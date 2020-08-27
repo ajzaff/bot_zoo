@@ -5,7 +5,7 @@ import (
 	"math/rand"
 )
 
-const zseed = 0xF00F
+const zseed = 1337
 
 var zkeys [1 + 5 + 15*64]int64
 
@@ -21,37 +21,30 @@ func newZKey(r *rand.Rand, usedKeys map[int64]bool) int64 {
 func init() {
 	r := rand.New(rand.NewSource(zseed))
 	usedKeys := map[int64]bool{0: true}
-	zkeys[0] = newZKey(r, usedKeys) // side to move is silver
-	for i := 0; i < 5; i++ {        // number of moves remaining is 0-4.
-		zkeys[1+i] = newZKey(r, usedKeys)
-	}
-	for _, p := range []Piece{
-		GRabbit,
-		GCat,
-		GDog,
-		GHorse,
-		GCamel,
-		GElephant,
-		SRabbit,
-		SCat,
-		SDog,
-		SHorse,
-		SCamel,
-		SElephant,
-	} { // every piece X every square
-		for j := 0; j < 64; j++ {
-			zkeys[1+5+p*64] = newZKey(r, usedKeys)
-		}
+	for i := range zkeys {
+		zkeys[i] = newZKey(r, usedKeys)
 	}
 }
 
-func ZHash(bitboards []Bitboard, side Color, steps int) int64 {
+func ZSilverKey() int64 {
+	return zkeys[0]
+}
+
+func ZStepsKey(steps int) int64 {
 	if steps < 0 || steps > 4 {
 		panic(fmt.Sprintf("invalid steps: %d", steps))
 	}
-	zhash := zkeys[1+steps]
+	return zkeys[1+steps]
+}
+
+func ZPieceKey(p Piece, i Square) int64 {
+	return zkeys[1+5+int(p)*64+int(i)]
+}
+
+func ZHash(bitboards []Bitboard, side Color, steps int) int64 {
+	zhash := ZStepsKey(steps)
 	if side != Gold {
-		zhash ^= zkeys[0]
+		zhash ^= ZSilverKey()
 	}
 	for _, p := range []Piece{
 		GRabbit,
@@ -71,7 +64,7 @@ func ZHash(bitboards []Bitboard, side Color, steps int) int64 {
 		for pieces > 0 {
 			b := pieces & -pieces
 			pieces ^= b
-			zhash ^= zkeys[1+5+b.Index()*64]
+			zhash ^= zkeys[1+5+b.Square()*64]
 		}
 	}
 	return zhash

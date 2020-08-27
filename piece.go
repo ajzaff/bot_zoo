@@ -1,28 +1,53 @@
 package zoo
 
+import "fmt"
+
 type Color int
 
 const (
 	Gold Color = iota
 	Silver
-	Neither Color = -1
 )
-
 const (
 	colorMask   = 8
 	decolorMask = ^colorMask
 )
 
-func (c Color) PieceMask() Piece {
-	if c == Gold {
-		return 0
+func ParseColor(s string) Color {
+	switch s {
+	case "w", "g":
+		return Gold
+	case "b", "s":
+		return Silver
+	default:
+		return -1
 	}
-	return colorMask
+}
+
+func (c Color) Valid() bool {
+	return c == Gold || c == Silver
+}
+
+func (c Color) Opposite() Color {
+	return c ^ 1
+}
+
+func (c Color) PieceMask() Piece {
+	return Piece(c << 3)
 }
 
 type Piece int
 
 const PChars = " RCDHMExxrcdhme"
+
+func ParsePiece(s string) (Piece, error) {
+	for i, r := range PChars {
+		if s == string(r) {
+			return Piece(i), nil
+		}
+	}
+	return Empty, fmt.Errorf("input does not match /^[%s]$/", PChars)
+}
 
 const (
 	Empty Piece = iota
@@ -50,10 +75,14 @@ func (p Piece) Color() Color {
 	return Silver
 }
 
-func (p Piece) MakeGold() Piece {
-	return p & ^colorMask
+func (p Piece) MakeColor(c Color) Piece {
+	return p | c.PieceMask()
 }
 
-func (p Piece) MakeSilver() Piece {
-	return p | colorMask
+func (p Piece) SamePiece(piece Piece) bool {
+	return p&decolorMask == piece&decolorMask
+}
+
+func (p Piece) WeakerThan(piece Piece) bool {
+	return p&decolorMask < piece&decolorMask
 }

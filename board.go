@@ -26,19 +26,19 @@ func (b Bitboard) Neighbors() Bitboard {
 	return bb
 }
 
-func (b Bitboard) anyIndex() uint8 {
+func (b Bitboard) ne0v() uint8 {
 	if b == 0 {
 		return 0
 	}
 	return 1
 }
 
-func (b Bitboard) Index() uint8 {
-	x := (b & 0xAAAAAAAAAAAAAAAA).anyIndex()
-	x |= (b & 0xCCCCCCCCCCCCCCCC).anyIndex() << 1
-	x |= (b & 0xF0F0F0F0F0F0F0F0).anyIndex() << 2
-	x |= (b & 0xFF00FF00FF00FF00).anyIndex() << 3
-	x |= (b & 0xFFFF0000FFFF0000).anyIndex() << 4
-	x |= (b & 0xFFFFFFFF00000000).anyIndex() << 5
-	return x
+func (b Bitboard) Square() Square {
+	x := (b & 0xAAAAAAAAAAAAAAAA).ne0v()
+	x |= (b & 0xCCCCCCCCCCCCCCCC).ne0v() << 1
+	x |= (b & 0xF0F0F0F0F0F0F0F0).ne0v() << 2
+	x |= (b & 0xFF00FF00FF00FF00).ne0v() << 3
+	x |= (b & 0xFFFF0000FFFF0000).ne0v() << 4
+	x |= (b & 0xFFFFFFFF00000000).ne0v() << 5
+	return Square(x)
 }
