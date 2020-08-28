@@ -219,12 +219,22 @@ func (p *Pos) CheckStep(step Step) (ok bool, err error) {
 	if p.Steps == 3 {
 		return false, fmt.Errorf("push started on last step")
 	}
-	for s := piece.MakeColor(piece.Color().Opposite()) + 1; s <= GElephant.MakeColor(Silver); s++ {
-		if srcNeighbors&p.Bitboards[s]&^p.FrozenNeighbors(src) != 0 {
-			return true, nil
+	if p.LastPiece == Empty ||
+		p.LastFrom != step.Dest ||
+		p.LastPiece.WeakerThan(piece) ||
+		p.LastPiece.SamePiece(piece) {
+		foundPusher := false
+		for s := piece.MakeColor(piece.Color().Opposite()) + 1; s <= GElephant.MakeColor(p.Side); s++ {
+			if srcNeighbors&p.Bitboards[s]&^p.FrozenNeighbors(src) != 0 {
+				foundPusher = true
+				break
+			}
+		}
+		if !foundPusher {
+			return false, fmt.Errorf("move with no pusher")
 		}
 	}
-	return false, fmt.Errorf("move with no pusher")
+	return true, nil
 }
 
 func (p *Pos) Step(step Step) *Pos {
@@ -318,7 +328,7 @@ func (p *Pos) Move(steps []Step, check bool) (*Pos, error) {
 			0, false, Empty, 0, zhash,
 		)
 	}
-	fmt.Println(initZHash, p.ZHash, p.ZHash^ZSilverKey())
+	// TODO(ajzaff): This doesn't work yet.
 	if initZHash == p.ZHash^ZSilverKey() {
 		return nil, fmt.Errorf("recurring position is illegal")
 	}

@@ -1,0 +1,4 @@
+setposition s [                          eE                                    ]
+zzz_print
+makemove ec5w Ed5w
+zzz_print
