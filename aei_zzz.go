@@ -29,6 +29,19 @@ func (a *AEI) handleZoo(text string) error {
 	case text == "nullmove":
 		a.engine.SetPos(a.engine.Pos().NullMove())
 		return nil
+	case text == "movenow":
+		move := a.engine.Pos().RandomMove()
+		if len(move) == 0 {
+			a.Logf("no moves")
+			return nil
+		}
+		a.Logf("move is %s", MoveString(move))
+		pos, err := a.engine.Pos().Move(move, true)
+		if err != nil {
+			return err
+		}
+		a.engine.SetPos(pos)
+		return nil
 	case strings.HasPrefix(text, "print"):
 		parts := strings.SplitN(text, " ", 2)
 		if len(parts) < 2 {

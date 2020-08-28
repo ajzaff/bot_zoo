@@ -96,3 +96,14 @@ func ParseStep(s string) (Step, error) {
 		Dir:   matches[3],
 	}, nil
 }
+
+func MoveString(move []Step) string {
+	var sb strings.Builder
+	for i, step := range move {
+		sb.WriteString(step.String())
+		if i+1 < len(move) {
+			sb.WriteByte(' ')
+		}
+	}
+	return sb.String()
+}

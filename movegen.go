@@ -1,5 +1,7 @@
 package zoo
 
+import "math/rand"
+
 func (p *Pos) GetSteps(check bool) []Step {
 	var res []Step
 	for t := GRabbit; t <= SElephant; t++ {
@@ -32,4 +34,20 @@ func (p *Pos) GetSteps(check bool) []Step {
 		}
 	}
 	return res
+}
+
+var r = rand.New(rand.NewSource(1337))
+
+func (p *Pos) RandomMove() []Step {
+	var move []Step
+	for i := 0; i < 4; i++ {
+		steps := p.GetSteps(true)
+		if len(steps) == 0 {
+			return move
+		}
+		step := steps[r.Intn(len(steps))]
+		move = append(move, step)
+		p = p.Step(step)
+	}
+	return move
 }
