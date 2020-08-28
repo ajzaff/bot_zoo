@@ -113,7 +113,11 @@ func (a *AEI) Logf(format string, as ...interface{}) {
 	if !strings.HasSuffix(format, "\n") {
 		format = fmt.Sprint(format, "\n")
 	}
-	a.writef(fmt.Sprintf("log %s", format), as...)
+	s := fmt.Sprintf(format, as...)
+	sc := bufio.NewScanner(strings.NewReader(s))
+	for sc.Scan() {
+		a.writef("log %s\n", sc.Text())
+	}
 }
 
 func (a *AEI) Run(w io.Writer, r io.Reader) error {

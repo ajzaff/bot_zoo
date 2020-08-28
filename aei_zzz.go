@@ -1,7 +1,6 @@
 package zoo
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -24,7 +23,11 @@ func (a *AEI) handleZoo(text string) error {
 		if err != nil {
 			return err
 		}
-		a.engine.SetPos(a.engine.Pos().Step(step))
+		pos, err := a.engine.Pos().Step(step)
+		if err != nil {
+			return err
+		}
+		a.engine.SetPos(pos)
 		return nil
 	case text == "nullmove":
 		a.engine.SetPos(a.engine.Pos().NullMove())
@@ -45,23 +48,26 @@ func (a *AEI) handleZoo(text string) error {
 	case strings.HasPrefix(text, "print"):
 		parts := strings.SplitN(text, " ", 2)
 		if len(parts) < 2 {
-			fmt.Println(a.engine.Pos().String())
-		} else {
-			var b Bitboard
-			switch parts[1] {
-			case "w", "g":
-				b = a.engine.Pos().Presence[Gold]
-			case "b", "s":
-				b = a.engine.Pos().Presence[Silver]
-			default:
-				p, _ := ParsePiece(parts[1])
-				bs := a.engine.Pos().Bitboards
-				if bs != nil {
-					b = bs[p]
-				}
-			}
-			fmt.Println(b)
+			a.Logf(a.engine.Pos().String())
+			return nil
 		}
+		var b Bitboard
+		switch parts[1] {
+		case "w", "g":
+			b = a.engine.Pos().Presence[Gold]
+		case "b", "s":
+			b = a.engine.Pos().Presence[Silver]
+		case "short":
+			a.Logf(a.engine.Pos().ShortString())
+			return nil
+		default:
+			p, _ := ParsePiece(parts[1])
+			bs := a.engine.Pos().Bitboards
+			if bs != nil {
+				b = bs[p]
+			}
+		}
+		a.Logf(b.String())
 		return nil
 	default:
 		return nil

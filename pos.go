@@ -6,6 +6,7 @@ type Pos struct {
 	Bitboards []Bitboard
 	Presence  []Bitboard
 	Side      Color
+	MoveNum   int
 	Steps     int
 	Push      bool
 	LastPiece Piece
@@ -17,6 +18,7 @@ func NewPos(
 	bitboards []Bitboard,
 	presence []Bitboard,
 	side Color,
+	moveNum int,
 	steps int,
 	push bool,
 	lastPiece Piece,
@@ -48,6 +50,7 @@ func NewPos(
 		Bitboards: bitboards,
 		Presence:  presence,
 		Side:      side,
+		MoveNum:   moveNum,
 		Steps:     steps,
 		Push:      push,
 		LastPiece: lastPiece,
@@ -113,7 +116,7 @@ func (p *Pos) Place(piece Piece, i Square) (*Pos, error) {
 	ps[piece.Color()] |= b
 	zhash := p.ZHash ^ ZPieceKey(piece, i)
 	return NewPos(
-		bs, ps, p.Side, p.Steps, p.Push,
+		bs, ps, p.Side, p.MoveNum, p.Steps, p.Push,
 		p.LastPiece, p.LastFrom, zhash,
 	), nil
 }
@@ -142,7 +145,7 @@ func (p *Pos) Remove(i Square) (*Pos, error) {
 	ps[piece.Color()] &= ^b
 	zhash := p.ZHash ^ ZPieceKey(piece, i)
 	return NewPos(
-		bs, ps, p.Side, p.Steps, p.Push,
+		bs, ps, p.Side, p.MoveNum, p.Steps, p.Push,
 		p.LastPiece, p.LastFrom, zhash,
 	), nil
 }
@@ -180,6 +183,12 @@ func (p *Pos) FrozenNeighbors(b Bitboard) Bitboard {
 }
 
 func (p *Pos) CheckStep(step Step) (ok bool, err error) {
+	if p.MoveNum == 1 {
+		if !step.Setup() {
+			return false, fmt.Errorf("expected setup move")
+		}
+		return true, nil
+	}
 	src := step.Src.Bitboard()
 	dest := step.Dest.Bitboard()
 	if src&p.Bitboards[Empty] != 0 {
@@ -237,7 +246,10 @@ func (p *Pos) CheckStep(step Step) (ok bool, err error) {
 	return true, nil
 }
 
-func (p *Pos) Step(step Step) *Pos {
+func (p *Pos) Step(step Step) (*Pos, error) {
+	if step.Setup() {
+		return p.Place(step.Piece, step.Dest)
+	}
 	bs := make([]Bitboard, len(p.Bitboards))
 	for i := range p.Bitboards {
 		bs[i] = p.Bitboards[i]
@@ -277,8 +289,12 @@ func (p *Pos) Step(step Step) *Pos {
 	}
 	steps := p.Steps + 1
 	side := p.Side
+	moveNum := p.MoveNum
 	if steps < 1 {
 		p.Side = p.Side.Opposite()
+		if p.Side == Gold {
+			moveNum++
+		}
 		steps = 0
 		piece = Empty
 		src = 0
@@ -288,22 +304,26 @@ func (p *Pos) Step(step Step) *Pos {
 		src = 0
 	}
 	return NewPos(
-		bs, ps, side, steps, push,
+		bs, ps, side, moveNum, steps, push,
 		piece, src.Square(), zhash,
-	)
+	), nil
 }
 func (p *Pos) NullMove() *Pos {
 	side := p.Side.Opposite()
 	zhash := p.ZHash
 	zhash ^= ZSilverKey()
+	moveNum := p.MoveNum
+	if side == Gold {
+		moveNum++
+	}
 	return NewPos(
 		p.Bitboards, p.Presence, side,
-		0, false, Empty, 0, zhash,
+		moveNum, 0, false, Empty, 0, zhash,
 	)
 }
 
 func (p *Pos) Move(steps []Step, check bool) (*Pos, error) {
-	if p.Steps+len(steps) > 4 {
+	if p.MoveNum > 1 && p.Steps+len(steps) > 4 {
 		return nil, fmt.Errorf("tried to take more than 4 steps")
 	}
 	initZHash := p.ZHash
@@ -312,20 +332,28 @@ func (p *Pos) Move(steps []Step, check bool) (*Pos, error) {
 		if check {
 			legal, err := p.CheckStep(step)
 			if !legal {
-				return nil, fmt.Errorf("move %d: %v", i+1, err)
+				return nil, fmt.Errorf("check %d: %v", i+1, err)
 			}
-			p = p.Step(step)
+			p, err = p.Step(step)
+			if err != nil {
+				return nil, fmt.Errorf("step %d: %v", i+1, err)
+			}
+
 		}
 	}
 	if p.Side == side {
 		side = side.Opposite()
+		moveNum := p.MoveNum
+		if side == Gold {
+			moveNum++
+		}
 		zhash := p.ZHash
 		zhash ^= ZSilverKey()
 		zhash ^= ZStepsKey(p.Steps)
 		zhash ^= ZStepsKey(0)
 		p = NewPos(
 			p.Bitboards, p.Presence, side,
-			0, false, Empty, 0, zhash,
+			moveNum, 0, false, Empty, 0, zhash,
 		)
 	}
 	// TODO(ajzaff): This doesn't work yet.

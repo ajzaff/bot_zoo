@@ -36,6 +36,17 @@ func (c Color) PieceMask() Piece {
 	return Piece(c << 3)
 }
 
+func (c Color) Byte() byte {
+	if c == Gold {
+		return 'g'
+	}
+	return 's'
+}
+
+func (c Color) String() string {
+	return string(c.Byte())
+}
+
 type Piece int
 
 const pchars = " RCDHMExxrcdhme"

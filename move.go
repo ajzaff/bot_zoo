@@ -42,7 +42,14 @@ type Step struct {
 	Dir string
 }
 
+func (s Step) Setup() bool {
+	return !s.Src.Valid() && s.Dir == "" && s.Dest.Valid() && s.Piece != Empty
+}
+
 func (s Step) String() string {
+	if s.Setup() {
+		return fmt.Sprintf("%c%s", s.Piece.Byte(), s.Dest.String())
+	}
 	return fmt.Sprintf("%c%s%s", s.Piece.Byte(), s.Src.String(), s.Dir)
 }
 
@@ -59,21 +66,7 @@ func ParseMove(s string) ([]Step, error) {
 	return res, nil
 }
 
-var setupPattern = regexp.MustCompile(`^([RCDHME rcdhme])([a-h][1-8])$`)
-
-func ParseSetup(s string) (Piece, Square, error) {
-	matches := setupPattern.FindStringSubmatch(s)
-	if matches == nil {
-		return Empty, 0, fmt.Errorf("input does not match /%s/", setupPattern)
-	}
-	piece, err := ParsePiece(matches[1])
-	if err != nil {
-		return Empty, 0, err
-	}
-	return piece, ParseSquare(s), nil
-}
-
-var stepPattern = regexp.MustCompile(`^([RCDHMErcdhme])([a-h][1-8])([nsewx])$`)
+var stepPattern = regexp.MustCompile(`^([RCDHMErcdhme])([a-h][1-8])([nsewx])?$`)
 
 func ParseStep(s string) (Step, error) {
 	matches := stepPattern.FindStringSubmatch(s)
@@ -84,13 +77,20 @@ func ParseStep(s string) (Step, error) {
 	if err != nil {
 		return Step{}, err
 	}
-	src := ParseSquare(matches[2])
-	dest := src.Translate(ParseDelta(matches[3]))
+	at := ParseSquare(matches[2])
+	if matches[3] == "" {
+		return Step{
+			Src:   invalidSquare,
+			Dest:  at,
+			Piece: piece,
+		}, nil
+	}
+	dest := at.Translate(ParseDelta(matches[3]))
 	if !dest.Valid() {
 		return Step{}, fmt.Errorf("destination is invalid")
 	}
 	return Step{
-		Src:   src,
+		Src:   at,
 		Dest:  dest,
 		Piece: piece,
 		Dir:   matches[3],

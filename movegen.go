@@ -39,6 +39,9 @@ func (p *Pos) GetSteps(check bool) []Step {
 var r = rand.New(rand.NewSource(1337))
 
 func (p *Pos) RandomMove() []Step {
+	if p.MoveNum == 1 {
+		return p.RandomSetup()
+	}
 	var move []Step
 	for i := 0; i < 4; i++ {
 		steps := p.GetSteps(true)
@@ -47,7 +50,49 @@ func (p *Pos) RandomMove() []Step {
 		}
 		step := steps[r.Intn(len(steps))]
 		move = append(move, step)
-		p = p.Step(step)
+		p, _ = p.Step(step)
 	}
 	return move
+}
+
+func (p *Pos) RandomSetup() []Step {
+	c := p.Side
+	rank := 6
+	if c == Gold {
+		rank = 1
+	}
+	ps := []Piece{
+		GRabbit.MakeColor(c),
+		GRabbit.MakeColor(c),
+		GRabbit.MakeColor(c),
+		GRabbit.MakeColor(c),
+		GRabbit.MakeColor(c),
+		GRabbit.MakeColor(c),
+		GRabbit.MakeColor(c),
+		GRabbit.MakeColor(c),
+		GCat.MakeColor(c),
+		GCat.MakeColor(c),
+		GDog.MakeColor(c),
+		GDog.MakeColor(c),
+		GHorse.MakeColor(c),
+		GHorse.MakeColor(c),
+		GCamel.MakeColor(c),
+		GElephant.MakeColor(c),
+	}
+	r.Shuffle(len(ps), func(i, j int) {
+		ps[i], ps[j] = ps[j], ps[i]
+	})
+	var setup []Step
+	for i := rank; i >= rank-1; i-- {
+		for j := 0; j < 8; j++ {
+			at := Square(8*i + j)
+			setup = append(setup, Step{
+				Src:   invalidSquare,
+				Dest:  at,
+				Piece: ps[0],
+			})
+			ps = ps[1:]
+		}
+	}
+	return setup
 }

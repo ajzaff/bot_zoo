@@ -7,8 +7,9 @@ import (
 )
 
 const (
-	PosEmpty    = `g [                                                                ]`
-	PosStandard = `g [rrrrrrrrhdcemcdh                                HDCMECDHRRRRRRRR]`
+	PosEmpty     = `g [                                                                ]`
+	PosStandard  = `g [rrrrrrrrhdcemcdh                                HDCMECDHRRRRRRRR]`
+	PosStandardG = `g [rrrrrrrrhdcemcdh                                                ]`
 )
 
 var shortPosPattern = regexp.MustCompile(`^([wbgs]) \[([ RCDHMErcdhme]{64})\]$`)
@@ -19,7 +20,7 @@ func ParseShortPosition(s string) (*Pos, error) {
 		return nil, fmt.Errorf("input does not match /%s/", shortPosPattern)
 	}
 	side := ParseColor(matches[1])
-	pos := NewPos(nil, nil, side, 0, false, Empty, 0, 0)
+	pos := NewPos(nil, nil, side, 1, 0, false, Empty, 0, 0)
 	for i, r := range matches[2] {
 		square := Square(8*(7-i/8) + i%8)
 		piece, err := ParsePiece(string(r))
@@ -37,9 +38,25 @@ func ParseShortPosition(s string) (*Pos, error) {
 	return pos, nil
 }
 
+func (p *Pos) ShortString() string {
+	if p == nil {
+		return ""
+	}
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "%s [", p.Side.String())
+	for i := 7; i >= 0; i-- {
+		for j := 0; j < 8; j++ {
+			at := Square(8*i + j)
+			sb.WriteByte(p.At(at).Byte())
+		}
+	}
+	sb.WriteByte(']')
+	return sb.String()
+}
+
 func (p *Pos) String() string {
 	if p == nil {
-		return "(nil)"
+		return ""
 	}
 	var sb strings.Builder
 	for i := 7; i >= 0; i-- {
