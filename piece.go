@@ -83,6 +83,10 @@ func (p Piece) SamePiece(piece Piece) bool {
 	return p&decolorMask == piece&decolorMask
 }
 
+func (p Piece) SameColor(piece Piece) bool {
+	return p&colorMask == piece&colorMask
+}
+
 func (p Piece) WeakerThan(piece Piece) bool {
 	return p&decolorMask < piece&decolorMask
 }

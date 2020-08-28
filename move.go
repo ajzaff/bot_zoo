@@ -7,15 +7,15 @@ import (
 )
 
 var (
-	Steps       [64]Bitboard
-	RabbitSteps [2][64]Bitboard
+	stepsB       [64]Bitboard
+	rabbitStepsB [2][64]Bitboard
 )
 
 func init() {
 	for i := Square(0); i < 64; i++ {
 		b := i.Bitboard()
 		steps := b.Neighbors()
-		Steps[i] = steps
+		stepsB[i] = steps
 		grSteps := steps
 		if b&NotRank1 != 0 { // rabbits can't move backwards.
 			grSteps ^= b << 8
@@ -24,9 +24,16 @@ func init() {
 		if b&NotRank8 != 0 {
 			srSteps ^= b << 8
 		}
-		RabbitSteps[0][i] = grSteps
-		RabbitSteps[1][i] = srSteps
+		rabbitStepsB[0][i] = grSteps
+		rabbitStepsB[1][i] = srSteps
 	}
+}
+
+func StepsFor(p Piece, i Square) Bitboard {
+	if p.SamePiece(GRabbit) {
+		return rabbitStepsB[p.Color()][i]
+	}
+	return stepsB[i]
 }
 
 type Step struct {

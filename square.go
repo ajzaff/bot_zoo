@@ -19,6 +19,22 @@ func (i Square) Bitboard() Bitboard {
 	return Bitboard(1) << i
 }
 
+func (src Square) Delta(dest Square) int8 {
+	if src == dest {
+		return 0
+	}
+	if sr, dr := src/8, dest/8; sr == dr {
+		if src < dest {
+			return +1
+		}
+		return -1
+	}
+	if src < dest {
+		return +8
+	}
+	return -8
+}
+
 func (i Square) String() string {
 	return string([]byte{
 		files[i%8],
@@ -27,6 +43,21 @@ func (i Square) String() string {
 }
 
 const invalidSquare = 255
+
+func NewDelta(d int8) string {
+	switch d {
+	case +8:
+		return "n"
+	case -8:
+		return "s"
+	case 1:
+		return "e"
+	case -1:
+		return "w"
+	default:
+		return ""
+	}
+}
 
 func ParseDelta(s string) int8 {
 	switch s {
