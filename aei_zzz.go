@@ -23,14 +23,20 @@ func (a *AEI) handleZoo(text string) error {
 		if err != nil {
 			return err
 		}
-		pos, err := a.engine.Pos().Step(step)
+		pos, _, err := a.engine.Pos().Step(step)
 		if err != nil {
 			return err
 		}
 		a.engine.SetPos(pos)
+		if a.verbose {
+			a.Logf(a.engine.Pos().String())
+		}
 		return nil
 	case text == "nullmove":
 		a.engine.SetPos(a.engine.Pos().NullMove())
+		if a.verbose {
+			a.Logf(a.engine.Pos().String())
+		}
 		return nil
 	case text == "movenow":
 		move := a.engine.Pos().RandomMove()
@@ -39,7 +45,7 @@ func (a *AEI) handleZoo(text string) error {
 			return nil
 		}
 		a.Logf("move is %s", MoveString(move))
-		pos, err := a.engine.Pos().Move(move, true)
+		pos, _, err := a.engine.Pos().Move(move, true)
 		if err != nil {
 			return err
 		}

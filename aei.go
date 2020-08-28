@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"strings"
 )
 
@@ -15,6 +16,7 @@ type AEI struct {
 	id           []string
 	protoVersion string
 	w            io.Writer
+	verbose      bool
 }
 
 func NewAEI(engine *Engine) *AEI {
@@ -27,6 +29,10 @@ func NewAEI(engine *Engine) *AEI {
 		},
 		protoVersion: "1",
 	}
+}
+
+func (a *AEI) SetVerbose(verbose bool) {
+	a.verbose = verbose
 }
 
 func (a *AEI) handle(text string) error {
@@ -67,11 +73,14 @@ func (a *AEI) handle(text string) error {
 		if err != nil {
 			return err
 		}
-		pos, err := a.engine.Pos().Move(move, true)
+		pos, _, err := a.engine.Pos().Move(move, true)
 		if err != nil {
 			return err
 		}
 		a.engine.SetPos(pos)
+		if a.verbose {
+			a.Logf(a.engine.Pos().String())
+		}
 		return nil
 	case strings.HasPrefix(text, "go"):
 		parts := strings.SplitN(text, " ", 2)
@@ -97,8 +106,24 @@ func (a *AEI) handle(text string) error {
 	}
 }
 
+func (a *AEI) verboseLog(send bool, s string) {
+	if !a.verbose {
+		return
+	}
+	sc := bufio.NewScanner(strings.NewReader(s))
+	prefix := ">"
+	if send {
+		prefix = "<"
+	}
+	for sc.Scan() {
+		log.Println(prefix, sc.Text())
+	}
+}
+
 func (a *AEI) writef(format string, as ...interface{}) {
-	a.w.Write([]byte(fmt.Sprintf(format, as...)))
+	s := fmt.Sprintf(format, as...)
+	a.w.Write([]byte(s))
+	a.verboseLog(true, s)
 }
 
 func (a *AEI) writePreamble() {
@@ -125,6 +150,7 @@ func (a *AEI) Run(w io.Writer, r io.Reader) error {
 	a.w = w
 	for sc.Scan() {
 		text := strings.TrimSpace(sc.Text())
+		a.verboseLog(false, text)
 		if err := a.handle(text); err != nil {
 			if err == errAEIQuit {
 				return nil

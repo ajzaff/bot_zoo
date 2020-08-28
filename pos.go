@@ -7,7 +7,7 @@ type Pos struct {
 	Presence  []Bitboard
 	Side      Color
 	MoveNum   int
-	Steps     int
+	Steps     []Step
 	Push      bool
 	LastPiece Piece
 	LastFrom  Square
@@ -19,7 +19,7 @@ func NewPos(
 	presence []Bitboard,
 	side Color,
 	moveNum int,
-	steps int,
+	steps []Step,
 	push bool,
 	lastPiece Piece,
 	lastFrom Square,
@@ -44,7 +44,7 @@ func NewPos(
 		}
 	}
 	if zhash == 0 {
-		zhash = ZHash(bitboards, side, steps)
+		zhash = ZHash(bitboards, side, CountSteps(steps))
 	}
 	return &Pos{
 		Bitboards: bitboards,
@@ -198,7 +198,7 @@ func (p *Pos) CheckStep(step Step) (ok bool, err error) {
 		return false, fmt.Errorf("move to nonempty square")
 	}
 	piece := p.atB(src)
-	dir := step.Dest - step.Src
+	dir := step.Src.Delta(step.Dest)
 	srcNeighbors := src.Neighbors()
 	destNeighbors := dest.Neighbors()
 
@@ -209,14 +209,14 @@ func (p *Pos) CheckStep(step Step) (ok bool, err error) {
 		if p.frozenB(src) {
 			return false, fmt.Errorf("move from frozen piece")
 		}
-		if piece.SamePiece(GRabbit) && (piece.Color() == Gold && dir < 0 || piece.Color() == Silver && dir > 0) {
+		if piece.SamePiece(GRabbit) && (piece.Color() == Gold && dir == -8 || piece.Color() == Silver && dir == 8) {
 			return false, fmt.Errorf("backwards rabbit move")
 		}
 		if p.Push {
 			if step.Dest != p.LastFrom {
 				return false, fmt.Errorf("move must finish active push")
 			}
-			if piece.WeakerThan(p.LastPiece) {
+			if !p.LastPiece.WeakerThan(piece) {
 				return false, fmt.Errorf("piece is too weak to push")
 			}
 		}
@@ -225,15 +225,15 @@ func (p *Pos) CheckStep(step Step) (ok bool, err error) {
 	if p.Push {
 		return false, fmt.Errorf("push started before active push finished")
 	}
-	if p.Steps == 3 {
-		return false, fmt.Errorf("push started on last step")
-	}
 	if p.LastPiece == Empty ||
 		p.LastFrom != step.Dest ||
 		p.LastPiece.WeakerThan(piece) ||
 		p.LastPiece.SamePiece(piece) {
+		if CountSteps(p.Steps) == 3 {
+			return false, fmt.Errorf("push started on last step")
+		}
 		foundPusher := false
-		for s := piece.MakeColor(piece.Color().Opposite()) + 1; s <= GElephant.MakeColor(p.Side); s++ {
+		for s := piece.MakeColor(piece.Color().Opposite()) + 1; s <= GElephant.MakeColor(piece.Color().Opposite()); s++ {
 			if srcNeighbors&p.Bitboards[s]&^p.FrozenNeighbors(src) != 0 {
 				foundPusher = true
 				break
@@ -246,9 +246,10 @@ func (p *Pos) CheckStep(step Step) (ok bool, err error) {
 	return true, nil
 }
 
-func (p *Pos) Step(step Step) (*Pos, error) {
+func (p *Pos) Step(step Step) (rp *Pos, cap Step, err error) {
 	if step.Setup() {
-		return p.Place(step.Piece, step.Dest)
+		p, err = p.Place(step.Piece, step.Dest)
+		return p, Step{}, err
 	}
 	bs := make([]Bitboard, len(p.Bitboards))
 	for i := range p.Bitboards {
@@ -263,7 +264,8 @@ func (p *Pos) Step(step Step) (*Pos, error) {
 	piece := p.atB(src)
 	var push, pull bool
 	if piece.Color() != p.Side {
-		if p.LastPiece != Empty && p.LastFrom == step.Dest {
+		if p.LastPiece != Empty && p.LastFrom == step.Dest &&
+			piece.WeakerThan(p.LastPiece) {
 			pull = true
 		} else {
 			push = true
@@ -281,21 +283,32 @@ func (p *Pos) Step(step Step) (*Pos, error) {
 		ps[piece.Color()] &= ^trappedB
 		for t := GRabbit.MakeColor(piece.Color()); t <= GElephant.MakeColor(piece.Color()); t++ {
 			if bs[t]&trappedB != 0 {
-				zhash ^= ZPieceKey(t, trappedB.Square())
+				src := trappedB.Square()
+				zhash ^= ZPieceKey(t, src)
 				bs[t] &= ^trappedB
+				cap = Step{
+					Src:   src,
+					Piece: t,
+					Dir:   "x",
+				}
 				break // only one trapped piece possible
 			}
 		}
 	}
-	steps := p.Steps + 1
+	steps := make([]Step, len(p.Steps))
+	copy(steps, p.Steps)
+	steps = append(steps, step)
+	if cap.Capture() {
+		steps = append(steps, cap)
+	}
 	side := p.Side
 	moveNum := p.MoveNum
-	if steps < 1 {
+	if CountSteps(steps) > 3 {
 		p.Side = p.Side.Opposite()
 		if p.Side == Gold {
 			moveNum++
 		}
-		steps = 0
+		steps = steps[:0]
 		piece = Empty
 		src = 0
 	}
@@ -306,7 +319,7 @@ func (p *Pos) Step(step Step) (*Pos, error) {
 	return NewPos(
 		bs, ps, side, moveNum, steps, push,
 		piece, src.Square(), zhash,
-	), nil
+	), cap, nil
 }
 func (p *Pos) NullMove() *Pos {
 	side := p.Side.Opposite()
@@ -318,25 +331,43 @@ func (p *Pos) NullMove() *Pos {
 	}
 	return NewPos(
 		p.Bitboards, p.Presence, side,
-		moveNum, 0, false, Empty, 0, zhash,
+		moveNum, nil, false, Empty, 0, zhash,
 	)
 }
 
-func (p *Pos) Move(steps []Step, check bool) (*Pos, error) {
-	if p.MoveNum > 1 && p.Steps+len(steps) > 4 {
-		return nil, fmt.Errorf("tried to take more than 4 steps")
+func (p *Pos) Move(steps []Step, check bool) (rp *Pos, out []Step, err error) {
+	if p.MoveNum == 1 {
+		if len(steps) != 16 {
+			return nil, nil, fmt.Errorf("wrong number of setup moves")
+		}
+	} else { // Prune captures
+		newSteps := make([]Step, 0, len(steps))
+		for _, step := range steps {
+			if !step.Capture() {
+				newSteps = append(newSteps, step)
+			}
+		}
+		if len(newSteps) == 0 || len(newSteps) > 4 {
+			return nil, nil, fmt.Errorf("wrong number of steps")
+		}
+		steps = newSteps
 	}
-	initZHash := p.ZHash
+	// initZHash := p.ZHash
 	side := p.Side
 	for i, step := range steps {
 		if check {
 			legal, err := p.CheckStep(step)
 			if !legal {
-				return nil, fmt.Errorf("check %d: %v", i+1, err)
+				return nil, nil, fmt.Errorf("check %d: %v", i+1, err)
 			}
-			p, err = p.Step(step)
+			out = append(out, step)
+			var cap Step
+			p, cap, err = p.Step(step)
+			if cap.Capture() {
+				out = append(out, cap)
+			}
 			if err != nil {
-				return nil, fmt.Errorf("step %d: %v", i+1, err)
+				return nil, nil, fmt.Errorf("step %d: %v", i+1, err)
 			}
 
 		}
@@ -349,16 +380,16 @@ func (p *Pos) Move(steps []Step, check bool) (*Pos, error) {
 		}
 		zhash := p.ZHash
 		zhash ^= ZSilverKey()
-		zhash ^= ZStepsKey(p.Steps)
+		zhash ^= ZStepsKey(CountSteps(p.Steps))
 		zhash ^= ZStepsKey(0)
 		p = NewPos(
 			p.Bitboards, p.Presence, side,
-			moveNum, 0, false, Empty, 0, zhash,
+			moveNum, nil, false, Empty, 0, zhash,
 		)
 	}
 	// TODO(ajzaff): This doesn't work yet.
-	if initZHash == p.ZHash^ZSilverKey() {
-		return nil, fmt.Errorf("recurring position is illegal")
-	}
-	return p, nil
+	// if initZHash == p.ZHash^ZSilverKey() {
+	// 	return nil, fmt.Errorf("recurring position is illegal")
+	// }
+	return p, out, nil
 }

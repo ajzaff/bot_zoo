@@ -46,6 +46,10 @@ func (s Step) Setup() bool {
 	return !s.Src.Valid() && s.Dir == "" && s.Dest.Valid() && s.Piece != Empty
 }
 
+func (s Step) Capture() bool {
+	return s.Dir == "x"
+}
+
 func (s Step) String() string {
 	if s.Setup() {
 		return fmt.Sprintf("%c%s", s.Piece.Byte(), s.Dest.String())
@@ -106,4 +110,13 @@ func MoveString(move []Step) string {
 		}
 	}
 	return sb.String()
+}
+
+func CountSteps(steps []Step) (res int) {
+	for _, step := range steps {
+		if !step.Capture() {
+			res++
+		}
+	}
+	return res
 }

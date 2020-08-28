@@ -50,14 +50,18 @@ func (p *Pos) RandomMove() []Step {
 		}
 		step := steps[r.Intn(len(steps))]
 		move = append(move, step)
-		p, _ = p.Step(step)
+		var cap Step
+		p, cap, _ = p.Step(step)
+		if cap.Capture() {
+			move = append(move, cap)
+		}
 	}
 	return move
 }
 
 func (p *Pos) RandomSetup() []Step {
 	c := p.Side
-	rank := 6
+	rank := 7
 	if c == Gold {
 		rank = 1
 	}
