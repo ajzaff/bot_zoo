@@ -1,12 +1,15 @@
 package zoo
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type Pos struct {
 	Bitboards []Bitboard
 	Presence  []Bitboard
 	Side      Color
 	MoveNum   int
+	// TODO(ajzaff): Add numSteps field for efficiency.
 	Steps     []Step
 	Push      bool
 	LastPiece Piece
@@ -352,7 +355,7 @@ func (p *Pos) Move(steps []Step, check bool) (rp *Pos, out []Step, err error) {
 		}
 		steps = newSteps
 	}
-	// initZHash := p.ZHash
+	initZHash := p.ZHash
 	side := p.Side
 	for i, step := range steps {
 		if check {
@@ -388,8 +391,8 @@ func (p *Pos) Move(steps []Step, check bool) (rp *Pos, out []Step, err error) {
 		)
 	}
 	// TODO(ajzaff): This doesn't work yet.
-	// if initZHash == p.ZHash^ZSilverKey() {
-	// 	return nil, fmt.Errorf("recurring position is illegal")
-	// }
+	if initZHash == p.ZHash {
+		return nil, nil, fmt.Errorf("recurring position is illegal")
+	}
 	return p, out, nil
 }

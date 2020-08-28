@@ -1,6 +1,10 @@
 package zoo
 
-import "math/rand"
+import (
+	"fmt"
+	"log"
+	"math/rand"
+)
 
 func (p *Pos) GetSteps(check bool) []Step {
 	var res []Step
@@ -42,21 +46,29 @@ func (p *Pos) RandomMove() []Step {
 	if p.MoveNum == 1 {
 		return p.RandomSetup()
 	}
-	var move []Step
-	for i := 0; i < 4; i++ {
-		steps := p.GetSteps(true)
-		if len(steps) == 0 {
-			return move
+	for i := 0; i < 6; i++ { // try 6 times
+		var move []Step
+		for j := 0; j < 4; j++ {
+			steps := p.GetSteps(true)
+			if len(steps) == 0 {
+				return move
+			}
+			step := steps[r.Intn(len(steps))]
+			move = append(move, step)
+			var cap Step
+			p, cap, _ = p.Step(step)
+			if cap.Capture() {
+				move = append(move, cap)
+			}
 		}
-		step := steps[r.Intn(len(steps))]
-		move = append(move, step)
-		var cap Step
-		p, cap, _ = p.Step(step)
-		if cap.Capture() {
-			move = append(move, cap)
+		fmt.Println(move)
+		if _, _, err := p.Move(move, false); err == nil {
+			return move
+		} else {
+			log.Println(err)
 		}
 	}
-	return move
+	return nil
 }
 
 func (p *Pos) RandomSetup() []Step {

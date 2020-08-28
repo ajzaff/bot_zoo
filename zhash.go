@@ -64,7 +64,7 @@ func ZHash(bitboards []Bitboard, side Color, steps int) int64 {
 		for pieces > 0 {
 			b := pieces & -pieces
 			pieces ^= b
-			zhash ^= zkeys[1+5+b.Square()*64]
+			zhash ^= ZPieceKey(p, b.Square())
 		}
 	}
 	return zhash
