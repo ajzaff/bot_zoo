@@ -15,6 +15,10 @@ func (i Square) Valid() bool {
 	return i < 64
 }
 
+func (i Square) Bitboard() Bitboard {
+	return Bitboard(1) << i
+}
+
 func (i Square) String() string {
 	return string([]byte{
 		files[i%8],

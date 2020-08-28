@@ -46,7 +46,7 @@ func (p *Pos) String() string {
 		fmt.Fprintf(&sb, "%d ", i+1)
 		for j := 0; j < 8; j++ {
 			at := Square(8*i + j)
-			atB := Bitboard(1) << at
+			atB := at.Bitboard()
 			piece := p.At(at)
 			if piece == Empty {
 				if atB&Traps != 0 {

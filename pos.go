@@ -81,7 +81,7 @@ func (p *Pos) Terminal() bool {
 }
 
 func (p *Pos) At(i Square) Piece {
-	return p.atB(1 << i)
+	return p.atB(i.Bitboard())
 }
 
 func (p *Pos) atB(b Bitboard) Piece {
@@ -97,7 +97,7 @@ func (p *Pos) Place(piece Piece, i Square) (*Pos, error) {
 	if piece == Empty {
 		return p.Remove(i)
 	}
-	b := Bitboard(1) << i
+	b := i.Bitboard()
 	if p.Bitboards[Empty]&b == 0 {
 		return nil, fmt.Errorf("piece already present")
 	}
@@ -119,7 +119,7 @@ func (p *Pos) Place(piece Piece, i Square) (*Pos, error) {
 }
 
 func (p *Pos) Remove(i Square) (*Pos, error) {
-	b := Bitboard(1) << i
+	b := i.Bitboard()
 	if p.Bitboards[Empty]&b == 0 {
 		return nil, fmt.Errorf("no piece present")
 	}
@@ -148,7 +148,7 @@ func (p *Pos) Remove(i Square) (*Pos, error) {
 }
 
 func (p *Pos) Frozen(i Square) bool {
-	return p.frozenB(1 << i)
+	return p.frozenB(i.Bitboard())
 }
 
 func (p *Pos) frozenB(b Bitboard) bool {
@@ -180,8 +180,8 @@ func (p *Pos) FrozenNeighbors(b Bitboard) Bitboard {
 }
 
 func (p *Pos) CheckStep(step Step) (ok bool, err error) {
-	src := Bitboard(1) << step.Src
-	dest := Bitboard(1) << step.Dest
+	src := step.Src.Bitboard()
+	dest := step.Dest.Bitboard()
 	if src&p.Bitboards[Empty] != 0 {
 		return false, fmt.Errorf("move from empty square")
 	}
@@ -246,8 +246,8 @@ func (p *Pos) Step(step Step) *Pos {
 	ps[0] = p.Presence[0]
 	ps[1] = p.Presence[1]
 	zhash := p.ZHash
-	src := Bitboard(1) << step.Src
-	dest := Bitboard(1) << step.Dest
+	src := step.Src.Bitboard()
+	dest := step.Dest.Bitboard()
 	piece := p.atB(src)
 	var push, pull bool
 	if piece.Color() != p.Side {

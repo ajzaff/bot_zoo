@@ -5,8 +5,9 @@ type Engine struct {
 }
 
 func NewEngine() *Engine {
+	pos, _ := ParseShortPosition(PosEmpty)
 	return &Engine{
-		p: new(Pos),
+		p: pos,
 	}
 }
 

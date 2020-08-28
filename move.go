@@ -12,8 +12,8 @@ var (
 )
 
 func init() {
-	for i := 0; i < 64; i++ {
-		b := Bitboard(1) << i
+	for i := Square(0); i < 64; i++ {
+		b := i.Bitboard()
 		steps := b.Neighbors()
 		Steps[i] = steps
 		grSteps := steps
