@@ -38,15 +38,15 @@ func (c Color) PieceMask() Piece {
 
 type Piece int
 
-const PChars = " RCDHMExxrcdhme"
+const pchars = " RCDHMExxrcdhme"
 
 func ParsePiece(s string) (Piece, error) {
-	for i, r := range PChars {
+	for i, r := range pchars {
 		if s == string(r) {
 			return Piece(i), nil
 		}
 	}
-	return Empty, fmt.Errorf("input does not match /^[%s]$/", PChars)
+	return Empty, fmt.Errorf("input does not match /^[%s]$/", pchars)
 }
 
 const (
@@ -76,7 +76,7 @@ func (p Piece) Color() Color {
 }
 
 func (p Piece) MakeColor(c Color) Piece {
-	return p | c.PieceMask()
+	return p&decolorMask | c.PieceMask()
 }
 
 func (p Piece) SamePiece(piece Piece) bool {
@@ -85,4 +85,26 @@ func (p Piece) SamePiece(piece Piece) bool {
 
 func (p Piece) WeakerThan(piece Piece) bool {
 	return p&decolorMask < piece&decolorMask
+}
+
+func (p Piece) Valid() bool {
+	return p < 15 && p != 7 && p != 8
+}
+
+func (p Piece) validForPrint() bool {
+	return p < 15
+}
+
+func (p Piece) Byte() byte {
+	if p.validForPrint() {
+		return pchars[p]
+	}
+	return '?'
+}
+
+func (p Piece) String() string {
+	if p.validForPrint() {
+		return string(p.Byte())
+	}
+	return fmt.Sprintf("Piece(%d)", p)
 }

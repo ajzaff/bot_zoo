@@ -31,6 +31,12 @@ func init() {
 
 type Step struct {
 	Src, Dest Square
+	Piece
+	Dir string
+}
+
+func (s Step) String() string {
+	return fmt.Sprintf("%c%s%s", s.Piece.Byte(), s.Src.String(), s.Dir)
 }
 
 func ParseMove(s string) ([]Step, error) {
@@ -63,9 +69,13 @@ func ParseSetup(s string) (Piece, Square, error) {
 var stepPattern = regexp.MustCompile(`^([RCDHMErcdhme])([a-h][1-8])([nsewx])$`)
 
 func ParseStep(s string) (Step, error) {
-	matches := setupPattern.FindStringSubmatch(s)
+	matches := stepPattern.FindStringSubmatch(s)
 	if matches == nil {
 		return Step{}, fmt.Errorf("input does not match /%s/", stepPattern)
+	}
+	piece, err := ParsePiece(matches[1])
+	if err != nil {
+		return Step{}, err
 	}
 	src := ParseSquare(matches[2])
 	dest := src.Translate(ParseDelta(matches[3]))
@@ -73,7 +83,9 @@ func ParseStep(s string) (Step, error) {
 		return Step{}, fmt.Errorf("destination is invalid")
 	}
 	return Step{
-		Src:  src,
-		Dest: dest,
+		Src:   src,
+		Dest:  dest,
+		Piece: piece,
+		Dir:   matches[3],
 	}, nil
 }

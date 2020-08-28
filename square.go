@@ -40,28 +40,33 @@ func ParseDelta(s string) int8 {
 }
 
 func (i Square) Translate(d int8) Square {
-	if d == 0 {
-		return i
-	}
 	if !i.Valid() {
 		return invalidSquare
 	}
-	if d < 0 {
-		if i%8 == 0 || d < -64 || i < Square(-d) {
+	switch d {
+	case 0:
+		return i
+	case -1:
+		if i%8 == 0 {
 			return invalidSquare
 		}
-		v := Square(-d)
-		if i < v {
+		return i - 1
+	case 1:
+		if i%8 == 7 {
 			return invalidSquare
 		}
-		return i - v
-	}
-	if i%8 == 7 || d > 64 {
+		return i + 1
+	case -8:
+		if i/8 == 0 {
+			return invalidSquare
+		}
+		return i - 8
+	case 8:
+		if i/8 == 7 {
+			return invalidSquare
+		}
+		return i + 8
+	default:
 		return invalidSquare
 	}
-	v := i + Square(d)
-	if !v.Valid() {
-		return invalidSquare
-	}
-	return v
 }

@@ -36,7 +36,7 @@ func (a *AEI) handle(text string) error {
 	case text == "isready":
 		a.write("readyok")
 	case text == "newgame":
-		pos, _ := ParseShortPosition(EmptyPositionShortString)
+		pos, _ := ParseShortPosition(PosEmpty)
 		a.engine.SetPos(pos)
 	case text == "stop":
 	case text == "quit":
@@ -53,8 +53,22 @@ func (a *AEI) handle(text string) error {
 		a.engine.SetPos(pos)
 	case strings.HasPrefix(text, "setoption"):
 	case strings.HasPrefix(text, "makemove"):
+		parts := strings.SplitN(text, " ", 2)
+		if len(parts) < 2 {
+			return fmt.Errorf("expected steps matching /%s/", stepPattern)
+		}
+		move, err := ParseMove(parts[1])
+		if err != nil {
+			return err
+		}
+		pos, err := a.engine.Pos().Move(move, true)
+		if err != nil {
+			return err
+		}
+		a.engine.SetPos(pos)
 	case strings.HasPrefix(text, "go"):
-	case strings.HasPrefix(text, "go"):
+	case strings.HasPrefix(text, "zzz_"):
+		return a.handleZoo(text)
 	default:
 		return fmt.Errorf("unsupported command: %q", text)
 	}
