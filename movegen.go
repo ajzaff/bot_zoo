@@ -1,11 +1,8 @@
 package zoo
 
-func (p *Pos) GetSteps() []Step {
-	if p.Push {
-		return nil
-	}
+func (p *Pos) GetSteps(check bool) []Step {
 	var res []Step
-	for t := GRabbit.MakeColor(p.Side); t <= GElephant.MakeColor(p.Side); t++ {
+	for t := GRabbit; t <= SElephant; t++ {
 		bs := p.Bitboards[t]
 		for bs > 0 {
 			b := bs & -bs
@@ -16,15 +13,21 @@ func (p *Pos) GetSteps() []Step {
 				d := ds & -ds
 				ds &= ^d
 				dest := d.Square()
-				if p.Bitboards[Empty]&d == 0 {
-					continue
-				}
-				res = append(res, Step{
+				step := Step{
 					Src:   src,
 					Dest:  dest,
 					Piece: t,
 					Dir:   NewDelta(src.Delta(dest)),
-				})
+				}
+				if p.Bitboards[Empty]&d == 0 {
+					continue
+				}
+				if check {
+					if ok, _ := p.CheckStep(step); !ok {
+						continue
+					}
+				}
+				res = append(res, step)
 			}
 		}
 	}

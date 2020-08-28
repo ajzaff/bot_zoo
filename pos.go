@@ -204,11 +204,11 @@ func (p *Pos) CheckStep(step Step) (ok bool, err error) {
 			return false, fmt.Errorf("backwards rabbit move")
 		}
 		if p.Push {
-			if piece.WeakerThan(p.LastPiece) {
-				return false, fmt.Errorf("piece is too weak to push")
-			}
 			if step.Dest != p.LastFrom {
 				return false, fmt.Errorf("move must finish active push")
+			}
+			if piece.WeakerThan(p.LastPiece) {
+				return false, fmt.Errorf("piece is too weak to push")
 			}
 		}
 		return true, nil
