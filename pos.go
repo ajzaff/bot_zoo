@@ -207,7 +207,7 @@ func (p *Pos) CheckStep(step Step) (ok bool, err error) {
 			if piece.WeakerThan(p.LastPiece) {
 				return false, fmt.Errorf("piece is too weak to push")
 			}
-			if step.Src != p.LastFrom {
+			if step.Dest != p.LastFrom {
 				return false, fmt.Errorf("move must finish active push")
 			}
 		}

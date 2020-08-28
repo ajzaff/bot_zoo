@@ -1,0 +1,4 @@
+setposition s [                          hD                                    ]
+zzz_print
+makemove Dd5n hc5e
+zzz_print
