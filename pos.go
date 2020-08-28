@@ -155,12 +155,6 @@ func (p *Pos) frozenB(b Bitboard) bool {
 	neighbors := b.Neighbors()
 	piece := p.atB(b)
 	color := piece.Color()
-	fmt.Println(
-		neighbors&p.Presence[color] == 0,
-		neighbors&p.Presence[color.Opposite()] != 0,
-		piece.MakeColor(color.Opposite())+1,
-		GElephant.MakeColor(color.Opposite()),
-	)
 	if neighbors&p.Presence[color] == 0 &&
 		neighbors&p.Presence[color.Opposite()] != 0 {
 		for s := piece.MakeColor(color.Opposite()) + 1; s <= GElephant.MakeColor(color.Opposite()); s++ {
