@@ -1,0 +1,4 @@
+setposition s [                Dh                                              ]
+zzz_print
+makemove hb6e Da6e
+zzz_print

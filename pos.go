@@ -263,7 +263,7 @@ func (p *Pos) Step(step Step) *Pos {
 	ps[piece.Color()] ^= stepB
 	zhash ^= ZPieceKey(piece, step.Src)
 	zhash ^= ZPieceKey(piece, step.Dest)
-	trappedB := src.Neighbors() & Traps & ^ps[piece.Color()]
+	trappedB := src.Neighbors() & Traps & ^ps[piece.Color()].Neighbors()
 	if trappedB&ps[piece.Color()] != 0 {
 		bs[Empty] |= trappedB
 		ps[piece.Color()] &= ^trappedB
