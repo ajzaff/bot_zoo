@@ -93,6 +93,25 @@ func (p *Pos) Score() int {
 	return p.score(p.Side) - p.score(p.Side.Opposite())
 }
 
+var moveLenPenalty = []int{
+	-terminalEval,
+	-30,
+	-20,
+	-10,
+	0,
+	0,
+	0,
+	0,
+	0,
+}
+
+func moveLengthPenalty(n int) int {
+	if n < 8 {
+		return moveLenPenalty[n]
+	}
+	return 0
+}
+
 func (e *Engine) SortMoves(p *Pos, moves [][]Step) (scores []int) {
 	e.r.Shuffle(len(moves), func(i, j int) {
 		moves[i], moves[j] = moves[j], moves[i]
@@ -107,7 +126,9 @@ func (e *Engine) SortMoves(p *Pos, moves [][]Step) (scores []int) {
 			a.scores[i] = -terminalEval
 			continue
 		}
-		a.scores[i] = -t.Score()
+		score := -t.Score()
+		score += moveLengthPenalty(len(move))
+		a.scores[i] = score
 	}
 	sort.Sort(a)
 	return a.scores

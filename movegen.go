@@ -34,32 +34,38 @@ func (p *Pos) GetSteps(check bool) []Step {
 	return res
 }
 
-func (p *Pos) getMoves(transpose map[int64]bool, d int) (moves [][]Step) {
-	if d == 0 {
-		return nil
+func (p *Pos) getMoves(transpose map[int64]bool, prefix []Step, moves *[][]Step, depth int) {
+	if depth <= 0 {
+		return
 	}
 	for _, step := range p.GetSteps(true) {
-		var move []Step
-		move = append(move, step)
+		move := append(prefix, step)
 		t, cap, _ := p.Step(step)
 		if cap.Capture() {
 			move = append(move, cap)
 		}
-		if !transpose[t.ZHash] {
-			transpose[t.ZHash] = true
-			for _, m := range t.getMoves(transpose, d-1) {
-				moves = append(moves, append(move, m...))
+		if depth == 1 {
+			if !transpose[t.ZHash] {
+				transpose[t.ZHash] = true
+				*moves = append(*moves, move)
 			}
-			moves = append(moves, move)
+			continue
 		}
+		t.getMoves(transpose, move, moves, depth-1)
 	}
-	return moves
 }
 
-func (e *Engine ) GetMoves(p *Pos ) [][]Step {
-	leaves := map[int64]bool{p.ZHash: true}
-	moves := p.getMoves(leaves, 4)
-	e.SortMoves(p, moves)
+func (e *Engine) GetMoveScores(p *Pos) (moves [][]Step, scores []int) {
+	transpose := map[int64]bool{p.ZHash: true}
+	for i := 1; i <= 4; i++ {
+		p.getMoves(transpose, nil, &moves, i)
+	}
+	scores = e.SortMoves(p, moves)
+	return moves, scores
+}
+
+func (e *Engine) GetMoves(p *Pos) [][]Step {
+	moves, _ := e.GetMoveScores(p)
 	return moves
 }
 
