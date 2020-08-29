@@ -34,8 +34,8 @@ func (p *Pos) GetSteps(check bool) []Step {
 	return res
 }
 
-func (p *Pos) getMoves(n int) (moves [][]Step) {
-	if n == 0 {
+func (p *Pos) getMoves(transpose map[int64]bool, d int) (moves [][]Step) {
+	if d == 0 {
 		return nil
 	}
 	for _, step := range p.GetSteps(true) {
@@ -45,16 +45,20 @@ func (p *Pos) getMoves(n int) (moves [][]Step) {
 		if cap.Capture() {
 			move = append(move, cap)
 		}
-		for _, m := range t.getMoves(n - 1) {
-			moves = append(moves, append(move, m...))
+		if !transpose[t.ZHash] {
+			transpose[t.ZHash] = true
+			for _, m := range t.getMoves(transpose, d-1) {
+				moves = append(moves, append(move, m...))
+			}
+			moves = append(moves, move)
 		}
-		moves = append(moves, move)
 	}
 	return moves
 }
 
 func (p *Pos) GetMoves() [][]Step {
-	moves := p.getMoves(4)
+	leaves := map[int64]bool{p.ZHash: true}
+	moves := p.getMoves(leaves, 4)
 	SortMoves(p, moves)
 	return moves
 }

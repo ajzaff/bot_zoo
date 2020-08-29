@@ -2,28 +2,47 @@ package zoo
 
 import "sort"
 
-var terminalEval = 14884
+var terminalEval = 100000
 
 var pieceValue = []int{
 	0,
 	0,
-	2,  // Cat
-	3,  // Dog
-	5,  // Horse
-	8,  // Camel
-	13, // Elephant
+	200,  // Cat
+	300,  // Dog
+	500,  // Horse
+	800,  // Camel
+	1300, // Elephant
 }
 
 var rabbitValue = []int{
 	0,
-	122,
-	129,
-	135,
-	140,
-	144,
-	147,
-	149,
-	150,
+	12200,
+	12900,
+	13500,
+	14000,
+	14400,
+	14700,
+	14900,
+	15000,
+}
+
+var mobilityScore = []int{
+	-800,
+	-600,
+	-400,
+	-200,
+	-180,
+	-160,
+	-140,
+	-120,
+	-100,
+	-80,
+	-60,
+	-40,
+	-30,
+	-20,
+	-10,
+	0,
 }
 
 func (p *Pos) score(side Color) (score int) {
@@ -35,7 +54,24 @@ func (p *Pos) score(side Color) (score int) {
 	for s := GCat; s <= GElephant; s++ {
 		score += pieceValue[s] * p.Bitboards[s.MakeColor(side)].Count()
 	}
+	score += p.mobilityScore(side)
 	return score
+}
+
+func (p *Pos) mobilityScore(side Color) (score int) {
+	var count int
+	b := p.Presence[side]
+	for b > 0 {
+		atB := b & -b
+		if !p.frozenB(atB) {
+			count++
+		}
+		b &= ^atB
+	}
+	if count >= 16 {
+		count = 15
+	}
+	return mobilityScore[count]
 }
 
 func (p *Pos) Score() int {

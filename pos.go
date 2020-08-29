@@ -383,7 +383,7 @@ func (p *Pos) Move(steps []Step, check bool) (rp *Pos, out []Step, err error) {
 		}
 		steps = newSteps
 	}
-	// initZHash := p.ZHash
+	initZHash := p.ZHash
 	side := p.Side
 	for i, step := range steps {
 		if check {
@@ -417,9 +417,9 @@ func (p *Pos) Move(steps []Step, check bool) (rp *Pos, out []Step, err error) {
 			moveNum, nil, false, Empty, 0, zhash,
 		)
 	}
-	// TODO(ajzaff): This doesn't work yet.
-	// if initZHash == p.ZHash {
-	// 	return nil, nil, fmt.Errorf("recurring position is illegal")
-	// }
+	// Note: Movegen currently does not produce moves that would result in once-recurring positions.
+	if initZHash == p.ZHash {
+		return nil, nil, fmt.Errorf("recurring position is illegal")
+	}
 	return p, out, nil
 }

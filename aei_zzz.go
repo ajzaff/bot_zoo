@@ -15,7 +15,10 @@ func (a *AEI) handleZoo(text string) error {
 		for _, move := range moves {
 			a.Logf(MoveString(move))
 		}
-		a.Logf("%d moves", len(moves))
+		a.Logf("%d", len(moves))
+		return nil
+	case text == "hash":
+		a.Logf("%X", a.engine.Pos().ZHash)
 		return nil
 	case strings.HasPrefix(text, "step"), strings.HasPrefix(text, "makestep"):
 		parts := strings.SplitN(text, " ", 2)
