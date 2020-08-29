@@ -34,39 +34,29 @@ func (p *Pos) GetSteps(check bool) []Step {
 	return res
 }
 
-func (e *Engine) BestMove() []Step {
-	p := e.Pos()
-	if p.MoveNum == 1 {
-		return e.RandomSetup()
+func (p *Pos) getMoves(n int) (moves [][]Step) {
+	if n == 0 {
+		return nil
 	}
-	for i := 0; i < 6; i++ { // try 6 times
+	for _, step := range p.GetSteps(true) {
 		var move []Step
-		for j := 0; j < 4; j++ {
-			steps := p.GetSteps(true)
-			if len(steps) == 0 {
-				return move
-			}
-			scores := e.Sort(steps)
-			bestScore := scores[0]
-			n := 1
-			for ; n < len(steps); n++ {
-				if scores[n] != bestScore {
-					break
-				}
-			}
-			step := steps[e.r.Intn(n)]
-			move = append(move, step)
-			var cap Step
-			p, cap, _ = p.Step(step)
-			if cap.Capture() {
-				move = append(move, cap)
-			}
+		move = append(move, step)
+		t, cap, _ := p.Step(step)
+		if cap.Capture() {
+			move = append(move, cap)
 		}
-		if _, _, err := p.Move(move, false); err == nil {
-			return move
+		for _, m := range t.getMoves(n - 1) {
+			moves = append(moves, append(move, m...))
 		}
+		moves = append(moves, move)
 	}
-	return nil
+	return moves
+}
+
+func (p *Pos) GetMoves() [][]Step {
+	moves := p.getMoves(4)
+	SortMoves(p, moves)
+	return moves
 }
 
 func (e *Engine) RandomSetup() []Step {

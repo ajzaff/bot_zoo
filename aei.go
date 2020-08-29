@@ -91,7 +91,7 @@ func (a *AEI) handle(text string) error {
 				return nil
 			}
 			a.writef("bestmove %s\n", MoveString(move))
-			a.writef("info score %d", score)
+			a.writef("info score %d\n", score)
 			return nil
 		}
 		switch cmd := parts[1]; cmd {

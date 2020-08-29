@@ -26,6 +26,18 @@ var rabbitValue = []int{
 	150,
 }
 
+func (p *Pos) score(side Color) (score int) {
+	if v := p.Bitboards[GRabbit.MakeColor(side)].Count(); v <= 8 {
+		score += rabbitValue[v]
+	} else {
+		score += rabbitValue[8] + v - 8
+	}
+	for s := GCat; s <= GElephant; s++ {
+		score += pieceValue[s] * p.Bitboards[s.MakeColor(side)].Count()
+	}
+	return score
+}
+
 func (p *Pos) Score() int {
 	if v := p.Goal(); v == p.Side {
 		return terminalEval
@@ -45,25 +57,13 @@ func (p *Pos) Score() int {
 	return p.score(p.Side) - p.score(p.Side.Opposite())
 }
 
-func (p *Pos) score(side Color) (score int) {
-	if v := p.Bitboards[GRabbit.MakeColor(side)].Count(); v <= 8 {
-		score += rabbitValue[v]
-	} else {
-		score += rabbitValue[8] + v - 8
-	}
-	for s := GCat; s <= GElephant; s++ {
-		score += pieceValue[s] * p.Bitboards[s.MakeColor(side)].Count()
-	}
-	return score
-}
-
-func (e *Engine) Sort(steps []Step) (scores []int) {
+func SortMoves(p *Pos, moves [][]Step) (scores []int) {
 	a := byScore{
-		steps:  steps,
-		scores: make([]int, len(steps)),
+		moves:  moves,
+		scores: make([]int, len(moves)),
 	}
-	for i, step := range steps {
-		t, _, err := e.Pos().Step(step)
+	for i, move := range moves {
+		t, _, err := p.Move(move, false)
 		if err != nil {
 			a.scores[i] = -terminalEval
 			continue
@@ -76,13 +76,13 @@ func (e *Engine) Sort(steps []Step) (scores []int) {
 
 type byScore struct {
 	scores []int
-	steps  []Step
+	moves  [][]Step
 }
 
-func (a byScore) Len() int { return len(a.steps) }
+func (a byScore) Len() int { return len(a.moves) }
 func (a byScore) Swap(i, j int) {
 	a.scores[i], a.scores[j] = a.scores[j], a.scores[i]
-	a.steps[i], a.steps[j] = a.steps[j], a.steps[i]
+	a.moves[i], a.moves[j] = a.moves[j], a.moves[i]
 }
 func (a byScore) Less(i, j int) bool {
 	return a.scores[i] < a.scores[j]

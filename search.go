@@ -1,5 +1,7 @@
 package zoo
 
+import "math"
+
 func (e *Engine) Search() (move []Step, score int) {
 	p := e.Pos()
 	if p.MoveNum == 1 {
@@ -7,41 +9,48 @@ func (e *Engine) Search() (move []Step, score int) {
 		// For now, choose a random setup.
 		return e.RandomSetup(), 0
 	}
-	for d := 0; d <= 4; d++ {
-		move, score = e.search(p, d)
-	}
+	move, score = e.searchRoot(p)
 	return move, score
 }
 
-func (e *Engine) search(p *Pos, depth int) (move []Step, score int) {
-	scoreFn := func(x int) int {
-		if p.Side != Gold {
-			return -x
-		}
-		return x
-	}
-	if depth == 0 || p.Terminal() {
-		return nil, scoreFn(p.Score())
-	}
-	minmaxFn := func(x, y int) bool {
-		if p.Side != Gold {
-			return x > y
-		}
-		return x < y
-	}
-	var best []Step
-	value := scoreFn(-terminalEval)
-	steps := p.GetSteps(true)
-	for _, step := range steps {
-		t, _, err := p.Step(step)
+var inf = 2 * terminalEval
+
+func (e *Engine) searchRoot(p *Pos) ([]Step, int) {
+	bestScore := math.MinInt64
+	var bestMove []Step
+	for _, move := range p.GetMoves() {
+		t, mseq, err := p.Move(move, false)
 		if err != nil {
 			continue
 		}
-		move, v := e.search(t, depth-1)
-		if minmaxFn(value, v) {
-			best = append([]Step{step}, move...)
-			value = v
+		score := -e.search(t, 1, inf, -inf, 0)
+		if len(bestMove) == 0 || score > bestScore {
+			bestScore = score
+			bestMove = mseq
 		}
 	}
-	return best, value
+	return bestMove, bestScore
+}
+
+func (e *Engine) search(p *Pos, c, alpha, beta, depth int) int {
+	if depth == 0 || p.Terminal() {
+		// TODO(ajzaff): Add quiescence search.
+		// Among other things, check statically whether any pieces
+		// can be flipped into a trap on the next turn.
+		return c * p.Score()
+	}
+	for _, move := range p.GetMoves() {
+		t, _, err := p.Move(move, false)
+		if err != nil {
+			continue
+		}
+		v := -e.search(t, -c, -beta, -alpha, depth-1)
+		if v >= beta {
+			return beta // fail-hard cutoff
+		}
+		if v > alpha {
+			alpha = v
+		}
+	}
+	return alpha
 }

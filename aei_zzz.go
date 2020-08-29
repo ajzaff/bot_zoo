@@ -10,6 +10,13 @@ func (a *AEI) handleZoo(text string) error {
 		pos.MoveNum = 2
 		a.engine.SetPos(pos)
 		return nil
+	case strings.HasPrefix(text, "move"), strings.HasPrefix(text, "moves"):
+		moves := a.engine.Pos().GetMoves()
+		for _, move := range moves {
+			a.Logf(MoveString(move))
+		}
+		a.Logf("%d moves", len(moves))
+		return nil
 	case strings.HasPrefix(text, "step"), strings.HasPrefix(text, "makestep"):
 		parts := strings.SplitN(text, " ", 2)
 		if len(parts) < 2 {
@@ -36,19 +43,6 @@ func (a *AEI) handleZoo(text string) error {
 		if a.verbose {
 			a.verbosePos()
 		}
-		return nil
-	case text == "movenow":
-		move := a.engine.BestMove()
-		if len(move) == 0 {
-			a.Logf("no moves")
-			return nil
-		}
-		a.Logf("move is %s", MoveString(move))
-		pos, _, err := a.engine.Pos().Move(move, true)
-		if err != nil {
-			return err
-		}
-		a.engine.SetPos(pos)
 		return nil
 	case text == "search":
 		move, score := a.engine.Search()
