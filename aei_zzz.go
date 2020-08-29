@@ -28,13 +28,13 @@ func (a *AEI) handleZoo(text string) error {
 		}
 		a.engine.SetPos(pos)
 		if a.verbose {
-			a.Logf(a.engine.Pos().String())
+			a.verbosePos()
 		}
 		return nil
 	case text == "nullmove":
 		a.engine.SetPos(a.engine.Pos().NullMove())
 		if a.verbose {
-			a.Logf(a.engine.Pos().String())
+			a.verbosePos()
 		}
 		return nil
 	case text == "movenow":
@@ -49,6 +49,13 @@ func (a *AEI) handleZoo(text string) error {
 			return err
 		}
 		a.engine.SetPos(pos)
+		return nil
+	case text == "search":
+		move, score := a.engine.Search()
+		a.Logf("search: %d %s [depth=6]:", score, MoveString(move))
+		return nil
+	case text == "eval":
+		a.logScore()
 		return nil
 	case strings.HasPrefix(text, "print"):
 		parts := strings.SplitN(text, " ", 2)
@@ -77,4 +84,13 @@ func (a *AEI) handleZoo(text string) error {
 	default:
 		return nil
 	}
+}
+
+func (a *AEI) logScore() {
+	a.Logf("eval: %d", a.engine.Pos().Score())
+}
+
+func (a *AEI) verbosePos() {
+	a.Logf(a.engine.Pos().String())
+	a.logScore()
 }

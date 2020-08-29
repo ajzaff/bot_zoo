@@ -42,6 +42,10 @@ type Step struct {
 	Dir string
 }
 
+func (s Step) Valid() bool {
+	return s.Setup() || s.Src.Valid() && s.Dest.Valid() && s.Dir != ""
+}
+
 func (s Step) Setup() bool {
 	return !s.Src.Valid() && s.Dir == "" && s.Dest.Valid() && s.Piece != Empty
 }

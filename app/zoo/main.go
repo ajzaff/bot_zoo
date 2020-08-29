@@ -4,17 +4,22 @@ import (
 	"flag"
 	"log"
 	"os"
+	"time"
 
 	zoo "ajz.dev/games/arimaa-zoo"
 )
 
 var (
+	seed    = flag.Int64("seed", 0, "random seed passed to the engine")
 	verbose = flag.Bool("verbose", false, "log all protocol messages sent and received")
 )
 
 func main() {
 	flag.Parse()
-	engine := zoo.NewEngine()
+	if *seed == 0 {
+		*seed = time.Now().UnixNano()
+	}
+	engine := zoo.NewEngine(*seed)
 	aei := zoo.NewAEI(engine)
 	aei.SetVerbose(*verbose)
 	log.SetOutput(os.Stderr)

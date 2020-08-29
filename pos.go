@@ -63,27 +63,53 @@ func NewPos(
 }
 
 func (p *Pos) Goal() Color {
-	if p.Bitboards[GRabbit] & ^NotRank8 != 0 {
-		return Gold
+	sideRank, oppositeRank := ^NotRank8, ^NotRank1
+	if p.Side != Gold {
+		sideRank, oppositeRank = oppositeRank, sideRank
 	}
-	if p.Bitboards[SRabbit] & ^NotRank1 != 0 {
-		return Silver
+	if p.Bitboards[GRabbit.MakeColor(p.Side)]&sideRank != 0 {
+		return p.Side
+	}
+	if p.Bitboards[GRabbit.MakeColor(p.Side.Opposite())]&oppositeRank != 0 {
+		return p.Side.Opposite()
 	}
 	return -1
 }
 
-func (p *Pos) RabbitLoss() Color {
-	if p.Bitboards[GRabbit] == 0 {
-		return Gold
+func (p *Pos) Eliminated() Color {
+	if p.Bitboards[GRabbit.MakeColor(p.Side.Opposite())] == 0 {
+		return p.Side.Opposite()
 	}
-	if p.Bitboards[SRabbit] == 0 {
-		return Silver
+	if p.Bitboards[GRabbit.MakeColor(p.Side)] == 0 {
+		return p.Side
+	}
+	return -1
+}
+
+func (p *Pos) immobilized(c Color) bool {
+	b := p.Presence[c]
+	for b > 0 {
+		atB := b & -b
+		if !p.frozenB(atB) {
+			return false
+		}
+		b &= ^atB
+	}
+	return true
+}
+
+func (p *Pos) Immobilized() Color {
+	if p.immobilized(p.Side.Opposite()) {
+		return p.Side.Opposite()
+	}
+	if p.immobilized(p.Side) {
+		return p.Side
 	}
 	return -1
 }
 
 func (p *Pos) Terminal() bool {
-	return p.Goal() != -1 || p.RabbitLoss() != -1
+	return p.Goal().Valid() || p.Eliminated().Valid() || p.Immobilized().Valid()
 }
 
 func (p *Pos) At(i Square) Piece {
@@ -310,6 +336,7 @@ func (p *Pos) Step(step Step) (rp *Pos, cap Step, err error) {
 		p.Side = p.Side.Opposite()
 		if p.Side == Gold {
 			moveNum++
+			zhash ^= ZSilverKey()
 		}
 		steps = steps[:0]
 		piece = Empty
@@ -355,7 +382,7 @@ func (p *Pos) Move(steps []Step, check bool) (rp *Pos, out []Step, err error) {
 		}
 		steps = newSteps
 	}
-	initZHash := p.ZHash
+	// initZHash := p.ZHash
 	side := p.Side
 	for i, step := range steps {
 		if check {
@@ -390,8 +417,8 @@ func (p *Pos) Move(steps []Step, check bool) (rp *Pos, out []Step, err error) {
 		)
 	}
 	// TODO(ajzaff): This doesn't work yet.
-	if initZHash == p.ZHash {
-		return nil, nil, fmt.Errorf("recurring position is illegal")
-	}
+	// if initZHash == p.ZHash {
+	// 	return nil, nil, fmt.Errorf("recurring position is illegal")
+	// }
 	return p, out, nil
 }

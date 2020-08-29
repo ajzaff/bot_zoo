@@ -1,13 +1,17 @@
 package zoo
 
+import "math/rand"
+
 type Engine struct {
 	p *Pos
+	r *rand.Rand
 }
 
-func NewEngine() *Engine {
+func NewEngine(seed int64) *Engine {
 	pos, _ := ParseShortPosition(PosEmpty)
 	return &Engine{
 		p: pos,
+		r: rand.New(rand.NewSource(seed)),
 	}
 }
 

@@ -79,18 +79,19 @@ func (a *AEI) handle(text string) error {
 		}
 		a.engine.SetPos(pos)
 		if a.verbose {
-			a.Logf(a.engine.Pos().String())
+			a.verbosePos()
 		}
 		return nil
 	case strings.HasPrefix(text, "go"):
 		parts := strings.SplitN(text, " ", 2)
 		if len(parts) < 2 {
-			move := a.engine.BestMove()
+			move, score := a.engine.Search()
 			if len(move) == 0 {
 				a.Logf("no moves")
 				return nil
 			}
 			a.writef("bestmove %s\n", MoveString(move))
+			a.writef("info score %d", score)
 			return nil
 		}
 		switch cmd := parts[1]; cmd {

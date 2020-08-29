@@ -1,9 +1,5 @@
 package zoo
 
-import (
-	"math/rand"
-)
-
 func (p *Pos) GetSteps(check bool) []Step {
 	var res []Step
 	for t := GRabbit; t <= SElephant; t++ {
@@ -38,12 +34,10 @@ func (p *Pos) GetSteps(check bool) []Step {
 	return res
 }
 
-var r = rand.New(rand.NewSource(1337))
-
 func (e *Engine) BestMove() []Step {
 	p := e.Pos()
 	if p.MoveNum == 1 {
-		return p.RandomSetup()
+		return e.RandomSetup()
 	}
 	for i := 0; i < 6; i++ { // try 6 times
 		var move []Step
@@ -60,7 +54,7 @@ func (e *Engine) BestMove() []Step {
 					break
 				}
 			}
-			step := steps[r.Intn(n)]
+			step := steps[e.r.Intn(n)]
 			move = append(move, step)
 			var cap Step
 			p, cap, _ = p.Step(step)
@@ -75,7 +69,8 @@ func (e *Engine) BestMove() []Step {
 	return nil
 }
 
-func (p *Pos) RandomSetup() []Step {
+func (e *Engine) RandomSetup() []Step {
+	p := e.Pos()
 	c := p.Side
 	rank := 7
 	if c == Gold {
@@ -99,7 +94,7 @@ func (p *Pos) RandomSetup() []Step {
 		GCamel.MakeColor(c),
 		GElephant.MakeColor(c),
 	}
-	r.Shuffle(len(ps), func(i, j int) {
+	e.r.Shuffle(len(ps), func(i, j int) {
 		ps[i], ps[j] = ps[j], ps[i]
 	})
 	var setup []Step

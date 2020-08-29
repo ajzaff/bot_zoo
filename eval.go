@@ -2,7 +2,7 @@ package zoo
 
 import "sort"
 
-var terminalValue = 122
+var terminalEval = 14884
 
 var pieceValue = []int{
 	0,
@@ -16,7 +16,7 @@ var pieceValue = []int{
 
 var rabbitValue = []int{
 	0,
-	terminalValue,
+	122,
 	129,
 	135,
 	140,
@@ -26,14 +26,33 @@ var rabbitValue = []int{
 	150,
 }
 
-func (p *Pos) Score() (score int) {
-	if v := p.Bitboards[GRabbit.MakeColor(p.Side)].Count(); v <= 8 {
+func (p *Pos) Score() int {
+	if v := p.Goal(); v == p.Side {
+		return terminalEval
+	} else if v == p.Side.Opposite() {
+		return -terminalEval
+	}
+	if v := p.Eliminated(); v == p.Side {
+		return -terminalEval
+	} else if v == p.Side.Opposite() {
+		return terminalEval
+	}
+	if v := p.Immobilized(); v == p.Side {
+		return -terminalEval
+	} else if v == p.Side.Opposite() {
+		return terminalEval
+	}
+	return p.score(p.Side) - p.score(p.Side.Opposite())
+}
+
+func (p *Pos) score(side Color) (score int) {
+	if v := p.Bitboards[GRabbit.MakeColor(side)].Count(); v <= 8 {
 		score += rabbitValue[v]
 	} else {
 		score += rabbitValue[8] + v - 8
 	}
 	for s := GCat; s <= GElephant; s++ {
-		score += pieceValue[s] * p.Bitboards[s.MakeColor(p.Side)].Count()
+		score += pieceValue[s] * p.Bitboards[s.MakeColor(side)].Count()
 	}
 	return score
 }
@@ -46,7 +65,7 @@ func (e *Engine) Sort(steps []Step) (scores []int) {
 	for i, step := range steps {
 		t, _, err := e.Pos().Step(step)
 		if err != nil {
-			a.scores[i] = -terminalValue
+			a.scores[i] = -terminalEval
 			continue
 		}
 		a.scores[i] = t.Score()
