@@ -330,14 +330,9 @@ func (p *Pos) Step(step Step) (rp *Pos, cap Step, err error) {
 	if cap.Capture() {
 		steps = append(steps, cap)
 	}
-	side := p.Side
 	moveNum := p.MoveNum
 	if CountSteps(steps) > 3 {
-		side = p.Side.Opposite()
-		if side == Gold {
-			moveNum++
-			zhash ^= ZSilverKey()
-		}
+		// Allow Move to change Side.
 		steps = steps[:0]
 		piece = Empty
 		src = 0
@@ -347,7 +342,7 @@ func (p *Pos) Step(step Step) (rp *Pos, cap Step, err error) {
 		src = 0
 	}
 	return NewPos(
-		bs, ps, side, moveNum, steps, push,
+		bs, ps, p.Side, moveNum, steps, push,
 		piece, src.Square(), zhash,
 	), cap, nil
 }
@@ -405,11 +400,11 @@ func (p *Pos) Move(steps []Step, check bool) (rp *Pos, out []Step, err error) {
 	if p.Side == side {
 		side = side.Opposite()
 		moveNum := p.MoveNum
+		zhash := p.ZHash
 		if side == Gold {
 			moveNum++
+			zhash ^= ZSilverKey()
 		}
-		zhash := p.ZHash
-		zhash ^= ZSilverKey()
 		zhash ^= ZStepsKey(CountSteps(p.Steps))
 		zhash ^= ZStepsKey(0)
 		p = NewPos(

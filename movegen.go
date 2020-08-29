@@ -44,14 +44,15 @@ func (p *Pos) getMoves(transpose map[int64]bool, prefix []Step, moves *[][]Step,
 		if cap.Capture() {
 			move = append(move, cap)
 		}
+		newPrefix := make([]Step, len(move))
+		copy(newPrefix, move)
+		t.getMoves(transpose, newPrefix, moves, depth-1)
 		if depth == 1 {
 			if !transpose[t.ZHash] {
 				transpose[t.ZHash] = true
 				*moves = append(*moves, move)
 			}
-			continue
 		}
-		t.getMoves(transpose, move, moves, depth-1)
 	}
 }
 
