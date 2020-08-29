@@ -56,10 +56,10 @@ func (p *Pos) getMoves(transpose map[int64]bool, d int) (moves [][]Step) {
 	return moves
 }
 
-func (p *Pos) GetMoves() [][]Step {
+func (e *Engine ) GetMoves(p *Pos ) [][]Step {
 	leaves := map[int64]bool{p.ZHash: true}
 	moves := p.getMoves(leaves, 4)
-	SortMoves(p, moves)
+	e.SortMoves(p, moves)
 	return moves
 }
 

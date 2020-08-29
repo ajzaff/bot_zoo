@@ -93,7 +93,10 @@ func (p *Pos) Score() int {
 	return p.score(p.Side) - p.score(p.Side.Opposite())
 }
 
-func SortMoves(p *Pos, moves [][]Step) (scores []int) {
+func (e *Engine) SortMoves(p *Pos, moves [][]Step) (scores []int) {
+	e.r.Shuffle(len(moves), func(i, j int) {
+		moves[i], moves[j] = moves[j], moves[i]
+	})
 	a := byScore{
 		moves:  moves,
 		scores: make([]int, len(moves)),
@@ -104,9 +107,9 @@ func SortMoves(p *Pos, moves [][]Step) (scores []int) {
 			a.scores[i] = -terminalEval
 			continue
 		}
-		a.scores[i] = t.Score()
+		a.scores[i] = -t.Score()
 	}
-	sort.Stable(sort.Reverse(a))
+	sort.Sort(a)
 	return a.scores
 }
 
@@ -121,5 +124,5 @@ func (a byScore) Swap(i, j int) {
 	a.moves[i], a.moves[j] = a.moves[j], a.moves[i]
 }
 func (a byScore) Less(i, j int) bool {
-	return a.scores[i] < a.scores[j]
+	return a.scores[i] > a.scores[j]
 }

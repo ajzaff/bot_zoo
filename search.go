@@ -1,6 +1,9 @@
 package zoo
 
-import "math"
+import (
+	"fmt"
+	"math"
+)
 
 func (e *Engine) Search() (move []Step, score int) {
 	p := e.Pos()
@@ -18,17 +21,18 @@ var inf = 1000000
 func (e *Engine) searchRoot(p *Pos, depth int) ([]Step, int) {
 	bestScore := math.MinInt64
 	c := 1
-	if p.Side != Gold {
+	if depth <= 1 {
 		c = -1
 	}
 	var bestMove []Step
-	for _, move := range p.GetMoves() {
+	for _, move := range e.GetMoves(p) {
 		t, mseq, err := p.Move(move, false)
 		if err != nil {
 			continue
 		}
 		score := -e.search(t, -c, -inf, inf, depth-1)
 		if len(bestMove) == 0 || score > bestScore {
+			fmt.Printf("log new best move [%d] %s\n", score, MoveString(mseq))
 			bestScore = score
 			bestMove = mseq
 		}
@@ -37,13 +41,13 @@ func (e *Engine) searchRoot(p *Pos, depth int) ([]Step, int) {
 }
 
 func (e *Engine) search(p *Pos, c, alpha, beta, depth int) int {
-	if depth == 0 || p.Terminal() {
+	if depth <= 0 || p.Terminal() {
 		// TODO(ajzaff): Add quiescence search.
 		// Among other things, check statically whether any pieces
 		// can be flipped into a trap on the next turn.
 		return c * p.Score()
 	}
-	for _, move := range p.GetMoves() {
+	for _, move := range e.GetMoves(p) {
 		t, _, err := p.Move(move, false)
 		if err != nil {
 			continue
