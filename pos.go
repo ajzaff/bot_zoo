@@ -372,7 +372,6 @@ func (p *Pos) Move(steps []Step, check bool) (rp *Pos, out []Step, err error) {
 			if err != nil {
 				return nil, nil, fmt.Errorf("step %d: %v", i+1, err)
 			}
-
 		}
 	}
 	if p.Side == side {

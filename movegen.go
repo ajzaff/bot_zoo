@@ -1,8 +1,6 @@
 package zoo
 
 import (
-	"fmt"
-	"log"
 	"math/rand"
 )
 
@@ -42,7 +40,8 @@ func (p *Pos) GetSteps(check bool) []Step {
 
 var r = rand.New(rand.NewSource(1337))
 
-func (p *Pos) RandomMove() []Step {
+func (e *Engine) BestMove() []Step {
+	p := e.Pos()
 	if p.MoveNum == 1 {
 		return p.RandomSetup()
 	}
@@ -53,7 +52,15 @@ func (p *Pos) RandomMove() []Step {
 			if len(steps) == 0 {
 				return move
 			}
-			step := steps[r.Intn(len(steps))]
+			scores := e.Sort(steps)
+			bestScore := scores[0]
+			n := 1
+			for ; n < len(steps); n++ {
+				if scores[n] != bestScore {
+					break
+				}
+			}
+			step := steps[r.Intn(n)]
 			move = append(move, step)
 			var cap Step
 			p, cap, _ = p.Step(step)
@@ -61,11 +68,8 @@ func (p *Pos) RandomMove() []Step {
 				move = append(move, cap)
 			}
 		}
-		fmt.Println(move)
 		if _, _, err := p.Move(move, false); err == nil {
 			return move
-		} else {
-			log.Println(err)
 		}
 	}
 	return nil

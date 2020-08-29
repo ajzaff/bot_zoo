@@ -85,7 +85,7 @@ func (a *AEI) handle(text string) error {
 	case strings.HasPrefix(text, "go"):
 		parts := strings.SplitN(text, " ", 2)
 		if len(parts) < 2 {
-			move := a.engine.Pos().RandomMove()
+			move := a.engine.BestMove()
 			if len(move) == 0 {
 				a.Logf("no moves")
 				return nil

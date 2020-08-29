@@ -1,14 +1,13 @@
 package zoo
 
-import (
-	"strings"
-)
+import "strings"
 
 func (a *AEI) handleZoo(text string) error {
 	text = text[4:]
 	switch {
 	case text == "new", text == "newstandard":
 		pos, _ := ParseShortPosition(PosStandard)
+		pos.MoveNum = 2
 		a.engine.SetPos(pos)
 		return nil
 	case strings.HasPrefix(text, "step"), strings.HasPrefix(text, "makestep"):
@@ -39,7 +38,7 @@ func (a *AEI) handleZoo(text string) error {
 		}
 		return nil
 	case text == "movenow":
-		move := a.engine.Pos().RandomMove()
+		move := a.engine.BestMove()
 		if len(move) == 0 {
 			a.Logf("no moves")
 			return nil

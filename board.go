@@ -42,3 +42,22 @@ func (b Bitboard) Square() Square {
 	x |= (b & 0xFFFFFFFF00000000).ne0v() << 5
 	return Square(x)
 }
+
+var countTable [256]int
+
+func init() {
+	for i := 1; i < 256; i++ {
+		countTable[i] = countTable[i/2] + (i & 1)
+	}
+}
+
+func (b Bitboard) Count() int {
+	return countTable[b&0xff] +
+		countTable[(b>>8)&0xff] +
+		countTable[(b>>16)&0xff] +
+		countTable[(b>>24)&0xff] +
+		countTable[(b>>32)&0xff] +
+		countTable[(b>>40)&0xff] +
+		countTable[(b>>48)&0xff] +
+		countTable[b>>56]
+}
