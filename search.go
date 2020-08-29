@@ -17,17 +17,17 @@ var inf = 1000000
 
 func (e *Engine) searchRoot(p *Pos, depth int) ([]Step, int) {
 	bestScore := math.MinInt64
+	c := 1
+	if p.Side != Gold {
+		c = -1
+	}
 	var bestMove []Step
 	for _, move := range p.GetMoves() {
 		t, mseq, err := p.Move(move, false)
 		if err != nil {
 			continue
 		}
-		c := 1
-		if depth > 1 {
-			c = -1
-		}
-		score := -e.search(t, c, -inf, inf, depth-1)
+		score := -e.search(t, -c, -inf, inf, depth-1)
 		if len(bestMove) == 0 || score > bestScore {
 			bestScore = score
 			bestMove = mseq
@@ -48,11 +48,7 @@ func (e *Engine) search(p *Pos, c, alpha, beta, depth int) int {
 		if err != nil {
 			continue
 		}
-		cc := -c
-		if depth == 1 {
-			cc = c
-		}
-		v := -e.search(t, cc, -beta, -alpha, depth-1)
+		v := -e.search(t, -c, -beta, -alpha, depth-1)
 		if v >= beta {
 			return beta // fail-hard cutoff
 		}
