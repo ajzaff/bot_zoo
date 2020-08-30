@@ -56,17 +56,20 @@ func (p *Pos) getMoves(transpose map[int64]bool, prefix []Step, moves *[][]Step,
 	}
 }
 
-func (e *Engine) GetMoveScores(p *Pos) (moves [][]Step, scores []int) {
+func (e *Engine) GetMoveLenScores(p *Pos, n int) (moves [][]Step, scores []int) {
 	transpose := map[int64]bool{p.ZHash: true}
-	for i := 1; i <= 4; i++ {
+	if n <= 0 || n > 4 {
+		panic("n <= 0 || n > 4")
+	}
+	for i := 1; i <= n; i++ {
 		p.getMoves(transpose, nil, &moves, i)
 	}
 	scores = e.SortMoves(p, moves)
 	return moves, scores
 }
 
-func (e *Engine) GetMoves(p *Pos) [][]Step {
-	moves, _ := e.GetMoveScores(p)
+func (e *Engine) GetMovesLen(p *Pos, n int) [][]Step {
+	moves, _ := e.GetMoveLenScores(p, n)
 	return moves
 }
 

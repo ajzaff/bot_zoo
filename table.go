@@ -1,20 +1,37 @@
 package zoo
 
+type Bound int
+
+const (
+	NoBound Bound = iota
+	UpperBound
+	LowerBound
+	ExactBound
+)
+
 type Entry struct {
-	Best []Step
+	Bound
+	Depth int
+	Value int
 }
 
 type Table struct {
-	data map[int64]*SearchResult
+	table map[int64]*Entry
+	data  []*Entry
+	moves [][]Step
 }
 
 func NewTable() Table {
 	return Table{
-		data: make(map[int64]*SearchResult),
+		table: make(map[int64]*Entry),
 	}
 }
 
-func (t Table) GetDepth(key int64, depth int) (r *SearchResult, ok bool) {
+func (t Table) Clear() {
+
+}
+
+func (t Table) ProbeDepth(key int64, depth int) (r *SearchResult, ok bool) {
 	return nil, false
 
 	// r, ok = t.data[key]
@@ -24,7 +41,7 @@ func (t Table) GetDepth(key int64, depth int) (r *SearchResult, ok bool) {
 	// return nil, false
 }
 
-func (t Table) Update(key int64, value *SearchResult) {
+func (t Table) Store(key int64, value *SearchResult) {
 	// r, ok := t.data[key]
 	// if !ok {
 	// 	t.data[key] = value

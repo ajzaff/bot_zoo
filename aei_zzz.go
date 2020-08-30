@@ -11,7 +11,7 @@ func (a *AEI) handleZoo(text string) error {
 		a.engine.SetPos(pos)
 		return nil
 	case strings.HasPrefix(text, "move"), strings.HasPrefix(text, "moves"):
-		moves, scores := a.engine.GetMoveScores(a.engine.Pos())
+		moves, scores := a.engine.GetMoveLenScores(a.engine.Pos(), 4)
 		for i, move := range moves {
 			a.Logf("[%d] %s", scores[i], MoveString(move))
 		}
