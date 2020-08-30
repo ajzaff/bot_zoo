@@ -60,6 +60,7 @@ func (a *AEI) handle(text string) error {
 		if err != nil {
 			return err
 		}
+		pos.MoveNum = 2
 		a.engine.SetPos(pos)
 		return nil
 	case strings.HasPrefix(text, "setoption"):
@@ -85,7 +86,7 @@ func (a *AEI) handle(text string) error {
 	case strings.HasPrefix(text, "go"):
 		parts := strings.SplitN(text, " ", 2)
 		if len(parts) < 2 {
-			best := a.engine.SearchFixedDepth(8)
+			best := a.engine.SearchFixedDepth(16)
 			if len(best.Move) == 0 {
 				a.Logf("no moves")
 				return nil

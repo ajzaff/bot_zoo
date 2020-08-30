@@ -5,7 +5,7 @@ import "math/rand"
 type Engine struct {
 	p     *Pos
 	r     *rand.Rand
-	table Table
+	table *Table
 }
 
 func NewEngine(seed int64) *Engine {
@@ -13,7 +13,7 @@ func NewEngine(seed int64) *Engine {
 	return &Engine{
 		p:     pos,
 		r:     rand.New(rand.NewSource(seed)),
-		table: NewTable(),
+		table: NewTable(500000),
 	}
 }
 

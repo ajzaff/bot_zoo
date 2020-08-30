@@ -8,6 +8,7 @@ import (
 const inf = 1000000
 
 type SearchResult struct {
+	ZHash int64
 	Depth int
 	Score int
 	Nodes int
@@ -32,7 +33,6 @@ func (e *Engine) SearchFixedDepth(depth int) SearchResult {
 		best = e.searchRoot(p, d)
 	}
 	e.table.Clear()
-
 	best.Time = time.Now().Sub(start)
 	return best
 }
@@ -51,26 +51,51 @@ func (e *Engine) searchRoot(p *Pos, depth int) SearchResult {
 		if err != nil {
 			continue
 		}
-		score := -e.search(t, -1, inf, -inf, depth-CountSteps(move))
-		if score > best.Score {
+		score := -e.search(t, -1, inf, -inf, CountSteps(move), depth)
+		if score > best.Score && !t.Push {
 			best.Score = score
 			best.Move = mseq
 			fmt.Printf("log depth %d\n", depth)
 			fmt.Printf("log score %d\n", score)
 			fmt.Printf("log bestmove %s\n", MoveString(mseq))
+			fmt.Printf("log transpositions %d\n", e.table.Len())
 		}
 	}
 	return best
 }
 
-func (e *Engine) search(p *Pos, c, alpha, beta, depth int) int {
-	if depth <= 0 || p.Terminal() {
+func (e *Engine) search(p *Pos, c, alpha, beta, depth, maxDepth int) int {
+	alphaOrig := alpha
+
+	// Step 1: Check the transposition table.
+	if entry, ok := e.table.ProbeDepth(p.ZHash, depth); ok {
+		switch entry.Bound {
+		case ExactBound:
+			return entry.Value
+		case LowerBound:
+			if alpha < entry.Value {
+				alpha = entry.Value
+			}
+		case UpperBound:
+			if beta > entry.Value {
+				beta = entry.Value
+			}
+		}
+		if alpha >= beta {
+			return entry.Value
+		}
+	}
+
+	// Step 2: Is this a terminal node or depth==0?
+	if depth >= maxDepth || p.Terminal() {
 		// TODO(ajzaff): Add quiescence search.
 		// Among other things, check statically whether any pieces
 		// can be flipped into a trap on the next turn.
 		return -c * p.Score()
 	}
-	n := depth
+
+	// Step 3: Main search.
+	n := maxDepth
 	if n > 4 {
 		n = 4
 	}
@@ -80,7 +105,7 @@ func (e *Engine) search(p *Pos, c, alpha, beta, depth int) int {
 		if err != nil {
 			continue
 		}
-		score := -e.search(t, -c, -beta, -alpha, depth-CountSteps(move))
+		score := -e.search(t, -c, -beta, -alpha, depth+CountSteps(move), maxDepth)
 		if score > best {
 			best = score
 		}
@@ -91,5 +116,23 @@ func (e *Engine) search(p *Pos, c, alpha, beta, depth int) int {
 			break // fail-hard cutoff
 		}
 	}
+
+	// Step 4: Store transposition table entry.
+	entry := &Entry{
+		ZHash: p.ZHash,
+		Depth: maxDepth,
+		Value: best,
+	}
+	switch {
+	case best <= alphaOrig:
+		entry.Bound = UpperBound
+	case best >= beta:
+		entry.Bound = LowerBound
+	default:
+		entry.Bound = ExactBound
+	}
+	e.table.Store(entry)
+
+	// Return best score.
 	return best
 }
