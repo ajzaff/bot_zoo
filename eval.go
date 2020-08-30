@@ -14,7 +14,7 @@ var pieceValue = []int{
 	1300, // Elephant
 }
 
-var rabbitValue = []int{
+var rabbitMaterialValue = []int{
 	0,
 	12200,
 	12900,
@@ -45,18 +45,73 @@ var mobilityScore = []int{
 	0,
 }
 
-func (p *Pos) score(side Color) (score int) {
-	if v := p.Bitboards[GRabbit.MakeColor(side)].Count(); v <= 8 {
-		score += rabbitValue[v]
-	} else {
-		score += rabbitValue[8] + v - 8
-	}
-	for s := GCat; s <= GElephant; s++ {
-		score += pieceValue[s] * p.Bitboards[s.MakeColor(side)].Count()
-	}
-	score += p.mobilityScore(side)
-	return score
-}
+// Position values are symmetrical and represented as gold side.
+// When evaluating Silver, the board must be reflected on Rank-axis.
+// They are presented with A1 in the bottom left corner for clarity.
+var positionValue = [][]int{{ // Empty
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 50, 0, 0, 50, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 50, 0, 0, 50, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+}, { // Rabbit
+	999, 999, 999, 999, 999, 999, 999, 999,
+	199, 199, 50, 199, 199, 50, 199, 199,
+	20, -5, -50, -10, -10, -50, -5, 20,
+	10, 0, -10, 10, -10, -10, 0, 10,
+	5, 0, 0, -10, -10, 0, 0, 5,
+	5, 0, -10, -10, -10, -10, 0, 5,
+	0, 0, -5, -10, -10, -5, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+}, { // Cat
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, -50, 0, 0, -50, 0, 0,
+	0, -50, -100, -50, -50, -100, -50, 0,
+	0, 0, -50, 0, 0, -50, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, -5, 0, 0, -5, 0, 0,
+	10, 20, 50, 10, 10, 50, 20, 50,
+	10, 50, 50, 10, 10, 50, 50, 50,
+}, { // Dog
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, -20, 0, 0, -20, 0, 0,
+	0, -20, -100, -20, -20, -100, -20, 0,
+	0, 0, -20, 0, 0, -20, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 50, 50, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+}, { // Horse
+	-20, -20, -20, -20, -20, -20, -20, -20,
+	-20, 0, 0, 0, 0, 0, 0, -20,
+	-20, 10, -20, 50, 50, -20, 10, -20,
+	-20, 10, 50, 5, 5, 50, 10, -20,
+	-20, 10, 10, 5, 5, 10, 10, -20,
+	-20, 10, 0, 0, 10, 0, 10, -20,
+	-20, 0, 0, 0, 0, 0, 0, -20,
+	-20, -20, -20, -20, -20, -20, -20, -20,
+}, { // Camel
+	-20, -20, -20, -20, -20, -20, -20, -20,
+	-20, 0, 0, 0, 0, 0, 0, -20,
+	-20, 10, -20, 50, 50, -20, 10, -20,
+	-20, 10, 50, 5, 5, 50, 10, -20,
+	-20, 10, 10, 5, 5, 10, 10, -20,
+	-20, 10, 0, 10, 10, 0, 10, -20,
+	-20, 0, 0, 0, 0, 0, 0, -20,
+	-20, -20, -20, -20, -20, -20, -20, -20,
+}, { // Elephant
+	-20, -20, -20, -20, -20, -20, -20, -20,
+	-20, 0, 0, 0, 0, 0, 0, -20,
+	-20, 10, -20, 50, 50, -20, 10, -20,
+	-20, 10, 50, 50, 50, 50, 10, -20,
+	-20, 10, 10, 50, 50, 10, 10, -20,
+	-20, 10, 0, 10, 10, 0, 10, -20,
+	-20, 0, 0, 0, 0, 0, 0, -20,
+	-20, -20, -20, -20, -20, -20, -20, -20,
+}}
 
 func (p *Pos) mobilityScore(side Color) (score int) {
 	var count int
@@ -72,6 +127,45 @@ func (p *Pos) mobilityScore(side Color) (score int) {
 		count = 15
 	}
 	return mobilityScore[count]
+}
+
+func (p *Pos) positionScore(side Color) (score int) {
+	c := 7
+	m := -1
+	if side == Silver {
+		c = 0
+		m = 1
+	}
+	for _, t := range []Piece{
+		Empty,
+		GRabbit.MakeColor(side),
+		GCat.MakeColor(side),
+		GDog.MakeColor(side),
+		GHorse.MakeColor(side),
+		GCamel.MakeColor(side),
+		GElephant.MakeColor(side),
+	} {
+		ps := positionValue[t&decolorMask]
+		for b := p.Bitboards[t]; b > 0; b &= b - 1 {
+			at := b.Square()
+			score += ps[8*(c+m*int(at)/8)+c+m*(int(at)%8)]
+		}
+	}
+	return score
+}
+
+func (p *Pos) score(side Color) (score int) {
+	if v := p.Bitboards[GRabbit.MakeColor(side)].Count(); v <= 8 {
+		score += rabbitMaterialValue[v]
+	} else {
+		score += rabbitMaterialValue[8] + v - 8
+	}
+	for s := GCat; s <= GElephant; s++ {
+		score += pieceValue[s] * p.Bitboards[s.MakeColor(side)].Count()
+	}
+	score += p.mobilityScore(side)
+	score += p.positionScore(side)
+	return score
 }
 
 func (p *Pos) Score() int {

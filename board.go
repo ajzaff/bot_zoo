@@ -26,21 +26,24 @@ func (b Bitboard) Neighbors() Bitboard {
 	return bb
 }
 
-func (b Bitboard) ne0v() uint8 {
-	if b == 0 {
-		return 0
-	}
-	return 1
+const debruijn64 Bitboard = 0x03f79d71b4cb0a89
+
+var bsfIndex64 = [64]Square{
+	0, 1, 48, 2, 57, 49, 28, 3,
+	61, 58, 50, 42, 38, 29, 17, 4,
+	62, 55, 59, 36, 53, 51, 43, 22,
+	45, 39, 33, 30, 24, 18, 12, 5,
+	63, 47, 56, 27, 60, 41, 37, 16,
+	54, 35, 52, 21, 44, 32, 23, 11,
+	46, 26, 40, 15, 34, 20, 31, 10,
+	25, 14, 19, 9, 13, 8, 7, 6,
 }
 
 func (b Bitboard) Square() Square {
-	x := (b & 0xAAAAAAAAAAAAAAAA).ne0v()
-	x |= (b & 0xCCCCCCCCCCCCCCCC).ne0v() << 1
-	x |= (b & 0xF0F0F0F0F0F0F0F0).ne0v() << 2
-	x |= (b & 0xFF00FF00FF00FF00).ne0v() << 3
-	x |= (b & 0xFFFF0000FFFF0000).ne0v() << 4
-	x |= (b & 0xFFFFFFFF00000000).ne0v() << 5
-	return Square(x)
+	if b == 0 {
+		return invalidSquare
+	}
+	return bsfIndex64[((b&-b)*debruijn64)>>58]
 }
 
 var countTable [256]int
