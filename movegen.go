@@ -36,6 +36,10 @@ func (p *Pos) GetSteps(check bool) []Step {
 
 func (p *Pos) getMoves(transpose map[int64]bool, prefix []Step, moves *[][]Step, depth int) {
 	if depth <= 0 {
+		if !transpose[p.ZHash] && !p.Push {
+			transpose[p.ZHash] = true
+			*moves = append(*moves, prefix)
+		}
 		return
 	}
 	for _, step := range p.GetSteps(true) {
@@ -47,29 +51,18 @@ func (p *Pos) getMoves(transpose map[int64]bool, prefix []Step, moves *[][]Step,
 		newPrefix := make([]Step, len(move))
 		copy(newPrefix, move)
 		t.getMoves(transpose, newPrefix, moves, depth-1)
-		if depth == 1 {
-			if !transpose[t.ZHash] {
-				transpose[t.ZHash] = true
-				*moves = append(*moves, move)
-			}
-		}
 	}
 }
 
-func (e *Engine) GetMoveLenScores(p *Pos, n int) (moves [][]Step, scores []int) {
+func (e *Engine) getMovesLen(p *Pos, n int) [][]Step {
 	transpose := map[int64]bool{p.ZHash: true}
 	if n <= 0 || n > 4 {
 		panic("n <= 0 || n > 4")
 	}
+	var moves [][]Step
 	for i := 1; i <= n; i++ {
 		p.getMoves(transpose, nil, &moves, i)
 	}
-	scores = e.SortMoves(p, moves)
-	return moves, scores
-}
-
-func (e *Engine) GetMovesLen(p *Pos, n int) [][]Step {
-	moves, _ := e.GetMoveLenScores(p, n)
 	return moves
 }
 

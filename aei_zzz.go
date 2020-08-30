@@ -1,6 +1,9 @@
 package zoo
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 func (a *AEI) handleZoo(text string) error {
 	text = text[4:]
@@ -11,9 +14,21 @@ func (a *AEI) handleZoo(text string) error {
 		a.engine.SetPos(pos)
 		return nil
 	case strings.HasPrefix(text, "move"), strings.HasPrefix(text, "moves"):
-		moves, scores := a.engine.GetMoveLenScores(a.engine.Pos(), 4)
-		for i, move := range moves {
-			a.Logf("[%d] %s", scores[i], MoveString(move))
+		parts := strings.SplitN(text, " ", 2)
+		n := 0
+		if len(parts) == 2 {
+			n, _ = strconv.Atoi(parts[1])
+		}
+		moves := a.engine.getMovesLen(a.engine.Pos(), 4)
+		scoredMoves := a.engine.sortMoves(a.engine.Pos(), moves)
+		if n == 0 {
+			n = len(scoredMoves)
+		}
+		for i, e := range scoredMoves {
+			if i >= n {
+				break
+			}
+			a.Logf("[%d] %s", e.score, MoveString(e.move))
 		}
 		a.Logf("%d", len(moves))
 		return nil

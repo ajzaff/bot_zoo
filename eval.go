@@ -1,8 +1,6 @@
 package zoo
 
-import "sort"
-
-var terminalEval = 100000
+const terminalEval = 100000
 
 var pieceValue = []int{
 	0,
@@ -51,66 +49,66 @@ var mobilityScore = []int{
 var positionValue = [][]int{{ // Empty
 	0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 50, 0, 0, 50, 0, 0,
+	0, 0, 10, 0, 0, 10, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 50, 0, 0, 50, 0, 0,
+	0, 0, 10, 0, 0, 10, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0,
 }, { // Rabbit
 	999, 999, 999, 999, 999, 999, 999, 999,
 	199, 199, 50, 199, 199, 50, 199, 199,
-	20, -5, -50, -10, -10, -50, -5, 20,
-	10, 0, -10, 10, -10, -10, 0, 10,
-	5, 0, 0, -10, -10, 0, 0, 5,
-	5, 0, -10, -10, -10, -10, 0, 5,
-	0, 0, -5, -10, -10, -5, 0, 0,
+	8, -2, -10, -5, -5, -10, -2, 8,
+	5, 0, -5, 5, -5, -5, 0, 5,
+	2, 0, 0, -5, -5, 0, 0, 2,
+	2, 0, -5, -5, -5, -5, 0, 2,
+	0, 0, -2, -5, -5, -2, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0,
 }, { // Cat
 	0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, -50, 0, 0, -50, 0, 0,
-	0, -50, -100, -50, -50, -100, -50, 0,
-	0, 0, -50, 0, 0, -50, 0, 0,
+	0, 0, -8, 0, 0, -8, 0, 0,
+	0, -8, -10, -8, -8, -10, -8, 0,
+	0, 0, -8, 0, 0, -8, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, -5, 0, 0, -5, 0, 0,
-	10, 20, 50, 10, 10, 50, 20, 50,
-	10, 50, 50, 10, 10, 50, 50, 50,
+	0, 0, -2, 0, 0, -2, 0, 0,
+	5, 8, 10, 5, 5, 10, 8, 10,
+	5, 10, 10, 5, 5, 10, 10, 10,
 }, { // Dog
 	0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, -20, 0, 0, -20, 0, 0,
-	0, -20, -100, -20, -20, -100, -20, 0,
-	0, 0, -20, 0, 0, -20, 0, 0,
+	0, 0, -8, 0, 0, -8, 0, 0,
+	0, -8, -10, -8, -8, -10, -8, 0,
+	0, 0, -8, 0, 0, -8, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 0, 50, 50, 0, 0, 0,
+	0, 0, 0, 10, 10, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0,
 }, { // Horse
-	-20, -20, -20, -20, -20, -20, -20, -20,
-	-20, 0, 0, 0, 0, 0, 0, -20,
-	-20, 10, -20, 50, 50, -20, 10, -20,
-	-20, 10, 50, 5, 5, 50, 10, -20,
-	-20, 10, 10, 5, 5, 10, 10, -20,
-	-20, 10, 0, 0, 10, 0, 10, -20,
-	-20, 0, 0, 0, 0, 0, 0, -20,
-	-20, -20, -20, -20, -20, -20, -20, -20,
+	-8, -8, -8, -8, -8, -8, -8, -8,
+	-8, 0, 0, 0, 0, 0, 0, -8,
+	-8, 5, -8, 10, 10, -8, 5, -8,
+	-8, 5, 10, 2, 2, 10, 5, -8,
+	-8, 5, 5, 2, 2, 5, 5, -8,
+	-8, 5, 0, 0, 5, 0, 5, -8,
+	-8, 0, 0, 0, 0, 0, 0, -8,
+	-8, -8, -8, -8, -8, -8, -8, -8,
 }, { // Camel
-	-20, -20, -20, -20, -20, -20, -20, -20,
-	-20, 0, 0, 0, 0, 0, 0, -20,
-	-20, 10, -20, 50, 50, -20, 10, -20,
-	-20, 10, 50, 5, 5, 50, 10, -20,
-	-20, 10, 10, 5, 5, 10, 10, -20,
-	-20, 10, 0, 10, 10, 0, 10, -20,
-	-20, 0, 0, 0, 0, 0, 0, -20,
-	-20, -20, -20, -20, -20, -20, -20, -20,
+	-8, -8, -8, -8, -8, -8, -8, -8,
+	-8, 0, 0, 0, 0, 0, 0, -8,
+	-8, 5, -8, 10, 10, -8, 5, -8,
+	-8, 5, 10, 2, 2, 10, 5, -8,
+	-8, 5, 5, 2, 2, 5, 5, -8,
+	-8, 5, 0, 5, 5, 0, 5, -8,
+	-8, 0, 0, 0, 0, 0, 0, -8,
+	-8, -8, -8, -8, -8, -8, -8, -8,
 }, { // Elephant
-	-20, -20, -20, -20, -20, -20, -20, -20,
-	-20, 0, 0, 0, 0, 0, 0, -20,
-	-20, 10, -20, 50, 50, -20, 10, -20,
-	-20, 10, 50, 50, 50, 50, 10, -20,
-	-20, 10, 10, 50, 50, 10, 10, -20,
-	-20, 10, 0, 10, 10, 0, 10, -20,
-	-20, 0, 0, 0, 0, 0, 0, -20,
-	-20, -20, -20, -20, -20, -20, -20, -20,
+	-8, -8, -8, -8, -8, -8, -8, -8,
+	-8, 0, 0, 0, 0, 0, 0, -8,
+	-8, 5, -8, 10, 10, -8, 5, -8,
+	-8, 5, 10, 10, 10, 10, 5, -8,
+	-8, 5, 5, 10, 10, 5, 5, -8,
+	-8, 5, 0, 5, 5, 0, 5, -8,
+	-8, 0, 0, 0, 0, 0, 0, -8,
+	-8, -8, -8, -8, -8, -8, -8, -8,
 }}
 
 func (p *Pos) mobilityScore(side Color) (score int) {
@@ -132,7 +130,7 @@ func (p *Pos) mobilityScore(side Color) (score int) {
 func (p *Pos) positionScore(side Color) (score int) {
 	c := 7
 	m := -1
-	if side == Silver {
+	if side != Gold {
 		c = 0
 		m = 1
 	}
@@ -168,76 +166,56 @@ func (p *Pos) score(side Color) (score int) {
 	return score
 }
 
-func (p *Pos) Score() int {
-	if v := p.Goal(); v == p.Side {
-		return terminalEval
-	} else if v == p.Side.Opposite() {
-		return -terminalEval
+func (p *Pos) terminalGoalValue() int {
+	myGoal, theirGoal := ^NotRank8, ^NotRank1
+	if p.Side != Gold {
+		myGoal, theirGoal = theirGoal, myGoal
 	}
-	if v := p.Eliminated(); v == p.Side {
-		return -terminalEval
-	} else if v == p.Side.Opposite() {
+	if p.Bitboards[GRabbit.MakeColor(p.Side)]&myGoal != 0 {
 		return terminalEval
 	}
-	if v := p.Immobilized(); v == p.Side {
+	if p.Bitboards[GRabbit.MakeColor(p.Side.Opposite())]&theirGoal != 0 {
 		return -terminalEval
-	} else if v == p.Side.Opposite() {
-		return terminalEval
-	}
-	return p.score(p.Side) - p.score(p.Side.Opposite())
-}
-
-var moveLenPenalty = []int{
-	-terminalEval,
-	-30,
-	-20,
-	-10,
-	0,
-	0,
-	0,
-	0,
-	0,
-}
-
-func moveLengthPenalty(n int) int {
-	if n < 8 {
-		return moveLenPenalty[n]
 	}
 	return 0
 }
 
-func (e *Engine) SortMoves(p *Pos, moves [][]Step) (scores []int) {
-	e.r.Shuffle(len(moves), func(i, j int) {
-		moves[i], moves[j] = moves[j], moves[i]
-	})
-	a := byScore{
-		moves:  moves,
-		scores: make([]int, len(moves)),
+func (p *Pos) terminalEliminationValue() int {
+	if p.Bitboards[GRabbit.MakeColor(p.Side.Opposite())] == 0 {
+		return terminalEval
 	}
-	for i, move := range moves {
-		t, _, err := p.Move(move, false)
-		if err != nil {
-			a.scores[i] = -terminalEval
-			continue
-		}
-		score := -t.Score()
-		score += moveLengthPenalty(len(move))
-		a.scores[i] = score
+	if p.Bitboards[GRabbit.MakeColor(p.Side)] == 0 {
+		return -terminalEval
 	}
-	sort.Sort(a)
-	return a.scores
+	return 0
 }
 
-type byScore struct {
-	scores []int
-	moves  [][]Step
+func (p *Pos) terminalImmobilizedValue() int {
+	if p.immobilized(p.Side.Opposite()) {
+		return terminalEval
+	}
+	if p.immobilized(p.Side) {
+		return -terminalEval
+	}
+	return 0
 }
 
-func (a byScore) Len() int { return len(a.moves) }
-func (a byScore) Swap(i, j int) {
-	a.scores[i], a.scores[j] = a.scores[j], a.scores[i]
-	a.moves[i], a.moves[j] = a.moves[j], a.moves[i]
+func (p *Pos) terminalValue() int {
+	if v := p.terminalGoalValue(); v != 0 {
+		return v
+	}
+	if v := p.terminalEliminationValue(); v != 0 {
+		return v
+	}
+	if v := p.terminalImmobilizedValue(); v != 0 {
+		return v
+	}
+	return 0
 }
-func (a byScore) Less(i, j int) bool {
-	return a.scores[i] > a.scores[j]
+
+func (p *Pos) Score() int {
+	if v := p.terminalValue(); v != 0 {
+		return v
+	}
+	return p.score(p.Side) - p.score(p.Side.Opposite())
 }
