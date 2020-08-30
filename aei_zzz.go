@@ -47,10 +47,6 @@ func (a *AEI) handleZoo(text string) error {
 			a.verbosePos()
 		}
 		return nil
-	case text == "search":
-		move, score := a.engine.Search()
-		a.Logf("search: %d %s [depth=6]:", score, MoveString(move))
-		return nil
 	case text == "eval":
 		a.logScore()
 		return nil

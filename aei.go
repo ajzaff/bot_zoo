@@ -85,13 +85,17 @@ func (a *AEI) handle(text string) error {
 	case strings.HasPrefix(text, "go"):
 		parts := strings.SplitN(text, " ", 2)
 		if len(parts) < 2 {
-			move, score := a.engine.Search()
-			if len(move) == 0 {
+			best := a.engine.SearchFixedDepth(2)
+			if len(best.Move) == 0 {
 				a.Logf("no moves")
 				return nil
 			}
-			a.writef("bestmove %s\n", MoveString(move))
-			a.writef("info score %d\n", score)
+			a.writef("bestmove %s\n", MoveString(best.Move))
+			a.writef("info score %d\n", best.Score)
+			a.writef("info nodes %d\n", best.Nodes)
+			a.writef("info pv %s\n", MoveString(best.PV))
+			a.writef("info time %d\n", int(best.Time.Seconds()))
+			a.writef("info curmovenumber %d\n", a.engine.Pos().MoveNum)
 			return nil
 		}
 		switch cmd := parts[1]; cmd {
