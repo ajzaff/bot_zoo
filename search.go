@@ -113,14 +113,12 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 		n = 4
 	}
 	var best int
-	moves := e.getMovesLen(p, n)
-	sortedMoves := e.sortMoves(p, moves)
-	for _, entry := range sortedMoves {
-		t, _, err := p.Move(entry.move, false)
+	for _, step := range p.GetSteps(true) {
+		t, _, err := p.Step(step)
 		if err != nil {
 			continue
 		}
-		score := -e.search(t, -beta, -alpha, depth+CountSteps(entry.move), maxDepth)
+		score := -e.search(t, -beta, -alpha, depth+1, maxDepth)
 		if score > best {
 			best = score
 		}
