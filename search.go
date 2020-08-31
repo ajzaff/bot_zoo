@@ -2,6 +2,7 @@ package zoo
 
 import (
 	"fmt"
+	"log"
 	"time"
 )
 
@@ -19,7 +20,7 @@ type SearchResult struct {
 
 func (e *Engine) SearchFixedDepth(depth int) SearchResult {
 	p := e.Pos()
-	if p.MoveNum == 1 {
+	if p.moveNum == 1 {
 		// TODO(ajzaff): Find best setup moves using a specialized search.
 		// For now, choose a random setup.
 		res := SearchResult{
@@ -46,30 +47,27 @@ func (e *Engine) searchRoot(p *Pos, depth int) SearchResult {
 	if n > 4 {
 		n = 4
 	}
-	moves := e.getMovesLen(p, n)
+	moves := e.getRootMovesLen(p, n)
 	sortedMoves := e.sortMoves(p, moves)
 	for _, entry := range sortedMoves {
-		t, mseq, err := p.Move(entry.move, false)
-		if err != nil {
+		if err := p.Move(entry.move); err != nil {
+			log.Printf("move: %v", err)
 			continue
 		}
-		score := -e.search(t, -inf, inf, CountSteps(entry.move), depth)
+		score := -e.search(p, -inf, inf, len(entry.move), depth)
+		if err := p.Unmove(entry.move); err != nil {
+			log.Printf("unmove: %v", err)
+		}
 		if score > best.Score {
 			best.Score = score
-			best.Move = mseq
+			best.Move = entry.move
 			fmt.Printf("log depth %d\n", depth)
 			fmt.Printf("log score %d\n", score)
-			fmt.Printf("log pv %s\n", MoveString(mseq))
+			fmt.Printf("log pv %s\n", p.MoveString(entry.move))
 			fmt.Printf("log transpositions %d\n", e.table.Len())
 		}
 	}
 	return best
-}
-
-func assert(message string, cond bool) {
-	if !cond {
-		panic(message)
-	}
 }
 
 func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
@@ -77,7 +75,7 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 
 	// Step 1: Check the transposition table.
 	if e.useTable {
-		if entry, ok := e.table.ProbeDepth(p.ZHash, maxDepth); ok {
+		if entry, ok := e.table.ProbeDepth(p.zhash, maxDepth); ok {
 			switch entry.Bound {
 			case ExactBound:
 				return entry.Value
@@ -108,21 +106,22 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 	assert("!(0 < depth && depth < maxDepth)", 0 < depth && depth < maxDepth)
 
 	// Step 3: Main search.
-	n := maxDepth - depth
-	if n > 4 {
-		n = 4
-	}
 	var best int
-	for _, step := range p.GetSteps(true) {
-		t, _, err := p.Step(step)
-		if err != nil {
+	for _, step := range p.GenSteps() {
+		if err := p.Step(step); err != nil {
+			log.Println(err)
 			continue
 		}
 		var score int
-		if CountSteps(t.Steps) > 3 {
-			score = -e.search(t, -beta, -alpha, depth+1, maxDepth)
+		if len(p.steps) == 0 {
+			p.NullMove()
+			score = -e.search(p, -beta, -alpha, depth+1, maxDepth)
 		} else {
-			score = e.search(t, alpha, beta, depth+1, maxDepth)
+			score = e.search(p, alpha, beta, depth+1, maxDepth)
+		}
+		if err := p.Unstep(step); err != nil {
+			log.Println(err)
+			continue
 		}
 		if score > best {
 			best = score
@@ -138,7 +137,7 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 	// Step 4: Store transposition table entry.
 	if e.useTable {
 		entry := &TableEntry{
-			ZHash: p.ZHash,
+			ZHash: p.zhash,
 			Depth: maxDepth,
 			Value: best,
 		}

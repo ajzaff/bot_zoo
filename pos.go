@@ -5,27 +5,21 @@ import (
 )
 
 type Pos struct {
-	Bitboards []Bitboard
-	Presence  []Bitboard
-	Side      Color
-	MoveNum   int
+	bitboards []Bitboard
+	presence  []Bitboard
+	side      Color
+	moveNum   int
 	// TODO(ajzaff): Add numSteps field for efficiency.
-	Steps     []Step
-	Push      bool
-	LastPiece Piece
-	LastFrom  Square
-	ZHash     int64
+	steps []Step
+	zhash int64
 }
 
-func NewPos(
+func newPos(
 	bitboards []Bitboard,
 	presence []Bitboard,
 	side Color,
 	moveNum int,
 	steps []Step,
-	push bool,
-	lastPiece Piece,
-	lastFrom Square,
 	zhash int64,
 ) *Pos {
 	if bitboards == nil {
@@ -47,23 +41,20 @@ func NewPos(
 		}
 	}
 	if zhash == 0 {
-		zhash = ZHash(bitboards, side, CountSteps(steps))
+		zhash = ZHash(bitboards, side, len(steps))
 	}
 	return &Pos{
-		Bitboards: bitboards,
-		Presence:  presence,
-		Side:      side,
-		MoveNum:   moveNum,
-		Steps:     steps,
-		Push:      push,
-		LastPiece: lastPiece,
-		LastFrom:  lastFrom,
-		ZHash:     zhash,
+		bitboards: bitboards,
+		presence:  presence,
+		side:      side,
+		moveNum:   moveNum,
+		steps:     steps,
+		zhash:     zhash,
 	}
 }
 
 func (p *Pos) immobilized(c Color) bool {
-	b := p.Presence[c]
+	b := p.presence[c]
 	for b > 0 {
 		atB := b & -b
 		if !p.frozenB(atB) {
@@ -83,80 +74,62 @@ func (p *Pos) At(i Square) Piece {
 }
 
 func (p *Pos) atB(b Bitboard) Piece {
-	for piece := GRabbit; piece <= SElephant && int(piece) < len(p.Bitboards); piece++ {
-		if p.Bitboards[piece]&b != 0 {
+	for piece := GRabbit; piece <= SElephant && int(piece) < len(p.bitboards); piece++ {
+		if p.bitboards[piece]&b != 0 {
 			return piece
 		}
 	}
 	return Empty
 }
 
-func (p *Pos) Place(piece Piece, i Square) (*Pos, error) {
+func (p *Pos) Place(piece Piece, i Square) error {
 	if piece == Empty {
 		return p.Remove(i)
 	}
 	b := i.Bitboard()
-	if p.Bitboards[Empty]&b == 0 {
-		return nil, fmt.Errorf("piece already present")
+	if p.bitboards[Empty]&b == 0 {
+		return fmt.Errorf("piece already present")
 	}
-	bs := make([]Bitboard, len(p.Bitboards))
-	for i := range p.Bitboards {
-		bs[i] = p.Bitboards[i]
+	bs := make([]Bitboard, len(p.bitboards))
+	for i := range p.bitboards {
+		bs[i] = p.bitboards[i]
 	}
-	bs[piece] |= b
-	bs[Empty] &= ^b
-	ps := make([]Bitboard, 2)
-	ps[0] = p.Presence[0]
-	ps[1] = p.Presence[1]
-	ps[piece.Color()] |= b
-	zhash := p.ZHash ^ ZPieceKey(piece, i)
-	return NewPos(
-		bs, ps, p.Side, p.MoveNum, p.Steps, p.Push,
-		p.LastPiece, p.LastFrom, zhash,
-	), nil
+	p.bitboards[piece] |= b
+	p.bitboards[Empty] &= ^b
+	p.presence[piece.Color()] |= b
+	p.zhash ^= ZPieceKey(piece, i)
+	return nil
 }
 
-func (p *Pos) Remove(i Square) (*Pos, error) {
+func (p *Pos) Remove(i Square) error {
 	b := i.Bitboard()
-	if p.Bitboards[Empty]&b == 0 {
-		return nil, fmt.Errorf("no piece present")
+	if p.bitboards[Empty]&b == 0 {
+		return fmt.Errorf("no piece present")
 	}
 	piece := GRabbit
-	for piece <= SElephant && (p.Bitboards[piece] == 0 || p.Bitboards[piece]&b == 0) {
+	for piece <= SElephant && (p.bitboards[piece] == 0 || p.bitboards[piece]&b == 0) {
 		piece++
 	}
-	if piece > SElephant {
-		panic("inconsistent board state")
+	assert("inconsistent board state", piece <= SElephant)
+	bs := make([]Bitboard, len(p.bitboards))
+	for i := range p.bitboards {
+		bs[i] = p.bitboards[i]
 	}
-	bs := make([]Bitboard, len(p.Bitboards))
-	for i := range p.Bitboards {
-		bs[i] = p.Bitboards[i]
-	}
-	bs[piece] &= ^b
-	bs[Empty] |= b
-	ps := make([]Bitboard, 2)
-	ps[0] = p.Presence[0]
-	ps[1] = p.Presence[1]
-	ps[piece.Color()] &= ^b
-	zhash := p.ZHash ^ ZPieceKey(piece, i)
-	return NewPos(
-		bs, ps, p.Side, p.MoveNum, p.Steps, p.Push,
-		p.LastPiece, p.LastFrom, zhash,
-	), nil
-}
-
-func (p *Pos) Frozen(i Square) bool {
-	return p.frozenB(i.Bitboard())
+	p.bitboards[piece] &= ^b
+	p.bitboards[Empty] |= b
+	p.presence[piece.Color()] &= ^b
+	p.zhash ^= ZPieceKey(piece, i)
+	return nil
 }
 
 func (p *Pos) frozenB(b Bitboard) bool {
 	neighbors := b.Neighbors()
 	piece := p.atB(b)
 	color := piece.Color()
-	if neighbors&p.Presence[color] == 0 &&
-		neighbors&p.Presence[color.Opposite()] != 0 {
+	if neighbors&p.presence[color] == 0 &&
+		neighbors&p.presence[color.Opposite()] != 0 {
 		for s := piece.MakeColor(color.Opposite()) + 1; s <= GElephant.MakeColor(color.Opposite()); s++ {
-			if neighbors&p.Bitboards[s] != 0 {
+			if neighbors&p.bitboards[s] != 0 {
 				return true
 			}
 		}
@@ -164,7 +137,7 @@ func (p *Pos) frozenB(b Bitboard) bool {
 	return false
 }
 
-func (p *Pos) FrozenNeighbors(b Bitboard) Bitboard {
+func (p *Pos) frozenNeighbors(b Bitboard) Bitboard {
 	var res Bitboard
 	b = b.Neighbors()
 	for b > 0 {
@@ -177,210 +150,102 @@ func (p *Pos) FrozenNeighbors(b Bitboard) Bitboard {
 	return res
 }
 
-func (p *Pos) CheckStep(step Step) (ok bool, err error) {
-	if p.MoveNum == 1 {
-		if !step.Setup() {
-			return false, fmt.Errorf("expected setup move")
-		}
-		return true, nil
-	}
-	src := step.Src.Bitboard()
-	dest := step.Dest.Bitboard()
-	if src&p.Bitboards[Empty] != 0 {
-		return false, fmt.Errorf("move from empty square")
-	}
-	if dest&p.Bitboards[Empty] == 0 {
-		return false, fmt.Errorf("move to nonempty square")
-	}
-	piece := p.atB(src)
-	dir := step.Src.Delta(step.Dest)
-	srcNeighbors := src.Neighbors()
-	destNeighbors := dest.Neighbors()
-
-	if src&destNeighbors == 0 {
-		return false, fmt.Errorf("move to nonadjacent square")
-	}
-	if piece.Color() == p.Side {
-		if p.frozenB(src) {
-			return false, fmt.Errorf("move from frozen piece")
-		}
-		if piece.SamePiece(GRabbit) && (piece.Color() == Gold && dir == -8 || piece.Color() == Silver && dir == 8) {
-			return false, fmt.Errorf("backwards rabbit move")
-		}
-		if p.Push {
-			if step.Dest != p.LastFrom {
-				return false, fmt.Errorf("move must finish active push")
-			}
-			if !p.LastPiece.WeakerThan(piece) {
-				return false, fmt.Errorf("piece is too weak to push")
-			}
-		}
-		return true, nil
-	}
-	if p.Push {
-		return false, fmt.Errorf("push started before active push finished")
-	}
-	if p.LastPiece == Empty ||
-		p.LastFrom != step.Dest ||
-		p.LastPiece.WeakerThan(piece) ||
-		p.LastPiece.SamePiece(piece) {
-		if CountSteps(p.Steps) == 3 {
-			return false, fmt.Errorf("push started on last step")
-		}
-		foundPusher := false
-		for s := piece.MakeColor(piece.Color().Opposite()) + 1; s <= GElephant.MakeColor(piece.Color().Opposite()); s++ {
-			if srcNeighbors&p.Bitboards[s]&^p.FrozenNeighbors(src) != 0 {
-				foundPusher = true
-				break
-			}
-		}
-		if !foundPusher {
-			return false, fmt.Errorf("move with no pusher")
-		}
-	}
-	return true, nil
-}
-
-func (p *Pos) Step(step Step) (rp *Pos, cap Step, err error) {
+func (p *Pos) Step(step Step) error {
 	if step.Setup() {
-		p, err = p.Place(step.Piece, step.Dest)
-		return p, Step{}, err
+		return p.Place(step.Piece, step.Dest)
 	}
-	bs := make([]Bitboard, len(p.Bitboards))
-	for i := range p.Bitboards {
-		bs[i] = p.Bitboards[i]
+	if step.Capture() {
+		return p.Remove(step.Src)
 	}
-	ps := make([]Bitboard, 2)
-	ps[0] = p.Presence[0]
-	ps[1] = p.Presence[1]
-	zhash := p.ZHash
-	src := step.Src.Bitboard()
-	dest := step.Dest.Bitboard()
-	piece := p.atB(src)
-	var push, pull bool
-	if piece.Color() != p.Side {
-		if p.LastPiece != Empty && p.LastFrom == step.Dest &&
-			piece.WeakerThan(p.LastPiece) {
-			pull = true
-		} else {
-			push = true
-		}
+	if err := p.Remove(step.Src); err != nil {
+		return err
 	}
-	stepB := src | dest
-	bs[piece] ^= stepB
-	bs[Empty] ^= stepB
-	ps[piece.Color()] ^= stepB
-	zhash ^= ZPieceKey(piece, step.Src)
-	zhash ^= ZPieceKey(piece, step.Dest)
-	trappedB := src.Neighbors() & Traps & ^ps[piece.Color()].Neighbors()
-	if trappedB&ps[piece.Color()] != 0 {
-		bs[Empty] |= trappedB
-		ps[piece.Color()] &= ^trappedB
-		for t := GRabbit.MakeColor(piece.Color()); t <= GElephant.MakeColor(piece.Color()); t++ {
-			if bs[t]&trappedB != 0 {
-				src := trappedB.Square()
-				zhash ^= ZPieceKey(t, src)
-				bs[t] &= ^trappedB
-				cap = Step{
-					Src:   src,
-					Piece: t,
-					Dir:   "x",
-				}
-				break // only one trapped piece possible
-			}
-		}
+	piece := step.Piece
+	if err := p.Place(piece, step.Dest); err != nil {
+		return err
 	}
-	steps := make([]Step, len(p.Steps))
-	copy(steps, p.Steps)
-	steps = append(steps, step)
-	if cap.Capture() {
-		steps = append(steps, cap)
+	stepB := step.Src.Bitboard() | step.Dest.Bitboard()
+	p.bitboards[piece] ^= stepB
+	p.bitboards[Empty] ^= stepB
+	p.presence[piece.Color()] ^= stepB
+	p.zhash ^= ZPieceKey(piece, step.Src)
+	p.zhash ^= ZPieceKey(piece, step.Dest)
+	if c := p.capture(step); c.Capture() {
+		return p.Step(c)
 	}
-	moveNum := p.MoveNum
-	if CountSteps(steps) > 3 {
-		// Allow Move to change Side.
-		steps = steps[:0]
-		piece = Empty
-		src = 0
-	}
-	if p.Push || pull {
-		piece = Empty
-		src = 0
-	}
-	return NewPos(
-		bs, ps, p.Side, moveNum, steps, push,
-		piece, src.Square(), zhash,
-	), cap, nil
+	return nil
 }
 
-func (p *Pos) NullMove() *Pos {
-	side := p.Side.Opposite()
-	zhash := p.ZHash
-	zhash ^= ZSilverKey()
-	moveNum := p.MoveNum
-	if side == Gold {
-		moveNum++
+func (p *Pos) Unstep(step Step) error {
+	if step.Setup() {
+		return p.Remove(step.Dest)
 	}
-	return NewPos(
-		p.Bitboards, p.Presence, side,
-		moveNum, nil, false, Empty, 0, zhash,
-	)
+	piece := step.Piece
+	if step.Capture() {
+		return p.Place(piece, step.Src)
+	}
+	if c := p.capture(step); c.Capture() {
+		if err := p.Unstep(c); err != nil {
+			return err
+		}
+	}
+	if err := p.Remove(step.Dest); err != nil {
+		return err
+	}
+	if err := p.Place(piece, step.Src); err != nil {
+		return err
+	}
+	stepB := step.Src.Bitboard() | step.Dest.Bitboard()
+	p.bitboards[piece] ^= stepB
+	p.bitboards[Empty] ^= stepB
+	p.presence[piece.Color()] ^= stepB
+	p.zhash ^= ZPieceKey(piece, step.Src)
+	p.zhash ^= ZPieceKey(piece, step.Dest)
+	return nil
 }
 
-func (p *Pos) Move(steps []Step, check bool) (rp *Pos, out []Step, err error) {
-	if p.MoveNum == 1 {
-		if len(steps) != 16 {
-			return nil, nil, fmt.Errorf("wrong number of setup moves")
-		}
-	} else { // Prune captures
-		newSteps := make([]Step, 0, len(steps))
-		for _, step := range steps {
-			if !step.Capture() {
-				newSteps = append(newSteps, step)
-			}
-		}
-		if len(newSteps) == 0 || len(newSteps) > 4 {
-			return nil, nil, fmt.Errorf("wrong number of steps")
-		}
-		steps = newSteps
+func (p *Pos) NullMove() {
+	p.zhash ^= ZSilverKey()
+	if p.side = p.side.Opposite(); p.side == Gold {
+		p.moveNum++
 	}
-	initZHash := p.ZHash
-	side := p.Side
-	for i, step := range steps {
-		if check {
-			legal, err := p.CheckStep(step)
-			if !legal {
-				return nil, nil, fmt.Errorf("check %d: %v", i+1, err)
-			}
-		}
-		out = append(out, step)
-		var cap Step
-		p, cap, err = p.Step(step)
-		if cap.Capture() {
-			out = append(out, cap)
-		}
-		if err != nil {
-			return nil, nil, fmt.Errorf("step %d: %v", i+1, err)
+}
+
+func (p *Pos) NullUnmove() {
+	p.zhash ^= ZSilverKey()
+	if p.side = p.side.Opposite(); p.side == Gold {
+		p.moveNum--
+	}
+}
+
+func (p *Pos) Move(steps []Step) error {
+	if p.moveNum == 1 && len(steps) != 16 {
+		return fmt.Errorf("wrong number of setup moves")
+	}
+	initZHash := p.zhash
+	for _, step := range steps {
+		if err := p.Step(step); err != nil {
+			return fmt.Errorf("%s: %v", step.String(), err)
 		}
 	}
-	if p.Side == side {
-		side = side.Opposite()
-		moveNum := p.MoveNum
-		zhash := p.ZHash
-		if side == Gold {
-			moveNum++
-			zhash ^= ZSilverKey()
+	p.NullMove()
+	// TODO(ajzaff): Movegen should filter moves that would result
+	// in recurring positions.
+	if initZHash == p.zhash {
+		return fmt.Errorf("recurring position is illegal")
+	}
+	return nil
+}
+
+func (p *Pos) Unmove(steps []Step) error {
+	if p.moveNum == 1 && len(steps) != 16 {
+		return fmt.Errorf("wrong number of setup moves")
+	}
+	p.NullUnmove()
+	for _, step := range steps {
+		if err := p.Unstep(step); err != nil {
+			return fmt.Errorf("%s: %v", step.String(), err)
 		}
-		zhash ^= ZStepsKey(CountSteps(p.Steps))
-		zhash ^= ZStepsKey(0)
-		p = NewPos(
-			p.Bitboards, p.Presence, side,
-			moveNum, nil, false, Empty, 0, zhash,
-		)
 	}
-	// Note: Movegen currently does not produce moves that would result in once-recurring positions.
-	if initZHash == p.ZHash {
-		return nil, nil, fmt.Errorf("recurring position is illegal")
-	}
-	return p, out, nil
+	return nil
 }

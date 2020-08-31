@@ -94,9 +94,10 @@ func (t *Table) emplaceBack(e *TableEntry) {
 	t.len++
 }
 
-func (t *Table) purge(curDepth int) {
+func (t *Table) fixedPurge(curDepth int) {
 	t.pop(t.head)
-	for it := t.head; it != nil && it.Depth < curDepth; it = it.next {
+	n := t.Len() / 2
+	for it := t.head; it != nil && it.Depth < curDepth && n > 0; it, n = it.next, n-1 {
 		t.pop(it)
 	}
 }
@@ -108,7 +109,7 @@ func (t *Table) Store(e *TableEntry) {
 	}
 	t.table[e.ZHash] = e
 	if t.Len() >= t.Cap() {
-		t.purge(e.Depth)
+		t.fixedPurge(e.Depth)
 	}
 	t.emplaceBack(e)
 }

@@ -11,11 +11,12 @@ const (
 )
 
 const (
-	TrapC3          = Bitboard(1) << 18
-	TrapF3          = Bitboard(1) << 21
-	TrapC6          = Bitboard(1) << 42
-	TrapF6          = Bitboard(1) << 45
-	Traps  Bitboard = 0x0000240000240000
+	TrapC3        = Bitboard(1) << 18
+	TrapF3        = Bitboard(1) << 21
+	TrapC6        = Bitboard(1) << 42
+	TrapF6        = Bitboard(1) << 45
+	Traps         = Bitboard(0x0000240000240000)
+	TrapNeighbors = Traps>>1 | Traps<<1 | Traps>>8 | Traps<<8
 )
 
 func (b Bitboard) Neighbors() Bitboard {

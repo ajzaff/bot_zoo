@@ -10,7 +10,7 @@ func (a *AEI) handleZoo(text string) error {
 	switch {
 	case text == "new", text == "newstandard":
 		pos, _ := ParseShortPosition(PosStandard)
-		pos.MoveNum = 2
+		pos.moveNum = 2
 		a.engine.SetPos(pos)
 		return nil
 	case strings.HasPrefix(text, "move"), strings.HasPrefix(text, "moves"):
@@ -19,7 +19,7 @@ func (a *AEI) handleZoo(text string) error {
 		if len(parts) == 2 {
 			n, _ = strconv.Atoi(parts[1])
 		}
-		moves := a.engine.getMovesLen(a.engine.Pos(), 4)
+		moves := a.engine.getRootMovesLen(a.engine.Pos(), 4)
 		scoredMoves := a.engine.sortMoves(a.engine.Pos(), moves)
 		if n == 0 {
 			n = len(scoredMoves)
@@ -28,17 +28,17 @@ func (a *AEI) handleZoo(text string) error {
 			if i >= n {
 				break
 			}
-			a.Logf("[%d] %s", e.score, MoveString(e.move))
+			a.Logf("[%d] %s", e.score, a.engine.Pos().MoveString(e.move))
 		}
 		a.Logf("%d", len(scoredMoves))
 		return nil
 	case text == "hash":
-		a.Logf("%X", a.engine.Pos().ZHash)
+		a.Logf("%X", a.engine.Pos().zhash)
 		return nil
 	case strings.HasPrefix(text, "step"), strings.HasPrefix(text, "makestep"):
 		parts := strings.SplitN(text, " ", 2)
 		if len(parts) < 2 {
-			for _, step := range a.engine.Pos().GetSteps(true) {
+			for _, step := range a.engine.Pos().GenSteps() {
 				a.Logf("%s", step)
 			}
 			return nil
@@ -47,23 +47,21 @@ func (a *AEI) handleZoo(text string) error {
 		if err != nil {
 			return err
 		}
-		pos, _, err := a.engine.Pos().Step(step)
-		if err != nil {
+		if err := a.engine.Pos().Step(step); err != nil {
 			return err
 		}
-		a.engine.SetPos(pos)
 		if a.verbose {
 			a.verbosePos()
 		}
 		return nil
 	case text == "nullmove":
-		a.engine.SetPos(a.engine.Pos().NullMove())
+		a.engine.Pos().NullMove()
 		if a.verbose {
 			a.verbosePos()
 		}
 		return nil
 	case text == "eval":
-		a.logScore()
+		a.logEval()
 		return nil
 	case strings.HasPrefix(text, "print"):
 		parts := strings.SplitN(text, " ", 2)
@@ -74,15 +72,15 @@ func (a *AEI) handleZoo(text string) error {
 		var b Bitboard
 		switch parts[1] {
 		case "w", "g":
-			b = a.engine.Pos().Presence[Gold]
+			b = a.engine.Pos().presence[Gold]
 		case "b", "s":
-			b = a.engine.Pos().Presence[Silver]
+			b = a.engine.Pos().presence[Silver]
 		case "short":
 			a.Logf(a.engine.Pos().ShortString())
 			return nil
 		default:
 			p, _ := ParsePiece(parts[1])
-			bs := a.engine.Pos().Bitboards
+			bs := a.engine.Pos().bitboards
 			if bs != nil {
 				b = bs[p]
 			}
@@ -94,11 +92,11 @@ func (a *AEI) handleZoo(text string) error {
 	}
 }
 
-func (a *AEI) logScore() {
+func (a *AEI) logEval() {
 	a.Logf("eval: %d", a.engine.Pos().Score())
 }
 
 func (a *AEI) verbosePos() {
 	a.Logf(a.engine.Pos().String())
-	a.logScore()
+	a.logEval()
 }

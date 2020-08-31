@@ -113,7 +113,7 @@ var positionValue = [][]int{{ // Empty
 
 func (p *Pos) mobilityScore(side Color) (score int) {
 	var count int
-	b := p.Presence[side]
+	b := p.presence[side]
 	for b > 0 {
 		atB := b & -b
 		if !p.frozenB(atB) {
@@ -144,7 +144,7 @@ func (p *Pos) positionScore(side Color) (score int) {
 		GElephant.MakeColor(side),
 	} {
 		ps := positionValue[t&decolorMask]
-		for b := p.Bitboards[t]; b > 0; b &= b - 1 {
+		for b := p.bitboards[t]; b > 0; b &= b - 1 {
 			at := b.Square()
 			score += ps[8*(c+m*int(at)/8)+c+m*(int(at)%8)]
 		}
@@ -153,13 +153,13 @@ func (p *Pos) positionScore(side Color) (score int) {
 }
 
 func (p *Pos) score(side Color) (score int) {
-	if v := p.Bitboards[GRabbit.MakeColor(side)].Count(); v <= 8 {
+	if v := p.bitboards[GRabbit.MakeColor(side)].Count(); v <= 8 {
 		score += rabbitMaterialValue[v]
 	} else {
 		score += rabbitMaterialValue[8] + v - 8
 	}
 	for s := GCat; s <= GElephant; s++ {
-		score += pieceValue[s] * p.Bitboards[s.MakeColor(side)].Count()
+		score += pieceValue[s] * p.bitboards[s.MakeColor(side)].Count()
 	}
 	score += p.mobilityScore(side)
 	score += p.positionScore(side)
@@ -168,33 +168,33 @@ func (p *Pos) score(side Color) (score int) {
 
 func (p *Pos) terminalGoalValue() int {
 	myGoal, theirGoal := ^NotRank8, ^NotRank1
-	if p.Side != Gold {
+	if p.side != Gold {
 		myGoal, theirGoal = theirGoal, myGoal
 	}
-	if p.Bitboards[GRabbit.MakeColor(p.Side)]&myGoal != 0 {
+	if p.bitboards[GRabbit.MakeColor(p.side)]&myGoal != 0 {
 		return terminalEval
 	}
-	if p.Bitboards[GRabbit.MakeColor(p.Side.Opposite())]&theirGoal != 0 {
+	if p.bitboards[GRabbit.MakeColor(p.side.Opposite())]&theirGoal != 0 {
 		return -terminalEval
 	}
 	return 0
 }
 
 func (p *Pos) terminalEliminationValue() int {
-	if p.Bitboards[GRabbit.MakeColor(p.Side.Opposite())] == 0 {
+	if p.bitboards[GRabbit.MakeColor(p.side.Opposite())] == 0 {
 		return terminalEval
 	}
-	if p.Bitboards[GRabbit.MakeColor(p.Side)] == 0 {
+	if p.bitboards[GRabbit.MakeColor(p.side)] == 0 {
 		return -terminalEval
 	}
 	return 0
 }
 
 func (p *Pos) terminalImmobilizedValue() int {
-	if p.immobilized(p.Side.Opposite()) {
+	if p.immobilized(p.side.Opposite()) {
 		return terminalEval
 	}
-	if p.immobilized(p.Side) {
+	if p.immobilized(p.side) {
 		return -terminalEval
 	}
 	return 0
@@ -217,5 +217,5 @@ func (p *Pos) Score() int {
 	if v := p.terminalValue(); v != 0 {
 		return v
 	}
-	return p.score(p.Side) - p.score(p.Side.Opposite())
+	return p.score(p.side) - p.score(p.side.Opposite())
 }
