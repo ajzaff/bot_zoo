@@ -30,7 +30,7 @@ func (a *AEI) handleZoo(text string) error {
 			}
 			a.Logf("[%d] %s", e.score, MoveString(e.move))
 		}
-		a.Logf("%d", len(moves))
+		a.Logf("%d", len(scoredMoves))
 		return nil
 	case text == "hash":
 		a.Logf("%X", a.engine.Pos().ZHash)

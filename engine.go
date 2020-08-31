@@ -2,6 +2,8 @@ package zoo
 
 import "math/rand"
 
+const transposeTableSize = 2000000
+
 type Engine struct {
 	p        *Pos
 	r        *rand.Rand
@@ -14,7 +16,7 @@ func NewEngine(seed int64) *Engine {
 	return &Engine{
 		p:        pos,
 		r:        rand.New(rand.NewSource(seed)),
-		table:    NewTable(500000),
+		table:    NewTable(transposeTableSize),
 		useTable: true,
 	}
 }

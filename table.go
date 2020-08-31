@@ -1,9 +1,5 @@
 package zoo
 
-import (
-	"container/heap"
-)
-
 type Bound int
 
 const (
@@ -13,43 +9,40 @@ const (
 	ExactBound
 )
 
-type Entry struct {
+type TableEntry struct {
 	Bound
 	ZHash int64
-	Epoch uint64
 	Depth int
 	Value int
 	Move  []Step
-	index int
+	prev  *TableEntry
+	next  *TableEntry
 }
 
 type Table struct {
-	table map[int64]*Entry
-	data  []*Entry
-	moves [][]Step
-	epoch uint64
+	head  *TableEntry
+	tail  *TableEntry
+	table map[int64]*TableEntry
+	len   int
 	cap   int
 }
 
 func NewTable(cap int) *Table {
 	return &Table{
-		table: make(map[int64]*Entry),
+		table: make(map[int64]*TableEntry),
 		cap:   cap,
 	}
 }
 
 func (t *Table) Clear() {
-	t.table = make(map[int64]*Entry)
-	t.data = make([]*Entry, 0)
-	t.moves = make([][]Step, 0)
-	t.epoch = 0
+	t.table = make(map[int64]*TableEntry)
+	t.len = 0
 }
 
-func (t *Table) ProbeDepth(key int64, depth int) (e *Entry, ok bool) {
+func (t *Table) ProbeDepth(key int64, depth int) (e *TableEntry, ok bool) {
 	if e, ok := t.table[key]; ok {
-		e.Epoch = t.epoch
-		t.epoch++
-		heap.Fix(t, e.index)
+		t.pop(e)
+		t.emplaceBack(e)
 		// TODO(ajzaff): Change this to `e.Depth >= depth`
 		// once quiescence search is added.
 		if e.Depth == depth {
@@ -60,52 +53,62 @@ func (t *Table) ProbeDepth(key int64, depth int) (e *Entry, ok bool) {
 }
 
 func (t *Table) Len() int {
-	return len(t.data)
+	return t.len
 }
 
-func (t *Table) Swap(i, j int) {
-	t.table[t.data[i].ZHash], t.table[t.data[j].ZHash] = t.data[j], t.data[i]
-	t.data[i], t.data[j] = t.data[j], t.data[i]
-	t.data[i].index, t.data[j].index = j, i
-	t.moves[i], t.moves[j] = t.moves[j], t.moves[i]
+func (t *Table) Cap() int {
+	return t.cap
 }
 
-func (t *Table) Less(i, j int) bool {
-	return t.data[i].Epoch < t.data[j].Epoch
-}
-
-func (t *Table) Push(x interface{}) {
-	e := x.(*Entry)
-	oldEntry, ok := t.table[e.ZHash]
-	if ok && oldEntry.Depth >= e.Depth {
-		return
-	}
-	e.Epoch = t.epoch
-	t.epoch++
-	t.table[e.ZHash] = e
-	if t.Len() >= t.cap {
-		for t.Len() > t.cap {
-			heap.Pop(t)
-		}
-		e.index = 0
-		t.data[0] = e
-		t.moves[0] = e.Move
-		heap.Fix(t, 0)
-		return
-	}
-	e.index = t.Len()
-	t.data = append(t.data, e)
-	t.moves = append(t.moves, e.Move)
-}
-
-func (t *Table) Pop() interface{} {
-	e := t.data[t.Len()-1]
+func (t *Table) pop(e *TableEntry) {
 	delete(t.table, e.ZHash)
-	t.data = t.data[:t.Len()-1]
-	t.moves = t.moves[:t.Len()-1]
-	return e
+	if t.Len() == 1 {
+		t.head = nil
+		t.tail = nil
+		t.len--
+		return
+	}
+	if e == t.head {
+		t.head = e.next
+	} else if e.prev != nil {
+		e.prev.next = e.next
+	}
+	if e == t.tail {
+		t.tail = e.prev
+	}
+	t.len--
 }
 
-func (t *Table) Store(e *Entry) {
-	heap.Push(t, e)
+func (t *Table) emplaceBack(e *TableEntry) {
+	if t.Len() == 0 {
+		t.head = e
+		t.tail = e
+		t.tail.prev = t.head
+		t.len++
+		return
+	}
+	t.tail.next = e
+	e.prev = t.tail
+	e.next = nil
+	t.tail = e
+	t.len++
+}
+
+func (t *Table) purge(curDepth int) {
+	t.pop(t.head)
+	for it := t.head; it != nil && it.Depth < curDepth; it = it.next {
+		t.pop(it)
+	}
+}
+
+func (t *Table) Store(e *TableEntry) {
+	old, ok := t.table[e.ZHash]
+	if ok && old.Depth >= e.Depth {
+		return
+	}
+	t.table[e.ZHash] = e
+	if t.Len() >= t.Cap() {
+		t.purge(e.Depth)
+	}
+	t.emplaceBack(e)
 }

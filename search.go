@@ -118,7 +118,12 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 		if err != nil {
 			continue
 		}
-		score := -e.search(t, -beta, -alpha, depth+1, maxDepth)
+		var score int
+		if CountSteps(t.Steps) > 3 {
+			score = -e.search(t, -beta, -alpha, depth+1, maxDepth)
+		} else {
+			score = e.search(t, alpha, beta, depth+1, maxDepth)
+		}
 		if score > best {
 			best = score
 		}
@@ -132,7 +137,7 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 
 	// Step 4: Store transposition table entry.
 	if e.useTable {
-		entry := &Entry{
+		entry := &TableEntry{
 			ZHash: p.ZHash,
 			Depth: maxDepth,
 			Value: best,

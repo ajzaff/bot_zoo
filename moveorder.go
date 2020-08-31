@@ -33,25 +33,28 @@ func (e *Engine) sortMoves(p *Pos, moves [][]Step) []scoredMove {
 	sort.Stable(byScore(a))
 
 	// Experimental pruning of non-best moves.
-	{
+	if len(a) > 0 {
 		best := a[0].score
-		if best > 0 {
-			n := 0
-			for ; n < len(a); n++ {
-				if a[n].score-best < 0 {
-					break
-				}
+		// 	if best > 0 {
+		n := 0
+		for ; n < len(a); n++ {
+			if a[n].score-best < 0 {
+				break
 			}
-			a = a[:n]
-		} else {
-			n := len(a) - 1
-			for ; n > 0; n-- {
-				if a[n].score-best < 100 {
-					break
-				}
-			}
-			a = a[:n]
 		}
+		a = a[:n]
+		// 	} else {
+		// n := len(a) - 1
+		// for ; n > 0; n-- {
+		// 	if best-a[n].score < 100 {
+		// 		break
+		// 	}
+		// }
+		// a = a[:n]
+		// 	}
+		// if len(a) > 20 {
+		// 	a = a[:20]
+		// }
 	}
 
 	return a
