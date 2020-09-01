@@ -25,8 +25,8 @@ func parseMove(s string) ([]Step, error) {
 	return res, nil
 }
 
-// MoveString outputs a legal move string by adding captures if missing.
-func (p *Pos) MoveString(move []Step) string {
+// MoveString outputs a legal move string.
+func MoveString(move []Step) string {
 	var sb strings.Builder
 	for i, step := range move {
 		sb.WriteString(step.String())
@@ -40,6 +40,10 @@ func (p *Pos) MoveString(move []Step) string {
 type Capture struct {
 	Piece
 	Src Square
+}
+
+func (c Capture) Valid() bool {
+	return c.Piece != Empty
 }
 
 type StepKind uint8
@@ -283,8 +287,17 @@ func (s Step) String() string {
 	case KindDefault:
 		fmt.Fprintf(&sb, "%c%s%s", s.Piece1.Byte(), s.Src, NewDelta(s.Src.Delta(s.Dest)))
 	default:
-		fmt.Fprintf(&sb, "InvalidStep(src=%s, dest=%s, alt=%s, piece1=%s, piece2=%s)", s.Src, s.Dest, s.Alt, s.Piece1, s.Piece2)
+		return s.GoString()
 	}
+	if s.Capture() {
+		fmt.Fprintf(&sb, " %c%sx", s.Cap.Piece.Byte(), s.Cap.Src)
+	}
+	return sb.String()
+}
+
+func (s Step) GoString() string {
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "Step(src=%s, dest=%s, alt=%s, piece1=%s, piece2=%s)", s.Src, s.Dest, s.Alt, s.Piece1, s.Piece2)
 	if s.Capture() {
 		fmt.Fprintf(&sb, " %c%sx", s.Cap.Piece.Byte(), s.Cap.Src)
 	}

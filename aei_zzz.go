@@ -28,7 +28,7 @@ func (a *AEI) handleZoo(text string) error {
 			if i >= n {
 				break
 			}
-			a.Logf("[%d] %s", e.score, a.engine.Pos().MoveString(e.move))
+			a.Logf("[%d] %s", e.score, MoveString(e.move))
 		}
 		a.Logf("%d", len(scoredMoves))
 		return nil
@@ -38,7 +38,7 @@ func (a *AEI) handleZoo(text string) error {
 	case strings.HasPrefix(text, "step"), strings.HasPrefix(text, "makestep"):
 		parts := strings.SplitN(text, " ", 2)
 		if len(parts) < 2 {
-			for _, step := range a.engine.Pos().GenSteps() {
+			for _, step := range a.engine.Pos().Steps() {
 				a.Logf("%s", step)
 			}
 			return nil

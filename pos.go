@@ -1,6 +1,7 @@
 package zoo
 
 import (
+	"errors"
 	"fmt"
 )
 
@@ -228,22 +229,24 @@ func (p *Pos) NullUnmove(steps []Step) {
 	}
 }
 
+var errRecurringPosition = errors.New("recurring position")
+
 func (p *Pos) Move(steps []Step) error {
 	if p.moveNum == 1 && len(steps) != 16 {
-		return fmt.Errorf("wrong number of setup moves")
+		return fmt.Errorf("move %s: wrong number of setup moves", MoveString(steps))
 	}
 	initZHash := p.zhash
 	for _, step := range steps {
 		if err := p.Step(step); err != nil {
-			return fmt.Errorf("%s: %v", step.String(), err)
+			return fmt.Errorf("move %s: %v", MoveString(steps), err)
 		}
 	}
-	p.NullMove()
 	// TODO(ajzaff): Movegen should filter moves that would result
 	// in recurring positions.
 	if initZHash == p.zhash {
-		return fmt.Errorf("recurring position is illegal")
+		return errRecurringPosition
 	}
+	p.NullMove()
 	return nil
 }
 
@@ -252,9 +255,9 @@ func (p *Pos) Unmove(steps []Step) error {
 		return fmt.Errorf("wrong number of setup moves")
 	}
 	p.NullUnmove(steps)
-	for _, step := range steps {
-		if err := p.Unstep(step); err != nil {
-			return fmt.Errorf("%s: %v", step.String(), err)
+	for i := len(steps) - 1; i >= 0; i-- {
+		if err := p.Unstep(steps[i]); err != nil {
+			return fmt.Errorf("umove %s: %v", MoveString(steps), err)
 		}
 	}
 	return nil

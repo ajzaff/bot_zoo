@@ -90,7 +90,7 @@ func (p Piece) MakeColor(c Color) Piece {
 	return p&decolorMask | c.PieceMask()
 }
 
-func (p Piece) SamePiece(piece Piece) bool {
+func (p Piece) SameType(piece Piece) bool {
 	return p&decolorMask == piece&decolorMask
 }
 

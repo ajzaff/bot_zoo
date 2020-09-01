@@ -25,16 +25,19 @@ func (src Square) Delta(dest Square) int8 {
 	if src == dest {
 		return 0
 	}
-	if sr, dr := src/8, dest/8; sr == dr {
-		if src < dest {
-			return +1
-		}
+	sb, db := src.Bitboard(), dest.Bitboard()
+	switch {
+	case sb&NotFileA>>1 == db:
 		return -1
+	case sb&NotRank1>>8 == db:
+		return -8
+	case sb&NotFileH<<1 == db:
+		return 1
+	case sb&NotRank8<<8 == db:
+		return 8
+	default:
+		return 0
 	}
-	if src < dest {
-		return +8
-	}
-	return -8
 }
 
 func (i Square) String() string {

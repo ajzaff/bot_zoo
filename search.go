@@ -51,7 +51,9 @@ func (e *Engine) searchRoot(p *Pos, depth int) SearchResult {
 	sortedMoves := e.sortMoves(p, moves)
 	for _, entry := range sortedMoves {
 		if err := p.Move(entry.move); err != nil {
-			log.Printf("move: %v", err)
+			if err != errRecurringPosition {
+				log.Printf("search: %v", err)
+			}
 			continue
 		}
 		score := -e.search(p, -inf, inf, len(entry.move), depth)
@@ -63,7 +65,7 @@ func (e *Engine) searchRoot(p *Pos, depth int) SearchResult {
 			best.Move = entry.move
 			fmt.Printf("log depth %d\n", depth)
 			fmt.Printf("log score %d\n", score)
-			fmt.Printf("log pv %s\n", p.MoveString(entry.move))
+			fmt.Printf("log pv %s\n", MoveString(entry.move))
 			fmt.Printf("log transpositions %d\n", e.table.Len())
 		}
 	}
@@ -107,7 +109,7 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 
 	// Step 3: Main search.
 	var best int
-	for _, step := range p.GenSteps() {
+	for _, step := range p.Steps() {
 		if err := p.Step(step); err != nil {
 			log.Println(err)
 			continue

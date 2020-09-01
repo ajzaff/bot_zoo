@@ -1,6 +1,9 @@
 package zoo
 
-import "sort"
+import (
+	"log"
+	"sort"
+)
 
 type ScoredStep struct {
 	score int
@@ -39,7 +42,11 @@ func (e *Engine) sortMoves(p *Pos, moves [][]Step) []ScoredMove {
 
 	for i, move := range moves {
 		if err := p.Move(move); err != nil {
-			panic(err)
+			if err != errRecurringPosition {
+				log.Printf("moveorder: %v", err)
+			}
+			a[i].score = -inf
+			continue
 		}
 
 		var score int
@@ -88,9 +95,9 @@ func (e *Engine) sortMoves(p *Pos, moves [][]Step) []ScoredMove {
 		// }
 		// a = a[:n]
 		// 	}
-		if len(a) > 20 {
-			a = a[:20]
-		}
+		// if len(a) > 20 {
+		// 	a = a[:20]
+		// }
 	}
 
 	return a
