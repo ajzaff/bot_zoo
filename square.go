@@ -1,5 +1,7 @@
 package zoo
 
+import "strconv"
+
 const (
 	ranks = "12345678"
 	files = "abcdefgh"
@@ -36,10 +38,13 @@ func (src Square) Delta(dest Square) int8 {
 }
 
 func (i Square) String() string {
-	return string([]byte{
-		files[i%8],
-		ranks[i/8],
-	})
+	if i.Valid() {
+		return string([]byte{
+			files[i%8],
+			ranks[i/8],
+		})
+	}
+	return strconv.Itoa(int(i))
 }
 
 const invalidSquare = 255

@@ -190,6 +190,33 @@ func (p *Pos) terminalEliminationValue() int {
 	return 0
 }
 
+func (p *Pos) frozenB(b Bitboard) bool {
+	neighbors := b.Neighbors()
+	piece := p.atB(b)
+	color := piece.Color()
+	if neighbors&p.presence[color] == 0 &&
+		neighbors&p.presence[color.Opposite()] != 0 {
+		for s := piece.MakeColor(color.Opposite()) + 1; s <= GElephant.MakeColor(color.Opposite()); s++ {
+			if neighbors&p.bitboards[s] != 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (p *Pos) immobilized(c Color) bool {
+	b := p.presence[c]
+	for b > 0 {
+		atB := b & -b
+		if !p.frozenB(atB) {
+			return false
+		}
+		b &= ^atB
+	}
+	return true
+}
+
 func (p *Pos) terminalImmobilizedValue() int {
 	if p.immobilized(p.side.Opposite()) {
 		return terminalEval

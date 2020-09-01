@@ -41,31 +41,39 @@ func (p *Pos) pieceSteps(piece Piece, table [64]Bitboard) []Step {
 				continue
 			}
 			dest := d.Square()
-			steps = append(steps, Step{
-				Src:   src,
-				Dest:  dest,
-				Piece: piece,
-				Dir:   NewDelta(src.Delta(dest)),
-			})
+			steps = append(steps, p.completeCapture(Step{
+				Src:    src,
+				Dest:   dest,
+				Piece1: piece,
+			}))
 		}
 	}
 	return steps
 }
 
-func (p *Pos) capture(last Step) Step {
-	assert("last move was capture", !last.Capture())
-
-	c := last.Piece.Color()
+func (p *Pos) completeCapture(step Step) Step {
+	if step.Capture() {
+		return step
+	}
+	if err := p.Step(step); err != nil {
+		panic(err)
+	}
+	defer func() {
+		if err := p.Unstep(step); err != nil {
+			panic(err)
+		}
+	}()
+	c := step.Piece1.Color()
 	ps := p.presence[c]
-	srcB := last.Src.Bitboard()
+	srcB := step.Src.Bitboard()
+
 	if b := srcB.Neighbors() & Traps & ^ps.Neighbors(); b != 0 {
-		return Step{
+		step.Cap = Capture{
 			Piece: p.atB(b),
 			Src:   b.Square(),
-			Dir:   "x",
 		}
 	}
-	return Step{}
+	return step
 }
 
 func (p *Pos) getPulls(steps *[]Step) {
@@ -78,7 +86,7 @@ func (p *Pos) getPulls(steps *[]Step) {
 	for ; i >= 0 && p.steps[i].Capture(); i-- {
 	}
 	assert("i < 0", i >= 0)
-	t1 := p.steps[i].Piece
+	t1 := p.steps[i].Piece1
 	if t1.SamePiece(GRabbit) {
 		return
 	}
@@ -99,12 +107,11 @@ func (p *Pos) getPulls(steps *[]Step) {
 			t2b &= ^b
 			src := b.Square()
 			assert("src == dest", src != dest)
-			*steps = append(*steps, Step{
-				Src:   src,
-				Dest:  dest,
-				Piece: t2,
-				Dir:   NewDelta(src.Delta(dest)),
-			})
+			*steps = append(*steps, p.completeCapture(Step{
+				Src:    src,
+				Dest:   dest,
+				Piece1: t2,
+			}))
 		}
 	}
 }
@@ -156,7 +163,7 @@ func (p *Pos) completePush(steps *[]Step) {
 	}
 	assert("i < 0", i >= 0)
 	push := p.steps[i]
-	p2 := push.Piece
+	p2 := push.Piece1
 	dest := push.Src
 	destB := dest.Bitboard()
 
@@ -171,10 +178,9 @@ func (p *Pos) completePush(steps *[]Step) {
 			src := b.Square()
 			assert("src == dest", src != dest)
 			*steps = append(*steps, Step{
-				Src:   src,
-				Dest:  dest,
-				Piece: p2,
-				Dir:   NewDelta(src.Delta(dest)),
+				Src:    src,
+				Dest:   dest,
+				Piece1: p2,
 			})
 		}
 	}
@@ -186,7 +192,7 @@ func (p *Pos) completePush(steps *[]Step) {
 // argument.
 func (p *Pos) GenSteps() []Step {
 	var steps []Step
-	if len(p.steps) > 0 && p.steps[len(p.steps)-1].Piece.Color() != p.side {
+	if len(p.steps) > 0 && p.steps[len(p.steps)-1].Piece1.Color() != p.side {
 		p.completePush(&steps)
 	} else {
 		if len(p.steps) < 3 {

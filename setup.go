@@ -33,9 +33,8 @@ func (e *Engine) RandomSetup() []Step {
 		for j := 0; j < 8; j++ {
 			at := Square(8*i + j)
 			setup = append(setup, Step{
-				Src:   invalidSquare,
-				Dest:  at,
-				Piece: ps[0],
+				Alt:    at,
+				Piece1: ps[0],
 			})
 			ps = ps[1:]
 		}

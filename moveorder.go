@@ -38,30 +38,32 @@ func (e *Engine) sortMoves(p *Pos, moves [][]Step) []ScoredMove {
 	}
 
 	for i, move := range moves {
-		func() {
-			if err := p.Move(move); err != nil {
-				panic(err)
-			}
-			defer func() {
-				if err := p.Unmove(move); err != nil {
-					panic(err)
-				}
-			}()
+		if err := p.Move(move); err != nil {
+			panic(err)
+		}
 
-			// Step 1a: Table lookup.
-			if e.useTable {
-				if entry, ok := e.table.ProbeDepth(p.zhash, 0); ok {
-					score := entry.Value
-					if entry.Bound == ExactBound {
-						a[i].score = inf + score
-					}
-					return
-				}
-			}
+		var score int
 
+		// Step 1a: Table lookup.
+		if e.useTable {
+			if entry, ok := e.table.ProbeDepth(p.zhash, 0); ok {
+				score := entry.Value
+				if entry.Bound == ExactBound {
+					a[i].score = inf + score
+				}
+			} else {
+				score = -p.Score()
+			}
+		} else {
 			// Step 1b: Fallback to eval score.
-			a[i].score = -p.Score()
-		}()
+			score = -p.Score()
+		}
+
+		a[i].score = score
+
+		if err := p.Unmove(move); err != nil {
+			panic(err)
+		}
 	}
 	sort.Sort(byLen(a))
 	sort.Stable(byScore(a))

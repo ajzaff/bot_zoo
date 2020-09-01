@@ -68,8 +68,9 @@ func (a *AEI) handle(text string) error {
 	case strings.HasPrefix(text, "makemove"):
 		parts := strings.SplitN(text, " ", 2)
 		if len(parts) < 2 {
-			return fmt.Errorf("expected steps matching /%s/", stepPattern)
+			return fmt.Errorf("expected steps")
 		}
+		parts[1] = strings.TrimSpace(parts[1])
 		move, err := ParseMove(parts[1])
 		if err != nil {
 			return err
