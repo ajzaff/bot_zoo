@@ -280,7 +280,7 @@ func (p *Pos) Move(steps []Step) error {
 	initZHash := p.zhash
 	for i, step := range steps {
 		if step.Pass && i < len(steps)-1 {
-			return fmt.Errorf("move %s: pass before last step")
+			return fmt.Errorf("move %s: pass before last step", MoveString(steps))
 		}
 		if err := p.Step(step); err != nil {
 			return fmt.Errorf("move %s: %v", MoveString(steps), err)
