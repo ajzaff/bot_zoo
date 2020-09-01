@@ -254,6 +254,17 @@ func (s Step) Capture() bool {
 	return s.Cap.Piece != Empty
 }
 
+func (s Step) Len() int {
+	switch s.Kind() {
+	case KindDefault, KindSetup:
+		return 1
+	case KindPush, KindPull:
+		return 2
+	default:
+		return 0
+	}
+}
+
 func (s Step) String() string {
 	var sb strings.Builder
 	switch s.Kind() {

@@ -26,28 +26,24 @@ func init() {
 func (p *Pos) pieceSteps(piece Piece, table [64]Bitboard) []Step {
 	var steps []Step
 	piece = piece.MakeColor(p.side)
-	bs := p.bitboards[piece]
-	for bs > 0 {
-		b := bs & -bs
-		bs &= ^b
+	p.bitboards[piece].Each(func(b Bitboard) {
 		if p.frozenB(b) {
-			continue
+			return
 		}
 		src := b.Square()
-		for ds := stepsB[src]; ds > 0; {
-			d := ds & -ds
-			ds &= ^d
+		stepsB[src].Each(func(d Bitboard) {
 			if p.bitboards[Empty]&d == 0 {
-				continue
+				return
 			}
 			dest := d.Square()
 			steps = append(steps, p.completeCapture(Step{
 				Src:    src,
 				Dest:   dest,
+				Alt:    invalidSquare,
 				Piece1: piece,
 			}))
-		}
-	}
+		})
+	})
 	return steps
 }
 
@@ -110,6 +106,7 @@ func (p *Pos) getPulls(steps *[]Step) {
 			*steps = append(*steps, p.completeCapture(Step{
 				Src:    src,
 				Dest:   dest,
+				Alt:    invalidSquare,
 				Piece1: t2,
 			}))
 		}
@@ -130,29 +127,30 @@ func (p *Pos) getPushes(steps *[]Step) {
 			if p2b == 0 {
 				continue
 			}
-			for bs := p1n & p2b; bs > 0; {
-				b := bs & -bs
-				bs &= ^b
+			(p1n & p2b).Each(func(b Bitboard) {
 				if p.frozenB(b) {
-					continue
+					return
 				}
-				// src := b.Square()
-				// for ds := stepsFor(p2, src); ds > 0; {
-				// 	d := ds & -ds
-				// 	ds &= ^d
-				// 	if p.Bitboards[Empty]&d == 0 {
-				// 		continue
-				// 	}
-				// 	dest := d.Square()
-				// 	assert("src == dest", src != dest)
-				// 	*steps = append(*steps, Step{
-				// 		Src:   src,
-				// 		Dest:  dest,
-				// 		Piece: p2,
-				// 		Dir:   NewDelta(src.Delta(dest)),
-				// 	})
-				// }
-			}
+				src := b.Square()
+				sB := stepsB
+				if p2.SamePiece(GRabbit) {
+					sB = rabbitStepsB[p2.Color()]
+				} else {
+					sB = stepsB
+				}
+				sB[src].Each(func(d Bitboard) {
+					if p.bitboards[Empty]&d == 0 {
+						return
+					}
+					dest := d.Square()
+					assert("src == dest", src != dest)
+					*steps = append(*steps, Step{
+						Src:    src,
+						Dest:   dest,
+						Piece1: p2,
+					})
+				})
+			})
 		}
 	}
 }

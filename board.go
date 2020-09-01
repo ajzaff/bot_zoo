@@ -47,6 +47,14 @@ func (b Bitboard) Square() Square {
 	return bsfIndex64[((b&-b)*debruijn64)>>58]
 }
 
+func (b Bitboard) Each(f func(e Bitboard)) {
+	for b > 0 {
+		e := b & -b
+		b &= ^e
+		f(e)
+	}
+}
+
 var countTable [256]int
 
 func init() {
