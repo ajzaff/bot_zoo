@@ -2,7 +2,6 @@ package zoo
 
 import (
 	"fmt"
-	"log"
 	"time"
 )
 
@@ -52,13 +51,14 @@ func (e *Engine) searchRoot(p *Pos, depth int) SearchResult {
 	for _, entry := range sortedMoves {
 		if err := p.Move(entry.move); err != nil {
 			if err != errRecurringPosition {
-				log.Printf("search: %v", err)
+				fmt.Println(p)
+				panic(fmt.Sprintf("search_move_root: %v", err))
 			}
 			continue
 		}
-		score := -e.search(p, -inf, inf, len(entry.move), depth)
-		if err := p.Unmove(entry.move); err != nil {
-			log.Printf("unmove: %v", err)
+		score := -e.search(p, -inf, inf, MoveLen(entry.move), depth)
+		if err := p.Unmove(); err != nil {
+			panic(fmt.Sprintf("search_unmove_root: %v", err))
 		}
 		if score > best.Score {
 			best.Score = score
@@ -110,20 +110,19 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 	// Step 3: Main search.
 	var best int
 	for _, step := range p.Steps() {
+		initSide := p.side
+
 		if err := p.Step(step); err != nil {
-			log.Println(err)
-			continue
+			panic(fmt.Sprintf("search_step: %v", err))
 		}
 		var score int
-		if len(p.steps) == 0 {
-			p.NullMove()
-			score = -e.search(p, -beta, -alpha, depth+1, maxDepth)
+		if p.side == initSide {
+			score = e.search(p, alpha, beta, depth+step.Len(), maxDepth)
 		} else {
-			score = e.search(p, alpha, beta, depth+1, maxDepth)
+			score = -e.search(p, -beta, -alpha, depth+step.Len(), maxDepth)
 		}
-		if err := p.Unstep(step); err != nil {
-			log.Println(err)
-			continue
+		if err := p.Unstep(); err != nil {
+			panic(fmt.Sprintf("search_unstep: %v", err))
 		}
 		if score > best {
 			best = score

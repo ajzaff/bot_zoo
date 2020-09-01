@@ -37,6 +37,14 @@ func MoveString(move []Step) string {
 	return sb.String()
 }
 
+func MoveLen(move []Step) int {
+	n := 0
+	for _, step := range move {
+		n += step.Len()
+	}
+	return n
+}
+
 type Capture struct {
 	Piece
 	Src Square
@@ -60,6 +68,7 @@ type Step struct {
 	Src, Dest, Alt Square
 	Piece1, Piece2 Piece
 	Cap            Capture
+	Pass           bool
 }
 
 var invalidStep = Step{
@@ -230,8 +239,10 @@ func ParseStep(s string) (Step, error) {
 func (s Step) Kind() StepKind {
 	sv, dv := s.Src.Valid(), s.Dest.Valid()
 	p1e, p2e := s.Piece1 == Empty, s.Piece2 == Empty
-	if s.Alt.Valid() {
-		if sv && dv {
+	switch {
+	case s.Alt.Valid():
+		switch {
+		case sv && dv:
 			switch {
 			case p1e || p2e:
 				return KindInvalid
@@ -242,16 +253,16 @@ func (s Step) Kind() StepKind {
 			default:
 				return KindInvalid
 			}
-		}
-		if p1e {
+		case !p1e:
+			return KindSetup
+		default:
 			return KindInvalid
 		}
-		return KindSetup
-	}
-	if p1e && !s.Capture() {
+	case !p1e && sv && dv:
+		return KindDefault
+	default:
 		return KindInvalid
 	}
-	return KindDefault
 }
 
 func (s Step) Capture() bool {
@@ -259,10 +270,12 @@ func (s Step) Capture() bool {
 }
 
 func (s Step) Len() int {
-	switch s.Kind() {
-	case KindDefault, KindSetup:
+	switch kind := s.Kind(); {
+	case s.Pass:
+		return 0
+	case kind == KindDefault, kind == KindSetup:
 		return 1
-	case KindPush, KindPull:
+	case kind == KindPush, kind == KindPull:
 		return 2
 	default:
 		return 0
@@ -286,7 +299,10 @@ func (s Step) String() string {
 		)
 	case KindDefault:
 		fmt.Fprintf(&sb, "%c%s%s", s.Piece1.Byte(), s.Src, NewDelta(s.Src.Delta(s.Dest)))
-	default:
+	default: // Invalid
+		if s.Pass {
+			return "(pass)"
+		}
 		return s.GoString()
 	}
 	if s.Capture() {

@@ -7,12 +7,22 @@ import (
 )
 
 const (
-	PosEmpty     = `g [                                                                ]`
-	PosStandard  = `g [rrrrrrrrhdcemcdh                                HDCMECDHRRRRRRRR]`
-	PosStandardG = `g [rrrrrrrrhdcemcdh                                                ]`
+	posEmpty     = `g [                                                                ]`
+	posStandard  = `g [rrrrrrrrhdcemcdh                                HDCMECDHRRRRRRRR]`
+	posStandardG = `g [rrrrrrrrhdcemcdh                                                ]`
 )
 
 var shortPosPattern = regexp.MustCompile(`^([wbgs]) \[([ RCDHMErcdhme]{64})\]$`)
+
+func NewEmptyPosition() *Pos {
+	pos, err := ParseShortPosition(posEmpty)
+	if err != nil {
+		panic(err)
+	}
+	pos.stepsLeft = 16
+	pos.moveNum = 1
+	return pos
+}
 
 func ParseShortPosition(s string) (*Pos, error) {
 	matches := shortPosPattern.FindStringSubmatch(s)
@@ -20,7 +30,7 @@ func ParseShortPosition(s string) (*Pos, error) {
 		return nil, fmt.Errorf("input does not match /%s/", shortPosPattern)
 	}
 	side := ParseColor(matches[1])
-	pos := newPos(nil, nil, side, 2, nil, 0)
+	pos := newPos(nil, nil, side, 2, nil, nil, 4, 0)
 	for i, r := range matches[2] {
 		square := Square(8*(7-i/8) + i%8)
 		piece, err := ParsePiece(string(r))

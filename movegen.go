@@ -191,11 +191,11 @@ func (p *Pos) capture(presence, srcB, destB Bitboard) Capture {
 // a step results in a capture by calling captures with the step as an
 // argument.
 func (p *Pos) Steps() []Step {
-	if len(p.steps) == 4 {
-		return nil
+	if p.stepsLeft == 0 {
+		return []Step{{Pass: true}}
 	}
 	var steps []Step
-	canPush := len(p.steps) < 3
+	canPush := p.stepsLeft > 1
 	lo, hi := GRabbit, SElephant
 	c1, c2 := p.side, p.side.Opposite()
 	_ = c2
@@ -239,6 +239,9 @@ func (p *Pos) Steps() []Step {
 			})
 		}
 	}
+	if p.stepsLeft < 4 {
+		steps = append(steps, Step{Pass: true})
+	}
 	return steps
 }
 
@@ -255,7 +258,7 @@ func (p *Pos) getRootMoves(prefix []Step, moves *[][]Step, depth int) {
 		newPrefix := make([]Step, len(move))
 		copy(newPrefix, move)
 		p.getRootMoves(newPrefix, moves, depth-1)
-		if err := p.Unstep(step); err != nil {
+		if err := p.Unstep(); err != nil {
 			panic(err)
 		}
 	}

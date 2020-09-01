@@ -44,7 +44,7 @@ func (a *AEI) handle(text string) error {
 		a.writef("readyok\n")
 		return nil
 	case text == "newgame":
-		pos, _ := ParseShortPosition(PosEmpty)
+		pos := NewEmptyPosition()
 		a.engine.SetPos(pos)
 		return nil
 	case text == "stop":
@@ -85,7 +85,7 @@ func (a *AEI) handle(text string) error {
 	case strings.HasPrefix(text, "go"):
 		parts := strings.SplitN(text, " ", 2)
 		if len(parts) < 2 {
-			best := a.engine.SearchFixedDepth(8)
+			best := a.engine.SearchFixedDepth(32)
 			if len(best.Move) == 0 {
 				a.Logf("no moves")
 				return nil

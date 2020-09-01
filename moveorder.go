@@ -68,7 +68,7 @@ func (e *Engine) sortMoves(p *Pos, moves [][]Step) []ScoredMove {
 
 		a[i].score = score
 
-		if err := p.Unmove(move); err != nil {
+		if err := p.Unmove(); err != nil {
 			panic(err)
 		}
 	}
@@ -81,7 +81,7 @@ func (e *Engine) sortMoves(p *Pos, moves [][]Step) []ScoredMove {
 		// 	if best > 0 {
 		// n := 0
 		// for ; n < len(a); n++ {
-		// 	if a[n].score-best < 0 {
+		// 	if a[n].score < best {
 		// 		break
 		// 	}
 		// }
@@ -95,9 +95,9 @@ func (e *Engine) sortMoves(p *Pos, moves [][]Step) []ScoredMove {
 		// }
 		// a = a[:n]
 		// 	}
-		// if len(a) > 20 {
-		// 	a = a[:20]
-		// }
+		if len(a) > 500 {
+			a = a[:500]
+		}
 	}
 
 	return a

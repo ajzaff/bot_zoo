@@ -9,7 +9,10 @@ func (a *AEI) handleZoo(text string) error {
 	text = text[4:]
 	switch {
 	case text == "new", text == "newstandard":
-		pos, _ := ParseShortPosition(PosStandard)
+		pos, err := ParseShortPosition(posStandard)
+		if err != nil {
+			panic(err)
+		}
 		pos.moveNum = 2
 		a.engine.SetPos(pos)
 		return nil
@@ -39,7 +42,7 @@ func (a *AEI) handleZoo(text string) error {
 		parts := strings.SplitN(text, " ", 2)
 		if len(parts) < 2 {
 			for _, step := range a.engine.Pos().Steps() {
-				a.Logf("%s", step)
+				a.Logf(step.String())
 			}
 			return nil
 		}
@@ -54,8 +57,8 @@ func (a *AEI) handleZoo(text string) error {
 			a.verbosePos()
 		}
 		return nil
-	case text == "nullmove":
-		a.engine.Pos().NullMove()
+	case text == "pass":
+		a.engine.Pos().Pass()
 		if a.verbose {
 			a.verbosePos()
 		}
