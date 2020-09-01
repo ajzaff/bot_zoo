@@ -71,7 +71,7 @@ func (a *AEI) handle(text string) error {
 			return fmt.Errorf("expected steps")
 		}
 		parts[1] = strings.TrimSpace(parts[1])
-		move, err := ParseMove(parts[1])
+		move, err := parseMove(parts[1])
 		if err != nil {
 			return err
 		}

@@ -5,9 +5,14 @@ import (
 	"strings"
 )
 
-// ParseMove parses the move string into steps
+// parseMove parses the move string into steps
 // and checks for validity but not legality.
-func ParseMove(s string) ([]Step, error) {
+// TODO(ajzaff):
+// For now, this does NOT respect the quantized Step
+// and only outputs Default Steps. This is usually
+// fine since we just want to mechanically make moves
+// and not use them as nodes in search.
+func parseMove(s string) ([]Step, error) {
 	parts := strings.Split(s, " ")
 	var res []Step
 	for _, part := range parts {
@@ -86,6 +91,17 @@ func ParseStep(s string) (Step, error) {
 		src := ParseSquare(s[1:3])
 		if !src.Valid() {
 			return invalidStep, fmt.Errorf("invalid step square: %q", s)
+		}
+		if s[3:4] == "x" { // Lone capture:
+			return Step{
+				Src:  invalidSquare,
+				Dest: invalidSquare,
+				Alt:  invalidSquare,
+				Cap: Capture{
+					Piece: piece,
+					Src:   src,
+				},
+			}, nil
 		}
 		dest := src.Translate(ParseDelta(string(s[3])))
 		return Step{
@@ -228,7 +244,7 @@ func (s Step) Kind() StepKind {
 		}
 		return KindSetup
 	}
-	if p1e {
+	if p1e && !s.Capture() {
 		return KindInvalid
 	}
 	return KindDefault

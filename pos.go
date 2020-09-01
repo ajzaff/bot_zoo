@@ -137,11 +137,13 @@ func (p *Pos) Step(step Step) error {
 			return fmt.Errorf("%s: %v", step, err)
 		}
 	case KindDefault:
-		if err := p.Remove(step.Src); err != nil {
-			return fmt.Errorf("%s: %v", step, err)
-		}
-		if err := p.Place(step.Piece1, step.Dest); err != nil {
-			return fmt.Errorf("%s: %v", step, err)
+		if step.Src.Valid() && step.Dest.Valid() { // Not lone capture:
+			if err := p.Remove(step.Src); err != nil {
+				return fmt.Errorf("%s: %v", step, err)
+			}
+			if err := p.Place(step.Piece1, step.Dest); err != nil {
+				return fmt.Errorf("%s: %v", step, err)
+			}
 		}
 	case KindInvalid:
 		return fmt.Errorf("invalid step: %s", step)
