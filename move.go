@@ -2,12 +2,34 @@ package zoo
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
-// parseMove parses the move string into steps
+const (
+	pieceP       = `([RCDHMErcdhme])`
+	goldPieceP   = `([RCDHME])`
+	silverPieceP = `([rcdhme])`
+	squareP      = `([a-h][1-8])`
+	dirP         = `(nsew)`
+	capP         = `(x)`
+)
+
+var StepPattern = regexp.MustCompile(
+	fmt.Sprintf(`(%s%s)|(%s%s%s)|(%s%s%s %s%s%s)|(%s%s%s %s%s%s)|(%s%s%s %s%s%s)|(%s%s%s %s%s%s %s%s%s)|(%s%s%s %s%s%s %s%s%s)`,
+		pieceP, squareP, // setup
+		pieceP, squareP, dirP, // default
+		pieceP, squareP, dirP, pieceP, squareP, capP, // default capture
+		goldPieceP, squareP, dirP, silverPieceP, squareP, dirP, // push/pull
+		silverPieceP, squareP, dirP, goldPieceP, squareP, dirP, // push/pull
+		silverPieceP, squareP, dirP, goldPieceP, squareP, dirP, pieceP, squareP, capP, // push/pull capture
+		goldPieceP, squareP, dirP, silverPieceP, squareP, dirP, pieceP, squareP, capP, // push/pull capture
+	),
+)
+
+// ParseMove parses the move string into steps
 // and checks for validity but not legality.
-func parseMove(s string) ([]Step, error) {
+func ParseMove(s string) ([]Step, error) {
 	parts := strings.Split(s, " ")
 	var res []Step
 	for _, part := range parts {

@@ -219,6 +219,9 @@ func (p *Pos) Steps() []Step {
 				sB = rabbitStepsB[p.side]
 			}
 			ts.Each(func(sb Bitboard) {
+				if p.frozenB(sb) {
+					return
+				}
 				src := sb.Square()
 				sB[src].Each(func(db Bitboard) {
 					if p.bitboards[Empty]&db == 0 {
