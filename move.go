@@ -7,11 +7,6 @@ import (
 
 // parseMove parses the move string into steps
 // and checks for validity but not legality.
-// TODO(ajzaff):
-// For now, this does NOT respect the quantized Step
-// and only outputs Default Steps. This is usually
-// fine since we just want to mechanically make moves
-// and not use them as nodes in search.
 func parseMove(s string) ([]Step, error) {
 	parts := strings.Split(s, " ")
 	var res []Step
@@ -22,6 +17,7 @@ func parseMove(s string) ([]Step, error) {
 		}
 		res = append(res, step)
 	}
+	res = append(res, Step{Pass: true})
 	return res, nil
 }
 
@@ -29,6 +25,9 @@ func parseMove(s string) ([]Step, error) {
 func MoveString(move []Step) string {
 	var sb strings.Builder
 	for i, step := range move {
+		if step.Pass {
+			continue
+		}
 		sb.WriteString(step.String())
 		if i+1 < len(move) {
 			sb.WriteByte(' ')

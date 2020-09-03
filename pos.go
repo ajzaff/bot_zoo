@@ -120,19 +120,24 @@ func (p *Pos) Pass() {
 	}
 }
 
-func (p *Pos) Unpass() {
-	assert("len(moves) == 0", len(p.moves) > 0)
-	assert("len(steps) != 0", len(p.steps) == 0)
-
+func (p *Pos) Unpass() error {
+	if len(p.moves) == 0 {
+		return fmt.Errorf("no move to unpass")
+	}
+	if len(p.steps) != 0 {
+		return fmt.Errorf("steps were made since passing")
+	}
 	p.steps = p.moves[len(p.moves)-1]
+	p.moves = p.moves[:len(p.moves)-1]
 	p.zhash ^= ZSilverKey()
-	if p.side = p.side.Opposite(); p.side == Gold {
+	if p.side = p.side.Opposite(); p.side == Silver {
 		p.moveNum--
 	}
 	p.stepsLeft = 4
 	if p.moveNum == 1 {
 		p.stepsLeft = 16
 	}
+	return nil
 }
 
 func (p *Pos) Step(step Step) error {
@@ -204,14 +209,10 @@ func (p *Pos) Step(step Step) error {
 func (p *Pos) Unstep() error {
 	var step Step
 	if len(p.steps) == 0 {
-		assert("len(moves) == 0", len(p.moves) > 0)
-		p.steps = p.moves[len(p.moves)-1]
-		step = p.steps[len(p.steps)-1]
-		p.moves = p.moves[:len(p.moves)-1]
-	} else {
-		step = p.steps[len(p.steps)-1]
-		p.steps = p.steps[:len(p.steps)-1]
+		return p.Unpass()
 	}
+	step = p.steps[len(p.steps)-1]
+	p.steps = p.steps[:len(p.steps)-1]
 	p.stepsLeft += step.Len()
 	if step.Pass {
 		p.Unpass()
@@ -273,21 +274,21 @@ func (p *Pos) Unstep() error {
 var errRecurringPosition = errors.New("recurring position")
 
 func (p *Pos) Move(steps []Step) error {
-	if p.moveNum == 1 && len(steps) != 16 {
-		return fmt.Errorf("move %s: wrong number of setup moves", MoveString(steps))
+	if p.moveNum == 1 && MoveLen(steps) != 16 {
+		return fmt.Errorf("move %s: wrong number of setup moves", steps)
 	}
 	initSide := p.side
 	initZHash := p.zhash
 	for i, step := range steps {
 		if step.Pass && i < len(steps)-1 {
-			return fmt.Errorf("move %s: pass before last step", MoveString(steps))
+			return fmt.Errorf("move %s: pass before last step", steps)
 		}
 		if err := p.Step(step); err != nil {
-			return fmt.Errorf("move %s: %v", MoveString(steps), err)
+			return fmt.Errorf("move %s: %v", steps, err)
 		}
 	}
 	if p.side == initSide {
-		p.Pass()
+		return fmt.Errorf("move %s: no pass step", steps)
 	}
 	// TODO(ajzaff): Movegen should filter moves that would result
 	// in recurring positions.
@@ -298,20 +299,16 @@ func (p *Pos) Move(steps []Step) error {
 }
 
 func (p *Pos) Unmove() error {
-	assert("len(moves) == 0", len(p.moves) > 0)
-
-	n := len(p.moves) - 1
-	move := p.moves[n]
-	if p.moveNum == 1 && len(move) != 16 {
-		return fmt.Errorf("unmove: %s: wrong number of setup moves", MoveString(move))
+	if err := p.Unpass(); err != nil {
+		return err
 	}
-	for i := n; i >= 0; i-- {
-		step := move[i]
-		if step.Pass && i < n-1 {
-			return fmt.Errorf("unmove %s: pass before last step", MoveString(move))
+	for i := len(p.steps) - 1; i >= 0; i-- {
+		step := p.steps[i]
+		if step.Pass {
+			continue
 		}
 		if err := p.Unstep(); err != nil {
-			return fmt.Errorf("unmove %s: %v", MoveString(move), err)
+			return fmt.Errorf("unmove %s: %v", p.steps, err)
 		}
 	}
 	return nil

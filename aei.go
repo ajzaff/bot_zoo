@@ -85,7 +85,7 @@ func (a *AEI) handle(text string) error {
 	case strings.HasPrefix(text, "go"):
 		parts := strings.SplitN(text, " ", 2)
 		if len(parts) < 2 {
-			best := a.engine.SearchFixedDepth(32)
+			best := a.engine.SearchFixedDepth(8)
 			if len(best.Move) == 0 {
 				a.Logf("no moves")
 				return nil
@@ -104,10 +104,8 @@ func (a *AEI) handle(text string) error {
 		default:
 			return fmt.Errorf("unsupported go command: %q", cmd)
 		}
-	case strings.HasPrefix(text, "zzz_"):
-		return a.handleZoo(text)
 	default:
-		return fmt.Errorf("unsupported command: %q", text)
+		return a.handleExt(text)
 	}
 }
 

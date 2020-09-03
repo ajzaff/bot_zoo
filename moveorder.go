@@ -1,7 +1,7 @@
 package zoo
 
 import (
-	"log"
+	"fmt"
 	"sort"
 )
 
@@ -41,36 +41,40 @@ func (e *Engine) sortMoves(p *Pos, moves [][]Step) []ScoredMove {
 	}
 
 	for i, move := range moves {
-		if err := p.Move(move); err != nil {
-			if err != errRecurringPosition {
-				log.Printf("moveorder: %v", err)
+		func() {
+			err := p.Move(move)
+			defer func() {
+				if err := p.Unmove(); err != nil {
+					panic(fmt.Sprintf("moveorder: %v", err))
+				}
+			}()
+			if err != nil {
+				if err != errRecurringPosition {
+					panic(fmt.Sprintf("moveorder: %v", err))
+				}
+				a[i].score = -inf
+				return
 			}
-			a[i].score = -inf
-			continue
-		}
 
-		var score int
+			var score int
 
-		// Step 1a: Table lookup.
-		if e.useTable {
-			if entry, ok := e.table.ProbeDepth(p.zhash, 0); ok {
-				score := entry.Value
-				if entry.Bound == ExactBound {
-					a[i].score = inf + score
+			// Step 1a: Table lookup.
+			if e.useTable {
+				if entry, ok := e.table.ProbeDepth(p.zhash, 0); ok {
+					score := entry.Value
+					if entry.Bound == ExactBound {
+						a[i].score = inf + score
+					}
+				} else {
+					score = -p.Score()
 				}
 			} else {
+				// Step 1b: Fallback to eval score.
 				score = -p.Score()
 			}
-		} else {
-			// Step 1b: Fallback to eval score.
-			score = -p.Score()
-		}
 
-		a[i].score = score
-
-		if err := p.Unmove(); err != nil {
-			panic(err)
-		}
+			a[i].score = score
+		}()
 	}
 	sort.Sort(byLen(a))
 	sort.Stable(byScore(a))
@@ -95,8 +99,8 @@ func (e *Engine) sortMoves(p *Pos, moves [][]Step) []ScoredMove {
 		// }
 		// a = a[:n]
 		// 	}
-		if len(a) > 500 {
-			a = a[:500]
+		if len(a) > 10 {
+			a = a[:10]
 		}
 	}
 

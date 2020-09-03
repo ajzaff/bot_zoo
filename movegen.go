@@ -245,19 +245,27 @@ func (p *Pos) Steps() []Step {
 	return steps
 }
 
-func (p *Pos) getRootMoves(prefix []Step, moves *[][]Step, depth int) {
-	if depth <= 0 {
+func (p *Pos) getRootMoves(prefix []Step, moves *[][]Step, movesLeft int) {
+	if movesLeft == 0 {
+		if !prefix[len(prefix)-1].Pass {
+			prefix = append(prefix, Step{Pass: true})
+		}
 		*moves = append(*moves, prefix)
 		return
 	}
+	assert("movesLeft < 0", movesLeft > 0)
 	for _, step := range p.Steps() {
 		move := append(prefix, step)
+		if step.Pass {
+			*moves = append(*moves, move)
+			break
+		}
 		if err := p.Step(step); err != nil {
 			panic(err)
 		}
 		newPrefix := make([]Step, len(move))
 		copy(newPrefix, move)
-		p.getRootMoves(newPrefix, moves, depth-1)
+		p.getRootMoves(newPrefix, moves, movesLeft-1)
 		if err := p.Unstep(); err != nil {
 			panic(err)
 		}

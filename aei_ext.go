@@ -1,12 +1,12 @@
 package zoo
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 )
 
-func (a *AEI) handleZoo(text string) error {
-	text = text[4:]
+func (a *AEI) handleExt(text string) error {
 	switch {
 	case text == "new", text == "newstandard":
 		pos, err := ParseShortPosition(posStandard)
@@ -31,14 +31,22 @@ func (a *AEI) handleZoo(text string) error {
 			if i >= n {
 				break
 			}
-			a.Logf("[%d] %s", e.score, MoveString(e.move))
+			a.Logf("[%d] %s", e.score, e.move)
 		}
 		a.Logf("%d", len(scoredMoves))
+		return nil
+	case strings.HasPrefix(text, "unmove"):
+		if err := a.engine.Pos().Unmove(); err != nil {
+			return err
+		}
+		if a.verbose {
+			a.verbosePos()
+		}
 		return nil
 	case text == "hash":
 		a.Logf("%X", a.engine.Pos().zhash)
 		return nil
-	case strings.HasPrefix(text, "step"), strings.HasPrefix(text, "makestep"):
+	case strings.HasPrefix(text, "step"):
 		parts := strings.SplitN(text, " ", 2)
 		if len(parts) < 2 {
 			for _, step := range a.engine.Pos().Steps() {
@@ -57,8 +65,24 @@ func (a *AEI) handleZoo(text string) error {
 			a.verbosePos()
 		}
 		return nil
+	case strings.HasPrefix(text, "unstep"):
+		if err := a.engine.Pos().Unstep(); err != nil {
+			return err
+		}
+		if a.verbose {
+			a.verbosePos()
+		}
+		return nil
 	case text == "pass":
 		a.engine.Pos().Pass()
+		if a.verbose {
+			a.verbosePos()
+		}
+		return nil
+	case text == "unpass":
+		if err := a.engine.Pos().Unpass(); err != nil {
+			return err
+		}
 		if a.verbose {
 			a.verbosePos()
 		}
@@ -91,7 +115,7 @@ func (a *AEI) handleZoo(text string) error {
 		a.Logf(b.String())
 		return nil
 	default:
-		return nil
+		return fmt.Errorf("unsupported command: %q", text)
 	}
 }
 

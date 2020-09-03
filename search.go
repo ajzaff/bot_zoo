@@ -49,25 +49,29 @@ func (e *Engine) searchRoot(p *Pos, depth int) SearchResult {
 	moves := e.getRootMovesLen(p, n)
 	sortedMoves := e.sortMoves(p, moves)
 	for _, entry := range sortedMoves {
-		if err := p.Move(entry.move); err != nil {
-			if err != errRecurringPosition {
-				fmt.Println(p)
-				panic(fmt.Sprintf("search_move_root: %v", err))
+		func() {
+			err := p.Move(entry.move)
+			defer func() {
+				if err := p.Unmove(); err != nil {
+					panic(fmt.Sprintf("search_unmove_root: %v", err))
+				}
+			}()
+			if err != nil {
+				if err != errRecurringPosition {
+					panic(fmt.Sprintf("search_move_root: %v", err))
+				}
+				return
 			}
-			continue
-		}
-		score := -e.search(p, -inf, inf, MoveLen(entry.move), depth)
-		if err := p.Unmove(); err != nil {
-			panic(fmt.Sprintf("search_unmove_root: %v", err))
-		}
-		if score > best.Score {
-			best.Score = score
-			best.Move = entry.move
-			fmt.Printf("log depth %d\n", depth)
-			fmt.Printf("log score %d\n", score)
-			fmt.Printf("log pv %s\n", MoveString(entry.move))
-			fmt.Printf("log transpositions %d\n", e.table.Len())
-		}
+			score := -e.search(p, -inf, inf, MoveLen(entry.move), depth)
+			if score > best.Score {
+				best.Score = score
+				best.Move = entry.move
+				fmt.Printf("log depth %d\n", depth)
+				fmt.Printf("log score %d\n", score)
+				fmt.Printf("log pv %s\n", entry.move)
+				fmt.Printf("log transpositions %d\n", e.table.Len())
+			}
+		}()
 	}
 	return best
 }

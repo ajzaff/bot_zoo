@@ -41,5 +41,6 @@ func (e *Engine) RandomSetup() []Step {
 			ps = ps[1:]
 		}
 	}
+	setup = append(setup, Step{Pass: true})
 	return setup
 }
