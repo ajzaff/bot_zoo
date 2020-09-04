@@ -286,12 +286,10 @@ func (s Step) Kind() StepKind {
 			switch {
 			case p1e || p2e:
 				return KindInvalid
-			case s.Piece1&decolorMask < s.Piece2&decolorMask:
-				return KindPull
-			case s.Piece1&decolorMask > s.Piece2&decolorMask:
+			case s.Dest == s.Alt:
 				return KindPush
 			default:
-				return KindInvalid
+				return KindPull
 			}
 		case !p1e:
 			return KindSetup
