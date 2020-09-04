@@ -37,7 +37,8 @@ func splitMove(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	if stepLen := indices[1] - indices[0]; stepLen <= 3 {
 		return indices[1], data[indices[0]:indices[1]], nil
 	}
-	if len(indices) <= 4 {
+	// Handle a single step left:
+	if len(indices) < 4 {
 		if atEOF {
 			return indices[1], data[indices[0]:indices[1]], nil
 		}
@@ -91,6 +92,7 @@ func ParseMove(s string) ([]Step, error) {
 	)
 	sc.Split(splitMove)
 	for sc.Scan() {
+		fmt.Printf("step of %q: %q\n", s, sc.Text())
 		step, err := ParseStep(sc.Text())
 		if err != nil {
 			return nil, fmt.Errorf("%s: %v", sc.Text(), err)
@@ -206,19 +208,18 @@ func ParseStep(s string) (Step, error) {
 	}
 	src2 := ParseSquare(s[6:8])
 	if !src2.Valid() {
-		return invalidStep, fmt.Errorf("invalid second square: %q", s[1:3])
+		return invalidStep, fmt.Errorf("invalid second square: %q", s[6:8])
 	}
 	cap1 := Capture{}
+	delta2 := ParseDelta(s[8])
 	if s[8] == 'x' {
 		if !piece1.SameColor(piece2) {
 			return invalidStep, fmt.Errorf("invalid first capture color: %q", s)
 		}
 		cap1.Piece = piece2
 		cap1.Src = src2
-	}
-	delta2 := ParseDelta(s[8])
-	if delta2 == 0 {
-		return invalidStep, fmt.Errorf("invalid second delta: %c", s[3])
+	} else if delta2 == 0 {
+		return invalidStep, fmt.Errorf("invalid second delta: %c", s[8])
 	}
 	dest2 := src2.Translate(delta2)
 
