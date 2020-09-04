@@ -288,10 +288,8 @@ func (s Step) Kind() StepKind {
 				return KindInvalid
 			case s.Dest == s.Alt:
 				return KindPush
-			case s.Src == s.Alt:
+			default: // This could still be an illegal pull:
 				return KindPull
-			default:
-				return KindInvalid
 			}
 		case !p1e:
 			return KindSetup
