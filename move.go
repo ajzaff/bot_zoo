@@ -3,7 +3,6 @@ package zoo
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"strings"
 )
 
@@ -26,68 +25,61 @@ func splitMove(data []byte, atEOF bool) (advance int, token []byte, err error) {
 			break
 		}
 	}
-	switch n := len(indices); {
-	case n <= 1: // EOF
+	// Check if there's no step to return:
+	if len(indices) < 2 {
 		if atEOF {
 			return len(data), nil, nil
 		}
-		// Request more
+		// We need more data:
 		return 0, nil, nil
-	case n == 2:
-		if atEOF {
-			return len(data), data[indices[0]:indices[1]], nil
-		}
-		if indices[1]-indices[0] <= 3 {
-			return len(data), data[indices[0]:indices[1]], nil
-		}
-		// Request more
-		return 0, nil, nil
-	case n == 4:
-		if indices[1]-indices[0] <= 3 {
-			return indices[1], data[indices[0]:indices[1]], nil
-		}
-		p1, _ := ParsePiece(string(data[indices[0]]))
-		p2, _ := ParsePiece(string(data[indices[2]]))
-		s1 := ParseSquare(string(data[indices[0]+1 : indices[0]+3]))
-		s2 := ParseSquare(string(data[indices[2]+1 : indices[2]+3]))
-		d1 := ParseSquare(string(data[indices[0]+1 : indices[0]+3])).Translate(ParseDelta(string(indices[0] + 3)))
-		d2 := ParseSquare(string(data[indices[2]+1 : indices[2]+3])).Translate(ParseDelta(string(indices[2] + 3)))
-		cap := data[indices[2]+3] == 'x'
-		if cap {
-			return len(data), data[indices[0]:indices[3]], nil
-		}
-		if p1.Color() != p2.Color() && p1&decolorMask < p2&decolorMask && (d1 == s2 || d2 == s1) {
-			return len(data), data[indices[0]:indices[3]], nil
-		}
-		return indices[1], data[indices[0]:indices[1]], nil
-	case n >= 6:
-		if indices[1]-indices[0] <= 3 {
-			return indices[1], data[indices[0]:indices[1]], nil
-		}
-		p1, _ := ParsePiece(string(data[indices[0]]))
-		p2, _ := ParsePiece(string(data[indices[2]]))
-		s1 := ParseSquare(string(data[indices[0]+1 : indices[0]+3]))
-		s2 := ParseSquare(string(data[indices[2]+1 : indices[2]+3]))
-		d1 := ParseSquare(string(data[indices[0]+1 : indices[0]+3])).Translate(ParseDelta(string(indices[0] + 3)))
-		d2 := ParseSquare(string(data[indices[2]+1 : indices[2]+3])).Translate(ParseDelta(string(indices[2] + 3)))
-		cap := data[indices[2]+3] == 'x'
-		if cap {
-			return indices[3], data[indices[0]:indices[3]], nil
-		}
-		if p1.Color() == p2.Color() {
-			return indices[1], data[indices[0]:indices[1]], nil
-		}
-		if p1&decolorMask < p2&decolorMask && (d1 == s2 || d2 == s1) {
-			return indices[1], data[indices[0]:indices[1]], nil
-		}
-		cap2 := data[indices[4]+3] == 'x'
-		if !cap2 {
-			return indices[3], data[indices[0]:indices[3]], nil
-		}
-		return indices[5], data[indices[0]:indices[5]], nil
-	default:
-		return 0, nil, fmt.Errorf("unexpected input: %q", string(data))
 	}
+	// Check if first move is a setup move and if so return it:
+	if stepLen := indices[1] - indices[0]; stepLen <= 3 {
+		return indices[1], data[indices[0]:indices[1]], nil
+	}
+	if len(indices) <= 4 {
+		if atEOF {
+			return indices[1], data[indices[0]:indices[1]], nil
+		}
+		// We need more data:
+		return 0, nil, nil
+	}
+	// Check the next steps to see if they go together.
+	// Steps go together if they are a related push, pull or capture.
+	// The following patterns are possible:
+	//	push PUSH
+	//	PULL pull
+	//	push PUSH CAP
+	//	PULL pull CAP
+	p1, _ := ParsePiece(data[indices[0]])
+	p2, _ := ParsePiece(data[indices[2]])
+	s1 := ParseSquare(string(data[indices[0]+1 : indices[0]+3]))
+	s2 := ParseSquare(string(data[indices[2]+1 : indices[2]+3]))
+	d1 := s1.Translate(ParseDelta(data[indices[0]+3]))
+	d2 := s2.Translate(ParseDelta(data[indices[2]+3]))
+	cap := data[indices[2]+3] == 'x'
+
+	// The do not match the pattern and should not go together:
+	if !cap && (p1.SameColor(p2) || p1.SameType(p2) || (p1.WeakerThan(p2) && s2 != d1) || (!p1.WeakerThan(p2) && s1 != d2)) {
+		return indices[1], data[indices[0]:indices[1]], nil
+	}
+
+	if len(indices) < 6 {
+		// There cannot be two captures in a row so we know the sequence ends.
+		if cap || atEOF {
+			return indices[3], data[indices[0]:indices[3]], nil
+		}
+		// The push/pull may lead to a capture and we need more data:
+		return 0, nil, nil
+	}
+
+	// The push/pull leads to a capture:
+	if cap2 := data[indices[4]+3] == 'x'; cap2 {
+		return indices[5], data[indices[0]:indices[5]], nil
+	}
+
+	// Return the push/pull sequence
+	return indices[3], data[indices[0]:indices[3]], nil
 }
 
 // ParseMove parses the move string into steps
@@ -99,7 +91,6 @@ func ParseMove(s string) ([]Step, error) {
 	)
 	sc.Split(splitMove)
 	for sc.Scan() {
-		log.Printf("%q\n", sc.Text())
 		step, err := ParseStep(sc.Text())
 		if err != nil {
 			return nil, fmt.Errorf("%s: %v", sc.Text(), err)
@@ -171,160 +162,117 @@ var invalidStep = Step{
 // ParseStep parses a single step and optional capture.
 // TODO(ajzaff): Clean this up.
 func ParseStep(s string) (Step, error) {
-	switch {
-	case len(s) == 3: // Setup:
-		piece, err := ParsePiece(s[0:1])
-		if err != nil {
-			return invalidStep, err
-		}
-		alt := ParseSquare(s[1:3])
-		if !alt.Valid() {
-			return invalidStep, fmt.Errorf("invalid setup square: %q", s)
-		}
+	// Check if the step is too short:
+	if len(s) < 3 {
+		return invalidStep, fmt.Errorf("too short step: %s", s)
+	}
+	piece1, err := ParsePiece(s[0])
+	if err != nil {
+		return invalidStep, fmt.Errorf("invalid first piece: %v", err)
+	}
+	src1 := ParseSquare(s[1:3])
+	if !src1.Valid() {
+		return invalidStep, fmt.Errorf("invalid first square: %q", s[1:3])
+	}
+	// Return the setup step:
+	if len(s) == 3 {
 		return Step{
 			Src:    invalidSquare,
 			Dest:   invalidSquare,
-			Alt:    alt,
-			Piece1: piece,
+			Alt:    src1,
+			Piece1: piece1,
 		}, nil
-	case len(s) == 4: // Default:
-		piece, err := ParsePiece(string(s[0]))
-		if err != nil {
-			return invalidStep, err
-		}
-		src := ParseSquare(s[1:3])
-		if !src.Valid() {
-			return invalidStep, fmt.Errorf("invalid step square: %q", s)
-		}
-		if s[3:4] == "x" { // Lone capture:
-			return Step{
-				Src:  invalidSquare,
-				Dest: invalidSquare,
-				Alt:  invalidSquare,
-				Cap: Capture{
-					Piece: piece,
-					Src:   src,
-				},
-			}, nil
-		}
-		dest := src.Translate(ParseDelta(string(s[3])))
-		return Step{
-			Src:    src,
-			Dest:   dest,
-			Alt:    invalidSquare,
-			Piece1: piece,
-		}, nil
-	case len(s) == 9: // Push/Pull or Default capture:
-		if strings.HasSuffix(s, "x") { // Default capture:
-			piece, err := ParsePiece(s[0:1])
-			if err != nil {
-				return invalidStep, err
-			}
-			src := ParseSquare(s[1:3])
-			if !src.Valid() {
-				return invalidStep, fmt.Errorf("invalid step square: %q", s)
-			}
-			dest := src.Translate(ParseDelta(s[3:4]))
-			step := Step{
-				Src:    src,
-				Dest:   dest,
-				Alt:    invalidSquare,
-				Piece1: piece,
-			}
-			capPiece, err := ParsePiece(s[5:6])
-			if err != nil {
-				return invalidStep, err
-			}
-			capSrc := ParseSquare(s[6:8])
-			if !src.Valid() {
-				return invalidStep, fmt.Errorf("invalid capture square: %q", s)
-			}
-			step.Cap = Capture{
-				Piece: capPiece,
-				Src:   capSrc,
-			}
-			return step, nil
-		}
-		p1, err := ParsePiece(s[0:1])
-		if err != nil {
-			return invalidStep, err
-		}
-		src1 := ParseSquare(s[1:3])
-		if !src1.Valid() {
-			return invalidStep, fmt.Errorf("invalid first square: %q", s)
-		}
-		dest1 := src1.Translate(ParseDelta(s[3:4]))
-		p2, err := ParsePiece(s[5:6])
-		if err != nil {
-			return invalidStep, err
-		}
-		src2 := ParseSquare(s[6:8])
-		if !src2.Valid() {
-			return invalidStep, fmt.Errorf("invalid second square: %q", s)
-		}
-		dest2 := src2.Translate(ParseDelta(string(s[8])))
-		if p1&decolorMask < p2&decolorMask {
-			p1, p2 = p2, p1
-			src1 = src2
-			dest1, dest2 = dest2, dest1
-		}
+	}
+	delta1 := ParseDelta(s[3])
+	if delta1 == 0 {
+		return invalidStep, fmt.Errorf("invalid first delta: %c", s[3])
+	}
+	dest1 := src1.Translate(delta1)
+	// Return single step:
+	if len(s) == 4 {
 		return Step{
 			Src:    src1,
 			Dest:   dest1,
-			Alt:    dest2,
-			Piece1: p1,
-			Piece2: p2,
+			Alt:    invalidSquare,
+			Piece1: piece1,
 		}, nil
-	case len(s) == 14: // Push/Pull with capture:
-		p1, err := ParsePiece(s[0:1])
-		if err != nil {
-			return invalidStep, err
-		}
-		at1 := ParseSquare(s[1:3])
-		if !at1.Valid() {
-			return invalidStep, fmt.Errorf("invalid first square: %q", s)
-		}
-		dest1 := at1.Translate(ParseDelta(s[3:4]))
-		p2, err := ParsePiece(s[5:6])
-		if err != nil {
-			return invalidStep, err
-		}
-		at2 := ParseSquare(s[6:8])
-		if !at2.Valid() {
-			return invalidStep, fmt.Errorf("invalid second square: %q", s)
-		}
-		dest2 := at2.Translate(ParseDelta(s[8:9]))
-		if p1&decolorMask < p2&decolorMask {
-			p1, p2 = p2, p1
-			at1, at2 = at2, at1
-			dest1, dest2 = dest2, dest1
-		}
-		step := Step{
-			Src:    at1,
-			Dest:   dest1,
-			Alt:    at2,
-			Piece1: p1,
-			Piece2: p2,
-		}
-		capPiece, err := ParsePiece(s[9:10])
-		if err != nil {
-			return invalidStep, err
-		}
-		capSrc := ParseSquare(s[10:12])
-		if !capSrc.Valid() {
-			return invalidStep, fmt.Errorf("invalid capture square: %q", s)
-		}
-		if s[12] != 'x' {
-			return invalidStep, fmt.Errorf("invalid capture: %q", s)
-		}
-		step.Cap = Capture{
-			Piece: capPiece,
-			Src:   capSrc,
-		}
-		return step, nil
-	default:
-		return invalidStep, fmt.Errorf("malformed step: %q", s)
 	}
+	if len(s) < 9 {
+		return invalidStep, fmt.Errorf("too short step sequence: %q", s)
+	}
+	piece2, err := ParsePiece(s[5])
+	if err != nil {
+		return invalidStep, fmt.Errorf("invalid second piece: %v", err)
+	}
+	src2 := ParseSquare(s[6:8])
+	if !src2.Valid() {
+		return invalidStep, fmt.Errorf("invalid second square: %q", s[1:3])
+	}
+	cap1 := Capture{}
+	if s[8] == 'x' {
+		if !piece1.SameColor(piece2) {
+			return invalidStep, fmt.Errorf("invalid first capture color: %q", s)
+		}
+		cap1.Piece = piece2
+		cap1.Src = src2
+	}
+	delta2 := ParseDelta(s[8])
+	if delta2 == 0 {
+		return invalidStep, fmt.Errorf("invalid second delta: %c", s[3])
+	}
+	dest2 := src2.Translate(delta2)
+
+	// Return default self capture:
+	if cap1.Valid() && len(s) == 9 {
+		return Step{
+			Src:    src1,
+			Dest:   dest1,
+			Alt:    invalidSquare,
+			Piece1: piece1,
+			Cap:    cap1,
+		}, nil
+	}
+	if piece1.SameColor(piece2) {
+		return invalidStep, fmt.Errorf("invalid push or pull color: %q", s)
+	}
+	// Step sequence is a push or pull with a possible capture:
+	if piece1.WeakerThan(piece2) {
+		// Swap step order in a push (when the opponents piece comes first):
+		piece1, piece2 = piece2, piece1
+		src1, src2 = src2, src1
+		dest1, dest2 = dest2, dest1
+	}
+	// Alt for the push/pull becomes src2:
+	alt := src2
+	step := Step{
+		Src:    src1,
+		Dest:   dest1,
+		Alt:    alt,
+		Piece1: piece1,
+		Piece2: piece2,
+	}
+
+	// No capture:
+	if len(s) == 9 {
+		return step, nil
+	}
+
+	piece3, err := ParsePiece(s[10])
+	if err != nil {
+		return invalidStep, err
+	}
+	src3 := ParseSquare(s[11:13])
+	if !src3.Valid() {
+		return invalidStep, fmt.Errorf("invalid capture square: %q", s[11:13])
+	}
+	if s[13] != 'x' {
+		return invalidStep, fmt.Errorf("invalid capture delta: %c", s[13])
+	}
+	step.Cap = Capture{
+		Piece: piece3,
+		Src:   src3,
+	}
+	return step, nil
 }
 
 func (s Step) Kind() StepKind {

@@ -51,9 +51,9 @@ type Piece int
 
 const pchars = " RCDHMExxrcdhme"
 
-func ParsePiece(s string) (Piece, error) {
-	for i, r := range pchars {
-		if s == string(r) {
+func ParsePiece(b byte) (Piece, error) {
+	for i, x := range []byte(pchars) {
+		if b == x {
 			return Piece(i), nil
 		}
 	}

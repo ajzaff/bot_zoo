@@ -85,7 +85,7 @@ func (a *AEI) handle(text string) error {
 	case strings.HasPrefix(text, "go"):
 		parts := strings.SplitN(text, " ", 2)
 		if len(parts) < 2 {
-			best := a.engine.SearchFixedDepth(2)
+			best := a.engine.SearchFixedDepth(1)
 			if len(best.Move) == 0 {
 				a.Logf("no moves")
 				return nil

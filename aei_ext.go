@@ -106,7 +106,7 @@ func (a *AEI) handleExt(text string) error {
 			a.Logf(a.engine.Pos().ShortString())
 			return nil
 		default:
-			p, _ := ParsePiece(parts[1])
+			p, _ := ParsePiece(parts[1][0])
 			bs := a.engine.Pos().bitboards
 			if bs != nil {
 				b = bs[p]

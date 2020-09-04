@@ -31,9 +31,9 @@ func ParseShortPosition(s string) (*Pos, error) {
 	}
 	side := ParseColor(matches[1])
 	pos := newPos(nil, nil, side, 2, nil, nil, 4, 0)
-	for i, r := range matches[2] {
+	for i, b := range []byte(matches[2]) {
 		square := Square(8*(7-i/8) + i%8)
-		piece, err := ParsePiece(string(r))
+		piece, err := ParsePiece(b)
 		if err != nil {
 			return nil, fmt.Errorf("at %s: %v", square.String(), err)
 		}

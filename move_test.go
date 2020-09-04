@@ -91,6 +91,52 @@ func TestParseMove(t *testing.T) {
 		}, {
 			Pass: true,
 		}},
+	}, {
+		input: "Md2n Dh2n Md3n Md4s",
+		want: []Step{{
+			Src:    ParseSquare("d2"),
+			Dest:   ParseSquare("d3"),
+			Piece1: GCamel,
+			Alt:    invalidSquare,
+		}, {
+			Src:    ParseSquare("h2"),
+			Dest:   ParseSquare("h3"),
+			Piece1: GDog,
+			Alt:    invalidSquare,
+		}, {
+			Src:    ParseSquare("d3"),
+			Dest:   ParseSquare("d4"),
+			Piece1: GCamel,
+			Alt:    invalidSquare,
+		}, {
+			Src:    ParseSquare("d4"),
+			Dest:   ParseSquare("d3"),
+			Piece1: GCamel,
+			Alt:    invalidSquare,
+		}, {
+			Pass: true,
+		}},
+	}, {
+		input: "Hc4s rc5s Hc3w rc4s rc3x",
+		want: []Step{{
+			Src:    ParseSquare("c4"),
+			Dest:   ParseSquare("c3"),
+			Alt:    ParseSquare("c5"),
+			Piece1: GHorse,
+			Piece2: SRabbit,
+		}, {
+			Src:    ParseSquare("c3"),
+			Dest:   ParseSquare("b3"),
+			Alt:    ParseSquare("c4"),
+			Piece1: GHorse,
+			Piece2: SRabbit,
+			Cap: Capture{
+				Piece: SRabbit,
+				Src:   ParseSquare("c3"),
+			},
+		}, {
+			Pass: true,
+		}},
 	}} {
 		t.Run(tc.input, func(t *testing.T) {
 			got, err := ParseMove(tc.input)

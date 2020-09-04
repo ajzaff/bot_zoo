@@ -40,6 +40,10 @@ func (src Square) Delta(dest Square) int8 {
 	}
 }
 
+func (i Square) AdjacentTo(j Square) bool {
+	return i.Delta(j) != 0
+}
+
 func (i Square) String() string {
 	if i.Valid() {
 		return string([]byte{
@@ -67,15 +71,15 @@ func NewDelta(d int8) string {
 	}
 }
 
-func ParseDelta(s string) int8 {
-	switch s {
-	case "n":
+func ParseDelta(b byte) int8 {
+	switch b {
+	case 'n':
 		return +8
-	case "s":
+	case 's':
 		return -8
-	case "e":
+	case 'e':
 		return 1
-	case "w":
+	case 'w':
 		return -1
 	default:
 		return 0
