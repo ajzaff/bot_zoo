@@ -1,43 +1,113 @@
 package zoo
 
 import (
+	"bufio"
 	"fmt"
-	"regexp"
+	"log"
 	"strings"
 )
 
-const (
-	pieceP       = `([RCDHMErcdhme])`
-	goldPieceP   = `([RCDHME])`
-	silverPieceP = `([rcdhme])`
-	squareP      = `([a-h][1-8])`
-	dirP         = `(nsew)`
-	capP         = `(x)`
-)
+func splitMove(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	// A maximum of 2 split indices for a sequence with 2 steps and a capture.
+	// A third split corresponds to end of the advance return value.
+	var indices []int
 
-var StepPattern = regexp.MustCompile(
-	fmt.Sprintf(`(%s%s)|(%s%s%s)|(%s%s%s %s%s%s)|(%s%s%s %s%s%s)|(%s%s%s %s%s%s)|(%s%s%s %s%s%s %s%s%s)|(%s%s%s %s%s%s %s%s%s)`,
-		pieceP, squareP, // setup
-		pieceP, squareP, dirP, // default
-		pieceP, squareP, dirP, pieceP, squareP, capP, // default capture
-		goldPieceP, squareP, dirP, silverPieceP, squareP, dirP, // push/pull
-		silverPieceP, squareP, dirP, goldPieceP, squareP, dirP, // push/pull
-		silverPieceP, squareP, dirP, goldPieceP, squareP, dirP, pieceP, squareP, capP, // push/pull capture
-		goldPieceP, squareP, dirP, silverPieceP, squareP, dirP, pieceP, squareP, capP, // push/pull capture
-	),
-)
+	for i, p := 0, 0; i < 3; i++ {
+		for ; p < len(data) && data[p] == ' '; p++ {
+		}
+		indices = append(indices, p)
+		if p == len(data) {
+			break
+		}
+		for ; p < len(data) && data[p] != ' '; p++ {
+		}
+		indices = append(indices, p)
+		if p == len(data) {
+			break
+		}
+	}
+	switch n := len(indices); {
+	case n <= 1: // EOF
+		if atEOF {
+			return len(data), nil, nil
+		}
+		// Request more
+		return 0, nil, nil
+	case n == 2:
+		if atEOF {
+			return len(data), data[indices[0]:indices[1]], nil
+		}
+		if indices[1]-indices[0] <= 3 {
+			return len(data), data[indices[0]:indices[1]], nil
+		}
+		// Request more
+		return 0, nil, nil
+	case n == 4:
+		if indices[1]-indices[0] <= 3 {
+			return indices[1], data[indices[0]:indices[1]], nil
+		}
+		p1, _ := ParsePiece(string(data[indices[0]]))
+		p2, _ := ParsePiece(string(data[indices[2]]))
+		s1 := ParseSquare(string(data[indices[0]+1 : indices[0]+3]))
+		s2 := ParseSquare(string(data[indices[2]+1 : indices[2]+3]))
+		d1 := ParseSquare(string(data[indices[0]+1 : indices[0]+3])).Translate(ParseDelta(string(indices[0] + 3)))
+		d2 := ParseSquare(string(data[indices[2]+1 : indices[2]+3])).Translate(ParseDelta(string(indices[2] + 3)))
+		cap := data[indices[2]+3] == 'x'
+		if cap {
+			return len(data), data[indices[0]:indices[3]], nil
+		}
+		if p1.Color() != p2.Color() && p1&decolorMask < p2&decolorMask && (d1 == s2 || d2 == s1) {
+			return len(data), data[indices[0]:indices[3]], nil
+		}
+		return indices[1], data[indices[0]:indices[1]], nil
+	case n >= 6:
+		if indices[1]-indices[0] <= 3 {
+			return indices[1], data[indices[0]:indices[1]], nil
+		}
+		p1, _ := ParsePiece(string(data[indices[0]]))
+		p2, _ := ParsePiece(string(data[indices[2]]))
+		s1 := ParseSquare(string(data[indices[0]+1 : indices[0]+3]))
+		s2 := ParseSquare(string(data[indices[2]+1 : indices[2]+3]))
+		d1 := ParseSquare(string(data[indices[0]+1 : indices[0]+3])).Translate(ParseDelta(string(indices[0] + 3)))
+		d2 := ParseSquare(string(data[indices[2]+1 : indices[2]+3])).Translate(ParseDelta(string(indices[2] + 3)))
+		cap := data[indices[2]+3] == 'x'
+		if cap {
+			return indices[3], data[indices[0]:indices[3]], nil
+		}
+		if p1.Color() == p2.Color() {
+			return indices[1], data[indices[0]:indices[1]], nil
+		}
+		if p1&decolorMask < p2&decolorMask && (d1 == s2 || d2 == s1) {
+			return indices[1], data[indices[0]:indices[1]], nil
+		}
+		cap2 := data[indices[4]+3] == 'x'
+		if !cap2 {
+			return indices[3], data[indices[0]:indices[3]], nil
+		}
+		return indices[5], data[indices[0]:indices[5]], nil
+	default:
+		return 0, nil, fmt.Errorf("unexpected input: %q", string(data))
+	}
+}
 
 // ParseMove parses the move string into steps
 // and checks for validity but not legality.
 func ParseMove(s string) ([]Step, error) {
-	parts := strings.Split(s, " ")
-	var res []Step
-	for _, part := range parts {
-		step, err := ParseStep(part)
+	var (
+		sc  = bufio.NewScanner(strings.NewReader(s))
+		res []Step
+	)
+	sc.Split(splitMove)
+	for sc.Scan() {
+		log.Printf("%q\n", sc.Text())
+		step, err := ParseStep(sc.Text())
 		if err != nil {
-			return nil, fmt.Errorf("%s: %s", part, err)
+			return nil, fmt.Errorf("%s: %v", sc.Text(), err)
 		}
 		res = append(res, step)
+	}
+	if err := sc.Err(); err != nil {
+		return nil, fmt.Errorf("%s: %v", s, err)
 	}
 	res = append(res, Step{Pass: true})
 	return res, nil
@@ -179,29 +249,29 @@ func ParseStep(s string) (Step, error) {
 		if err != nil {
 			return invalidStep, err
 		}
-		at1 := ParseSquare(s[1:3])
-		if !at1.Valid() {
+		src1 := ParseSquare(s[1:3])
+		if !src1.Valid() {
 			return invalidStep, fmt.Errorf("invalid first square: %q", s)
 		}
-		dest1 := at1.Translate(ParseDelta(s[3:4]))
-		p2, err := ParsePiece(s[4:5])
+		dest1 := src1.Translate(ParseDelta(s[3:4]))
+		p2, err := ParsePiece(s[5:6])
 		if err != nil {
 			return invalidStep, err
 		}
-		at2 := ParseSquare(s[6:7])
-		if !at2.Valid() {
+		src2 := ParseSquare(s[6:8])
+		if !src2.Valid() {
 			return invalidStep, fmt.Errorf("invalid second square: %q", s)
 		}
-		dest2 := at2.Translate(ParseDelta(string(s[8])))
+		dest2 := src2.Translate(ParseDelta(string(s[8])))
 		if p1&decolorMask < p2&decolorMask {
 			p1, p2 = p2, p1
-			at1, at2 = at2, at1
+			src1 = src2
 			dest1, dest2 = dest2, dest1
 		}
 		return Step{
-			Src:    at1,
+			Src:    src1,
 			Dest:   dest1,
-			Alt:    at2,
+			Alt:    dest2,
 			Piece1: p1,
 			Piece2: p2,
 		}, nil
