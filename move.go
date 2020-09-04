@@ -288,8 +288,10 @@ func (s Step) Kind() StepKind {
 				return KindInvalid
 			case s.Dest == s.Alt:
 				return KindPush
-			default:
+			case s.Src == s.Alt:
 				return KindPull
+			default:
+				return KindInvalid
 			}
 		case !p1e:
 			return KindSetup
