@@ -44,8 +44,7 @@ func (a *AEI) handle(text string) error {
 		a.writef("readyok\n")
 		return nil
 	case text == "newgame":
-		pos := NewEmptyPosition()
-		a.engine.SetPos(pos)
+		a.engine.NewGame()
 		return nil
 	case text == "stop":
 		a.engine.Stop()

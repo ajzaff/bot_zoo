@@ -21,13 +21,13 @@ func (a *AEI) handleOption(text string) error {
 		if err != nil {
 			return err
 		}
-		a.engine.TimeLimits.Move = time.Duration(v) * time.Second
+		a.engine.timeControl.Move = time.Duration(v) * time.Second
 	case "tcreserve":
 		v, err := strconv.Atoi(value)
 		if err != nil {
 			return err
 		}
-		a.engine.TimeLimits.Reserve = time.Duration(v) * time.Second
+		a.engine.timeControl.Reserve = time.Duration(v) * time.Second
 	case "tcpercent":
 		v, err := strconv.Atoi(value)
 		if err != nil {
@@ -36,67 +36,48 @@ func (a *AEI) handleOption(text string) error {
 		if v < 0 || v > 100 {
 			return fmt.Errorf("percentage out of range [0-100%]: %d", v)
 		}
-		a.engine.TimeLimits.Percent = v
+		a.engine.timeControl.MoveReservePercent = v
 	case "tcmax":
 		v, err := strconv.Atoi(value)
 		if err != nil {
 			return err
 		}
-		a.engine.TimeLimits.Max = time.Duration(v) * time.Second
+		a.engine.timeControl.MaxReserve = time.Duration(v) * time.Second
 	case "tctotal":
 		v, err := strconv.Atoi(value)
 		if err != nil {
 			return err
 		}
-		a.engine.TimeLimits.Total = time.Duration(v) * time.Second
+		a.engine.timeControl.GameTotal = time.Duration(v) * time.Second
 	case "tcturns":
 		v, err := strconv.Atoi(value)
 		if err != nil {
 			return err
 		}
-		a.engine.TimeLimits.Turns = v
+		a.engine.timeControl.Turns = v
 	case "tcturntime":
 		v, err := strconv.Atoi(value)
 		if err != nil {
 			return err
 		}
-		a.engine.TimeLimits.Turn = time.Duration(v) * time.Second
+		a.engine.timeControl.MaxTurn = time.Duration(v) * time.Second
 	case "greserve":
 		v, err := strconv.Atoi(value)
 		if err != nil {
 			return err
 		}
-		a.engine.TimeInfo.Reserve[Gold] = time.Duration(v) * time.Second
+		a.engine.timeInfo.Reserve[Gold] = time.Duration(v) * time.Second
 	case "sreserve":
 		v, err := strconv.Atoi(value)
 		if err != nil {
 			return err
 		}
-		a.engine.TimeInfo.Reserve[Silver] = time.Duration(v) * time.Second
-	case "gused":
-		v, err := strconv.Atoi(value)
-		if err != nil {
-			return err
-		}
-		a.engine.TimeInfo.Used[Gold] = time.Duration(v) * time.Second
-	case "sused":
-		v, err := strconv.Atoi(value)
-		if err != nil {
-			return err
-		}
-		a.engine.TimeInfo.Used[Silver] = time.Duration(v) * time.Second
-	case "lastmoveused":
-		v, err := strconv.Atoi(value)
-		if err != nil {
-			return err
-		}
-		a.engine.TimeInfo.LastMoveUsed = time.Duration(v) * time.Second
-	case "moveused":
-		v, err := strconv.Atoi(value)
-		if err != nil {
-			return err
-		}
-		a.engine.TimeInfo.MoveUsed = time.Duration(v) * time.Second
+		a.engine.timeInfo.Reserve[Silver] = time.Duration(v) * time.Second
+	// We currently don't have any reason to support these:
+	// case "gused":
+	// case "sused":
+	// case "moveused":
+	// case "lastmoveused":
 	case "hash":
 		v, err := strconv.Atoi(value)
 		if err != nil {

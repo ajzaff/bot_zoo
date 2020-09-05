@@ -27,6 +27,8 @@ type SearchInfo struct {
 	// Used to determine remaining time to search.
 	times []int64
 
+	done chan struct{}
+
 	// best move
 	// time (unix seconds) when best was last set.
 	// Corresponds to end of search.
@@ -36,7 +38,9 @@ type SearchInfo struct {
 }
 
 func newSearchInfo() *SearchInfo {
-	s := &SearchInfo{}
+	s := &SearchInfo{
+		done: make(chan struct{}),
+	}
 	s.newPly()
 	return s
 }
@@ -85,17 +89,51 @@ func (s *SearchInfo) Seconds() int64 {
 	return end - s.times[0]
 }
 
-func (s *SearchInfo) EBF() int {
-	if len(s.nodes) < 4 {
-		return 0
+func computebfNd(d int, b float64) float64 {
+	n := b
+	for i := 2; i <= d; i++ {
+		n *= math.Pow(b, float64(i))
 	}
-	i0, i1 := len(s.nodes)-3, len(s.nodes)-1
-	n0 := s.nodes[i0]
-	if n0 == 0 {
-		return 0
+	return n
+}
+
+// EBF experimentally computes the effective branching factor.
+// This helps compute the nodes required to search to depth d
+// and by extension the duration of time required to complete
+// another ply.
+func (s *SearchInfo) EBF() float64 {
+	const (
+		tol   = 10000.
+		small = 1e-4
+	)
+	d := len(s.nodes) - 1
+	N := float64(s.Nodes())
+	b := 0.
+	for n, lo, hi := 0., 1., 50.; hi-lo > small; {
+		mid := (hi-lo)/2 + lo
+		b = mid
+		n = computebfNd(d, b)
+		e := n - N
+		if math.Abs(e) < tol {
+			break
+		}
+		if e < 0 {
+			lo = mid
+		} else {
+			hi = mid
+		}
 	}
-	n1 := s.nodes[i1]
-	return int(math.Sqrt(float64(n1) / float64(n0)))
+	return b
+}
+
+func (s *SearchInfo) guessNextPlyDuration() time.Duration {
+	now := time.Now().Unix()
+	d := len(s.nodes)
+	v := float64(now-s.times[d-1]) * math.Pow(s.EBF(), float64(d))
+	if v > math.MaxInt64 {
+		return math.MaxInt64
+	}
+	return time.Duration(v * float64(time.Second))
 }
 
 // Go starts the search routine.
@@ -113,51 +151,66 @@ func (e *Engine) GoPonder() {
 func (e *Engine) GoInfinite() {
 }
 
+// Stop stops the search immediately and blocks until stopped.
 func (e *Engine) Stop() {
 	if atomic.LoadInt32(&e.running) == 1 {
 		e.stopping = 1
+		<-e.searchInfo.done
 	}
 }
 
 // Stop search immediately and print the best move info.
 func (e *Engine) stop() {
-	best := e.SearchInfo.Best()
+	best := e.searchInfo.Best()
 	fmt.Printf("bestmove %s\n", MoveString(best.Move))
 	fmt.Printf("info score %d\n", best.Score)
-	fmt.Printf("info nodes %d\n", e.SearchInfo.Nodes())
-	fmt.Printf("info time %d\n", e.SearchInfo.Seconds())
-	fmt.Printf("info ebf %d\n", e.SearchInfo.EBF())
+	fmt.Printf("info nodes %d\n", e.searchInfo.Nodes())
+	fmt.Printf("info time %d\n", e.searchInfo.Seconds())
+	fmt.Printf("info ebf %f\n", e.searchInfo.EBF())
 	fmt.Printf("info pv %s\n", MoveString(best.PV))
 	fmt.Printf("info curmovenumber %d\n", e.Pos().moveNum)
 	atomic.SwapInt32(&e.running, 0)
+	e.searchInfo.done <- struct{}{}
 }
 
 func (e *Engine) iterativeDeepeningRoot() {
-	atomic.SwapInt32(&e.running, 1)
 	e.stopping = 0
 	defer func() { e.stop() }()
 
-	e.SearchInfo = newSearchInfo()
+	e.searchInfo = newSearchInfo()
+	if e.timeInfo == nil {
+		e.timeInfo = e.timeControl.newTimeInfo()
+	} else {
+		e.timeControl.resetTurn(e.timeInfo, e.p.side)
+	}
 
 	p := e.Pos()
 	if p.moveNum == 1 {
 		// TODO(ajzaff): Find best setup moves using a specialized search.
 		// For now, choose a random setup.
-		e.SearchInfo.setBest(SearchResult{
+		e.searchInfo.setBest(SearchResult{
 			Move: e.RandomSetup(),
 		})
 		return
 	}
-	start := time.Now()
-	e.TimeInfo.Start[p.side] = start
+
 	var best SearchResult
 	for d := 1; e.stopping == 0 && atomic.LoadInt32(&e.running) == 1; d++ {
-		e.SearchInfo.newPly()
+		if best.Score >= terminalEval {
+			go e.Stop()
+			return
+		}
+		if next, rem := e.searchInfo.guessNextPlyDuration(), e.timeControl.GameTimeRemaining(e.timeInfo, p.side); d > 4 && rem <= next {
+			fmt.Printf("log stop deepening before ply=%d (ebf=%f, cost=%s, budget=%s)\n", d, e.searchInfo.EBF(), next, rem)
+			go e.Stop()
+			return
+		}
+		e.searchInfo.newPly()
 		best = e.searchRoot(p, d)
-		e.SearchInfo.setBest(best)
+		e.searchInfo.setBest(best)
 	}
 	e.table.Clear()
-	e.SearchInfo.setBest(best)
+	e.searchInfo.setBest(best)
 }
 
 func (e *Engine) searchRoot(p *Pos, depth int) SearchResult {
@@ -273,7 +326,7 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 		}
 	}
 
-	e.SearchInfo.addNodes(nodes)
+	e.searchInfo.addNodes(nodes)
 
 	// Step 4: Store transposition table entry.
 	if e.useTable {

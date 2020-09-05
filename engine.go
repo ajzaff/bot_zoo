@@ -7,10 +7,10 @@ import (
 const transposeTableSize = 2000000
 
 type Engine struct {
-	TimeLimits TimeLimits
-	TimeInfo   TimeInfo
+	timeControl TimeControl
+	timeInfo    *TimeInfo
 
-	SearchInfo *SearchInfo
+	searchInfo *SearchInfo
 
 	p *Pos
 	r *rand.Rand
@@ -32,6 +32,13 @@ func NewEngine(seed int64) *Engine {
 		table:    NewTable(transposeTableSize),
 		useTable: true,
 	}
+}
+
+func (e *Engine) NewGame() {
+	pos := NewEmptyPosition()
+	e.SetPos(pos)
+	e.table.Clear()
+	e.timeInfo = e.timeControl.newTimeInfo()
 }
 
 func (e *Engine) Pos() *Pos {

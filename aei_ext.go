@@ -9,6 +9,7 @@ import (
 func (a *AEI) handleExt(text string) error {
 	switch {
 	case text == "new", text == "newstandard":
+		a.engine.NewGame()
 		pos, err := ParseShortPosition(posStandard)
 		if err != nil {
 			panic(err)

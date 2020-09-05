@@ -1,58 +1,124 @@
 package zoo
 
-import "time"
+import (
+	"math"
+	"time"
+)
 
-// TimeLimits configures game timing limits
+// TimeInfo is the current time state for the engine.
+type TimeInfo struct {
+	// GameStart is the time of game start from after receiving newgame.
+	GameStart time.Time
+
+	// Start time of the last turn for gold and silver.
+	Start [2]time.Time
+
+	// Move time for gold and silver.
+	Move [2]time.Duration
+
+	// Reserve remaining for gold and silver.
+	Reserve [2]time.Duration
+}
+
+// TimeControl configures game timing control
 // and some move limits. All times in seconds.
 // 0 means unlimited and is the default value.
-type TimeLimits struct {
-	// Move is the time config per-move time.
+type TimeControl struct {
+	// Move is the time control per-move time.
 	// Set using tcmove [seconds].
 	Move time.Duration
 
-	// Turn is the max turn time.
-	// Set using tcturn [seconds].
-	Turn time.Duration
-
-	// Reserve is the time config initial reserve time.
+	// Reserve is the time control initial reserve time.
 	// Set using tcreserve [seconds].
 	Reserve time.Duration
 
-	// Percent of move time added to reserve.
+	// MoveReservePercent of move time added to reserve.
 	// Set using tcpercent [%].
-	Percent int
+	MoveReservePercent int
 
-	// Max reserve time.
+	// MaxTurn is the max turn time.
+	// Set using tcturn [seconds].
+	MaxTurn time.Duration
+
+	// MaxReserve reserve time.
 	// Set using tcmax [seconds].
-	Max time.Duration
+	MaxReserve time.Duration
 
-	// Total max game duration.
+	// GameTotal max game duration.
 	// Set using tctotal [seconds].
-	Total time.Duration
+	GameTotal time.Duration
 
 	// Turns is the max number of turns in a game.
 	// Set using tcturns [N].
 	Turns int
 }
 
-// TimeInfo is the current time state for the engine.
-type TimeInfo struct {
-	// MoveUsed is the amount of time used on the current move.
-	MoveUsed time.Duration
-
-	// LastMoveUsed is the amount of time used on the last move.
-	LastMoveUsed time.Duration
-
-	// Start time of the last turn for gold and silver.
-	Start [2]time.Time
-
-	// Used time of the last turn for gold and silver.
-	Used [2]time.Duration
-
-	// Reserve remaining for gold and silver.
-	Reserve [2]time.Duration
+func (tc TimeControl) newTimeInfo() *TimeInfo {
+	now := time.Now()
+	return &TimeInfo{
+		GameStart: now,
+		Start:     [2]time.Time{now, now},
+		Move:      [2]time.Duration{tc.Move, tc.Move},
+		Reserve:   [2]time.Duration{tc.Reserve, tc.Reserve},
+	}
 }
 
-func (e *Engine) RemainingTime() time.Duration {
-	return 0
+func (tc TimeControl) resetTurn(t *TimeInfo, c Color) {
+	t.Move[c] = tc.Move
+	t.Start[c] = time.Now()
+}
+
+func (tc TimeControl) gameTimeRemaining(t *TimeInfo, c Color, now time.Time) time.Duration {
+	used := now.Sub(t.Start[c])
+	rem := time.Duration(math.MaxInt64)
+
+	// Check the remaining time against the turn limit timer.
+	// If set, this is a hard limit.
+	if tc.MaxTurn != 0 {
+		rem = tc.MaxTurn - used
+	}
+
+	// Check the total game time.
+	if tc.GameTotal != 0 {
+		if r := tc.GameTotal - used; r < rem {
+			rem = r
+		}
+	}
+
+	// Check the move time remaining plus reserves.
+	turn := t.Move[c] + t.Reserve[c]
+	if r := turn - used; r < rem {
+		rem = r
+	}
+
+	return rem
+}
+
+// GameTimeRemaining returns the maximum amount of time left for side c.
+// This generally assumes side c is the side to move.
+// If HardTimeRemaining elapses side c will lose on time.
+func (tc TimeControl) GameTimeRemaining(t *TimeInfo, c Color) time.Duration {
+	now := time.Now()
+	return tc.gameTimeRemaining(t, c, now)
+}
+
+func (tc TimeControl) turnTimeRemaining(t *TimeInfo, c Color, now time.Time) time.Duration {
+	used := now.Sub(t.Start[c])
+	rem := tc.gameTimeRemaining(t, c, now)
+
+	// Check the move time remaining without reserves.
+	if r := t.Move[c] - used; r < rem {
+		rem = r
+	}
+
+	return rem
+}
+
+// TurnTimeRemaining returns the amount of time remaining for the turn.
+// This is a tighter bound than GameTimeRemaining, if this time elpases
+// side c will not neccessarily lose the game so it's still necessary to
+// fall back to GameTimeRemaining.
+func (tc TimeControl) TurnTimeRemaining(t *TimeInfo, c Color) time.Duration {
+	now := time.Now()
+	return tc.turnTimeRemaining(t, c, now)
 }
