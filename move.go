@@ -162,7 +162,6 @@ var invalidStep = Step{
 }
 
 // ParseStep parses a single step and optional capture.
-// TODO(ajzaff): Clean this up.
 func ParseStep(s string) (Step, error) {
 	// Check if the step is too short:
 	if len(s) < 3 {
