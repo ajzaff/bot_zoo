@@ -64,7 +64,7 @@ func (a *AEI) handle(text string) error {
 		a.engine.SetPos(pos)
 		return nil
 	case strings.HasPrefix(text, "setoption"):
-		return fmt.Errorf("not implemented")
+		return a.handleOption(text)
 	case strings.HasPrefix(text, "makemove"):
 		parts := strings.SplitN(text, " ", 2)
 		if len(parts) < 2 {

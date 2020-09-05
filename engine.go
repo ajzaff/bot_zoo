@@ -5,10 +5,17 @@ import "math/rand"
 const transposeTableSize = 2000000
 
 type Engine struct {
-	p        *Pos
-	r        *rand.Rand
+	p *Pos
+	r *rand.Rand
+
 	table    *Table
 	useTable bool
+
+	// depth != 0 implies fixed depth.
+	depth int
+
+	TimeLimits TimeLimits
+	TimeInfo   TimeInfo
 }
 
 func NewEngine(seed int64) *Engine {
