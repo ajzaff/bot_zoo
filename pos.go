@@ -145,12 +145,9 @@ func (p *Pos) Step(step Step) error {
 		p.Pass()
 		return nil
 	}
-	{
-		n := step.Len()
-		if n > p.stepsLeft {
-			return fmt.Errorf("%s: not enough steps left", step)
-		}
-		p.stepsLeft -= n
+	n := step.Len()
+	if n > p.stepsLeft {
+		return fmt.Errorf("%s: not enough steps left", step)
 	}
 	switch step.Kind() {
 	case KindSetup:
@@ -197,6 +194,7 @@ func (p *Pos) Step(step Step) error {
 	case KindInvalid:
 		return fmt.Errorf("invalid step: %s", step)
 	}
+	p.stepsLeft -= n
 	p.steps = append(p.steps, step)
 	if step.Capture() {
 		if err := p.Remove(step.Cap.Src); err != nil {
@@ -213,7 +211,6 @@ func (p *Pos) Unstep() error {
 	}
 	step = p.steps[len(p.steps)-1]
 	p.steps = p.steps[:len(p.steps)-1]
-	p.stepsLeft += step.Len()
 	if step.Pass {
 		p.Unpass()
 		return nil
@@ -268,6 +265,7 @@ func (p *Pos) Unstep() error {
 	case KindInvalid:
 		return fmt.Errorf("invalid step: %s", step)
 	}
+	p.stepsLeft += step.Len()
 	return nil
 }
 
