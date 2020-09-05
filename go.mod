@@ -2,7 +2,4 @@ module ajz.dev/games/arimaa-zoo
 
 go 1.14
 
-require (
-	github.com/google/go-cmp v0.5.2
-	github.com/hajimehoshi/ebiten v1.11.7
-)
+require github.com/google/go-cmp v0.5.2
