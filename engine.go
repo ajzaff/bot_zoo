@@ -10,7 +10,7 @@ type Engine struct {
 	TimeLimits TimeLimits
 	TimeInfo   TimeInfo
 
-	SearchInfo SearchInfo
+	SearchInfo *SearchInfo
 
 	p *Pos
 	r *rand.Rand
@@ -21,7 +21,7 @@ type Engine struct {
 	table    *Table
 	useTable bool
 
-	stopping int32 // atomic
+	stopping int32
 	running  int32 // atomic
 }
 

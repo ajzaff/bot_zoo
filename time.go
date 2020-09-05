@@ -51,11 +51,6 @@ type TimeInfo struct {
 
 	// Reserve remaining for gold and silver.
 	Reserve [2]time.Duration
-
-	// Nodes is the number of nodes seen at the last three
-	// depths. This is used to estimate the EBF and the amount
-	// of time to use on search.
-	Nodes [3]int
 }
 
 func (e *Engine) RemainingTime() time.Duration {

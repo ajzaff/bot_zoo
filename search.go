@@ -2,6 +2,7 @@ package zoo
 
 import (
 	"fmt"
+	"math"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -13,18 +14,31 @@ type SearchResult struct {
 	ZHash int64
 	Depth int
 	Score int
-	Nodes int
 	Move  []Step
 	PV    []Step
-	Time  time.Duration
 }
 
 type SearchInfo struct {
-	// Nodes reports the number of nodes at the given ply.
-	Nodes []int
+	// cumulative nodes at the given ply
+	// which can be used to compute the EBF.
+	nodes []int
 
-	best SearchResult // guarded by mu
-	mu   sync.Mutex
+	// ply start times (unix seconds) per ply.
+	// Used to determine remaining time to search.
+	times []int64
+
+	// best move
+	// time (unix seconds) when best was last set.
+	// Corresponds to end of search.
+	bestTime int64        // guarded by mu
+	best     SearchResult // guarded by mu
+	mu       sync.Mutex
+}
+
+func newSearchInfo() *SearchInfo {
+	s := &SearchInfo{}
+	s.newPly()
+	return s
 }
 
 // Best returns the current best move.
@@ -39,12 +53,55 @@ func (s *SearchInfo) setBest(best SearchResult) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.best = best
+	s.bestTime = time.Now().Unix()
+}
+
+func (s *SearchInfo) newPly() {
+	n := 0
+	if len(s.nodes) > 0 {
+		n = s.nodes[len(s.nodes)-1]
+	}
+	s.nodes = append(s.nodes, n)
+	s.times = append(s.times, time.Now().Unix())
+}
+
+func (s *SearchInfo) addNodes(n int) {
+	s.nodes[len(s.nodes)-1] += n
+}
+
+// Nodes returns the number of nodes searched in all ply.
+func (s *SearchInfo) Nodes() int {
+	return s.nodes[len(s.nodes)-1]
+}
+
+// Seconds returns the number of seconds searched in all ply.
+func (s *SearchInfo) Seconds() int64 {
+	s.mu.Lock()
+	end := s.bestTime
+	s.mu.Unlock()
+	if end == 0 {
+		end = s.times[len(s.times)-1]
+	}
+	return end - s.times[0]
+}
+
+func (s *SearchInfo) EBF() int {
+	if len(s.nodes) < 4 {
+		return 0
+	}
+	i0, i1 := len(s.nodes)-3, len(s.nodes)-1
+	n0 := s.nodes[i0]
+	if n0 == 0 {
+		return 0
+	}
+	n1 := s.nodes[i1]
+	return int(math.Sqrt(float64(n1) / float64(n0)))
 }
 
 // Go starts the search routine.
 func (e *Engine) Go() {
 	if atomic.CompareAndSwapInt32(&e.running, 0, 1) {
-		go e.startSearch()
+		go e.iterativeDeepeningRoot()
 	}
 }
 
@@ -58,7 +115,7 @@ func (e *Engine) GoInfinite() {
 
 func (e *Engine) Stop() {
 	if atomic.LoadInt32(&e.running) == 1 {
-		atomic.SwapInt32(&e.stopping, 1)
+		e.stopping = 1
 	}
 }
 
@@ -67,17 +124,20 @@ func (e *Engine) stop() {
 	best := e.SearchInfo.Best()
 	fmt.Printf("bestmove %s\n", MoveString(best.Move))
 	fmt.Printf("info score %d\n", best.Score)
-	fmt.Printf("info nodes %d\n", best.Nodes)
+	fmt.Printf("info nodes %d\n", e.SearchInfo.Nodes())
+	fmt.Printf("info time %d\n", e.SearchInfo.Seconds())
+	fmt.Printf("info ebf %d\n", e.SearchInfo.EBF())
 	fmt.Printf("info pv %s\n", MoveString(best.PV))
-	fmt.Printf("info time %d\n", int(best.Time.Seconds()))
 	fmt.Printf("info curmovenumber %d\n", e.Pos().moveNum)
 	atomic.SwapInt32(&e.running, 0)
 }
 
-func (e *Engine) startSearch() {
-	atomic.SwapInt32(&e.stopping, 0)
+func (e *Engine) iterativeDeepeningRoot() {
 	atomic.SwapInt32(&e.running, 1)
+	e.stopping = 0
 	defer func() { e.stop() }()
+
+	e.SearchInfo = newSearchInfo()
 
 	p := e.Pos()
 	if p.moveNum == 1 {
@@ -91,12 +151,12 @@ func (e *Engine) startSearch() {
 	start := time.Now()
 	e.TimeInfo.Start[p.side] = start
 	var best SearchResult
-	for d := 1; atomic.LoadInt32(&e.stopping) == 0 && atomic.LoadInt32(&e.running) == 1; d++ {
+	for d := 1; e.stopping == 0 && atomic.LoadInt32(&e.running) == 1; d++ {
+		e.SearchInfo.newPly()
 		best = e.searchRoot(p, d)
 		e.SearchInfo.setBest(best)
 	}
 	e.table.Clear()
-	best.Time = time.Now().Sub(start)
 	e.SearchInfo.setBest(best)
 }
 
@@ -112,7 +172,7 @@ func (e *Engine) searchRoot(p *Pos, depth int) SearchResult {
 	moves := e.getRootMovesLen(p, n)
 	sortedMoves := e.sortMoves(p, moves)
 	for _, entry := range sortedMoves {
-		if atomic.LoadInt32(&e.stopping) != 0 {
+		if e.stopping != 0 {
 			break
 		}
 		func() {
@@ -177,12 +237,16 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 	// Step 2a: Assertions.
 	assert("!(0 < depth && depth < maxDepth)", 0 < depth && depth < maxDepth)
 
+	steps := p.Steps()
+
 	// Step 3: Main search.
 	best := -inf
-	for _, step := range p.Steps() {
+	nodes := 0
+	for _, step := range steps {
+		nodes++
 		initSide := p.side
 
-		if atomic.LoadInt32(&e.stopping) != 0 {
+		if e.stopping != 0 {
 			break
 		}
 
@@ -208,6 +272,8 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 			break // fail-hard cutoff
 		}
 	}
+
+	e.SearchInfo.addNodes(nodes)
 
 	// Step 4: Store transposition table entry.
 	if e.useTable {

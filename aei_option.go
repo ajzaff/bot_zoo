@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strconv"
 	"time"
+	"unsafe"
 )
 
 var optionPattern = regexp.MustCompile(`^setoption name (\S+) value (\S+)$`)
@@ -101,7 +102,10 @@ func (a *AEI) handleOption(text string) error {
 		if err != nil {
 			return err
 		}
-		a.engine.table = NewTable(v << 7)
+		size := unsafe.Sizeof(TableEntry{})
+		n := 1e6 * v / int(size)
+		a.Logf("setting hash table size to %d entries (%d MiB)", n, v)
+		a.engine.table = NewTable(n)
 	case "depth":
 		v, err := strconv.Atoi(value)
 		if err != nil {
