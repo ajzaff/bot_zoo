@@ -40,6 +40,8 @@ func (e *Engine) sortMoves(p *Pos, moves [][]Step) []ScoredMove {
 		a[i].score = -terminalEval
 	}
 
+	numIllegal := 0
+
 	for i, move := range moves {
 		func() {
 			err := p.Move(move)
@@ -53,6 +55,7 @@ func (e *Engine) sortMoves(p *Pos, moves [][]Step) []ScoredMove {
 					panic(fmt.Sprintf("moveorder: %v", err))
 				}
 				a[i].score = -inf
+				numIllegal++
 				return
 			}
 
@@ -76,6 +79,9 @@ func (e *Engine) sortMoves(p *Pos, moves [][]Step) []ScoredMove {
 			a[i].score = score
 		}()
 	}
+
+	a = a[:len(a)-numIllegal]
+
 	sort.Sort(byLen(a))
 	sort.Stable(byScore(a))
 

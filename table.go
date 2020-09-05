@@ -41,7 +41,7 @@ func (t *Table) Clear() {
 
 func (t *Table) ProbeDepth(key int64, depth int) (e *TableEntry, ok bool) {
 	if e, ok := t.table[key]; ok {
-		t.pop(e)
+		t.remove(e)
 		t.emplaceBack(e)
 		// TODO(ajzaff): Change this to `e.Depth >= depth`
 		// once quiescence search is added.
@@ -60,21 +60,44 @@ func (t *Table) Cap() int {
 	return t.cap
 }
 
-func (t *Table) pop(e *TableEntry) {
-	delete(t.table, e.ZHash)
-	if t.Len() == 1 {
+func (t *Table) remove(e *TableEntry) {
+	n := t.Len()
+	if n == 1 {
 		t.head = nil
 		t.tail = nil
 		t.len--
 		return
 	}
 	if e == t.head {
-		t.head = e.next
-	} else if e.prev != nil {
-		e.prev.next = e.next
+		t.pop()
+		return
 	}
+	delete(t.table, e.ZHash)
+	e.prev.next = e.next
 	if e == t.tail {
 		t.tail = e.prev
+	}
+	t.len--
+}
+
+func (t *Table) pop() {
+	n := t.Len()
+	if n < 2 {
+		if n == 0 {
+			return
+		}
+		if n == 1 {
+			t.head = nil
+			t.tail = nil
+			t.len--
+			return
+		}
+	}
+	delete(t.table, t.head.ZHash)
+	t.head = t.head.next
+	t.head.prev = nil
+	if n == 2 {
+		t.tail = t.head
 	}
 	t.len--
 }
@@ -94,22 +117,14 @@ func (t *Table) emplaceBack(e *TableEntry) {
 	t.len++
 }
 
-func (t *Table) fixedPurge(curDepth int) {
-	t.pop(t.head)
-	n := t.Len() / 2
-	for it := t.head; it != nil && it.Depth < curDepth && n > 0; it, n = it.next, n-1 {
-		t.pop(it)
-	}
-}
-
 func (t *Table) Store(e *TableEntry) {
 	old, ok := t.table[e.ZHash]
 	if ok && old.Depth >= e.Depth {
 		return
 	}
 	t.table[e.ZHash] = e
-	if t.Len() >= t.Cap() {
-		t.fixedPurge(e.Depth)
+	for t.Len() >= t.Cap() {
+		t.pop()
 	}
 	t.emplaceBack(e)
 }
