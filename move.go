@@ -92,7 +92,6 @@ func ParseMove(s string) ([]Step, error) {
 	)
 	sc.Split(splitMove)
 	for sc.Scan() {
-		fmt.Printf("step of %q: %q\n", s, sc.Text())
 		step, err := ParseStep(sc.Text())
 		if err != nil {
 			return nil, fmt.Errorf("%s: %v", sc.Text(), err)

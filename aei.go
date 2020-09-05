@@ -48,10 +48,10 @@ func (a *AEI) handle(text string) error {
 		a.engine.SetPos(pos)
 		return nil
 	case text == "stop":
-		return fmt.Errorf("not implemented")
+		a.engine.Stop()
 	case text == "quit":
 		return errAEIQuit
-	case strings.HasPrefix(text, "setposition"):
+	case strings.HasPrefix(text, "setposition "):
 		parts := strings.SplitN(text, " ", 2)
 		if len(parts) < 2 {
 			return fmt.Errorf("expected position matching /%s/", shortPosPattern)
@@ -63,9 +63,9 @@ func (a *AEI) handle(text string) error {
 		pos.moveNum = 2
 		a.engine.SetPos(pos)
 		return nil
-	case strings.HasPrefix(text, "setoption"):
+	case strings.HasPrefix(text, "setoption "):
 		return a.handleOption(text)
-	case strings.HasPrefix(text, "makemove"):
+	case strings.HasPrefix(text, "makemove "):
 		parts := strings.SplitN(text, " ", 2)
 		if len(parts) < 2 {
 			return fmt.Errorf("expected steps")
@@ -82,31 +82,23 @@ func (a *AEI) handle(text string) error {
 			a.verbosePos()
 		}
 		return nil
-	case strings.HasPrefix(text, "go"):
+	case text == "go":
+		a.engine.Go()
+		return nil
+	case strings.HasPrefix(text, "go "):
 		parts := strings.SplitN(text, " ", 2)
-		if len(parts) < 2 {
-			best := a.engine.SearchFixedDepth(8)
-			if len(best.Move) == 0 {
-				a.Logf("no moves")
-				return nil
-			}
-			a.writef("bestmove %s\n", MoveString(best.Move))
-			a.writef("info score %d\n", best.Score)
-			a.writef("info nodes %d\n", best.Nodes)
-			a.writef("info pv %s\n", MoveString(best.PV))
-			a.writef("info time %d\n", int(best.Time.Seconds()))
-			a.writef("info curmovenumber %d\n", a.engine.Pos().moveNum)
-			return nil
-		}
-		switch cmd := parts[1]; cmd {
+		switch cmd := strings.TrimSpace(parts[1]); cmd {
 		case "ponder":
-			return fmt.Errorf("not implemented")
+			a.engine.GoPonder()
+		case "infinite":
+			a.engine.GoInfinite()
 		default:
 			return fmt.Errorf("unsupported go command: %q", cmd)
 		}
 	default:
 		return a.handleExt(text)
 	}
+	return nil
 }
 
 func (a *AEI) verboseLog(send bool, s string) {

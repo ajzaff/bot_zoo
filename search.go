@@ -2,6 +2,7 @@ package zoo
 
 import (
 	"fmt"
+	"sync/atomic"
 	"time"
 )
 
@@ -17,24 +18,79 @@ type SearchResult struct {
 	Time  time.Duration
 }
 
-func (e *Engine) SearchFixedDepth(depth int) SearchResult {
+// Go starts the search routine.
+func (e *Engine) Go() {
+	if atomic.CompareAndSwapInt32(&e.running, 0, 1) {
+		go e.startSearch()
+	}
+}
+
+// GoPonder starts the search routine in ponder mode.
+func (e *Engine) GoPonder() {
+}
+
+// GoInfinite starts an infinite routine.
+func (e *Engine) GoInfinite() {
+}
+
+// Best returns the current best move.
+func (e *Engine) Best() (best SearchResult, ok bool) {
+	if atomic.LoadInt32(&e.running) == 0 {
+		return SearchResult{}, false
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.best, true
+}
+
+func (e *Engine) Stop() {
+	if atomic.LoadInt32(&e.running) == 1 {
+		atomic.SwapInt32(&e.stopping, 1)
+	}
+}
+
+// Stop search immediately and print the best move info.
+func (e *Engine) stop() {
+	best, ok := e.Best()
+	if !ok {
+		fmt.Printf("log search terminated before stop\n")
+		return
+	}
+	fmt.Printf("bestmove %s\n", MoveString(best.Move))
+	fmt.Printf("info score %d\n", best.Score)
+	fmt.Printf("info nodes %d\n", best.Nodes)
+	fmt.Printf("info pv %s\n", MoveString(best.PV))
+	fmt.Printf("info time %d\n", int(best.Time.Seconds()))
+	fmt.Printf("info curmovenumber %d\n", e.Pos().moveNum)
+	atomic.SwapInt32(&e.running, 0)
+}
+
+func (e *Engine) startSearch() {
+	atomic.SwapInt32(&e.stopping, 0)
+	atomic.SwapInt32(&e.running, 1)
+	defer func() { e.stop() }()
+
 	p := e.Pos()
 	if p.moveNum == 1 {
 		// TODO(ajzaff): Find best setup moves using a specialized search.
 		// For now, choose a random setup.
-		res := SearchResult{
+		e.mu.Lock()
+		e.best = SearchResult{
 			Move: e.RandomSetup(),
 		}
-		return res
+		e.mu.Unlock()
+		return
 	}
 	start := time.Now()
-	var best SearchResult
-	for d := 1; d <= depth; d++ {
-		best = e.searchRoot(p, d)
+	e.TimeInfo.Start[p.side] = start
+	for d := 1; atomic.LoadInt32(&e.stopping) == 0 && atomic.LoadInt32(&e.running) == 1; d++ {
+		best := e.searchRoot(p, d)
+		e.mu.Lock()
+		e.best = best
+		e.mu.Unlock()
 	}
-	e.table.Clear() // To clear or not to clear?
-	best.Time = time.Now().Sub(start)
-	return best
+	e.table.Clear()
+	e.best.Time = time.Now().Sub(start)
 }
 
 func (e *Engine) searchRoot(p *Pos, depth int) SearchResult {
@@ -49,6 +105,9 @@ func (e *Engine) searchRoot(p *Pos, depth int) SearchResult {
 	moves := e.getRootMovesLen(p, n)
 	sortedMoves := e.sortMoves(p, moves)
 	for _, entry := range sortedMoves {
+		if atomic.LoadInt32(&e.stopping) != 0 {
+			break
+		}
 		func() {
 			err := p.Move(entry.move)
 			defer func() {
@@ -112,9 +171,13 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 	assert("!(0 < depth && depth < maxDepth)", 0 < depth && depth < maxDepth)
 
 	// Step 3: Main search.
-	var best int
+	best := -inf
 	for _, step := range p.Steps() {
 		initSide := p.side
+
+		if atomic.LoadInt32(&e.stopping) != 0 {
+			break
+		}
 
 		if err := p.Step(step); err != nil {
 			panic(fmt.Sprintf("search_step: %v", err))

@@ -1,21 +1,30 @@
 package zoo
 
-import "math/rand"
+import (
+	"math/rand"
+	"sync"
+)
 
 const transposeTableSize = 2000000
 
 type Engine struct {
+	TimeLimits TimeLimits
+	TimeInfo   TimeInfo
+
 	p *Pos
 	r *rand.Rand
-
-	table    *Table
-	useTable bool
 
 	// depth != 0 implies fixed depth.
 	depth int
 
-	TimeLimits TimeLimits
-	TimeInfo   TimeInfo
+	table    *Table
+	useTable bool
+
+	stopping int32 // atomic
+	running  int32 // atomic
+
+	best SearchResult // guarded by mu
+	mu   sync.Mutex
 }
 
 func NewEngine(seed int64) *Engine {
