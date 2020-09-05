@@ -2,7 +2,6 @@ package zoo
 
 import (
 	"math/rand"
-	"sync"
 )
 
 const transposeTableSize = 2000000
@@ -10,6 +9,8 @@ const transposeTableSize = 2000000
 type Engine struct {
 	TimeLimits TimeLimits
 	TimeInfo   TimeInfo
+
+	SearchInfo SearchInfo
 
 	p *Pos
 	r *rand.Rand
@@ -22,9 +23,6 @@ type Engine struct {
 
 	stopping int32 // atomic
 	running  int32 // atomic
-
-	best SearchResult // guarded by mu
-	mu   sync.Mutex
 }
 
 func NewEngine(seed int64) *Engine {

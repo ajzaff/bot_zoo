@@ -2,6 +2,7 @@ package zoo
 
 import (
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -16,6 +17,28 @@ type SearchResult struct {
 	Move  []Step
 	PV    []Step
 	Time  time.Duration
+}
+
+type SearchInfo struct {
+	// Nodes reports the number of nodes at the given ply.
+	Nodes []int
+
+	best SearchResult // guarded by mu
+	mu   sync.Mutex
+}
+
+// Best returns the current best move.
+func (s *SearchInfo) Best() SearchResult {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.best
+}
+
+// setBest sets the current best move.
+func (s *SearchInfo) setBest(best SearchResult) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.best = best
 }
 
 // Go starts the search routine.
@@ -33,16 +56,6 @@ func (e *Engine) GoPonder() {
 func (e *Engine) GoInfinite() {
 }
 
-// Best returns the current best move.
-func (e *Engine) Best() (best SearchResult, ok bool) {
-	if atomic.LoadInt32(&e.running) == 0 {
-		return SearchResult{}, false
-	}
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	return e.best, true
-}
-
 func (e *Engine) Stop() {
 	if atomic.LoadInt32(&e.running) == 1 {
 		atomic.SwapInt32(&e.stopping, 1)
@@ -51,11 +64,7 @@ func (e *Engine) Stop() {
 
 // Stop search immediately and print the best move info.
 func (e *Engine) stop() {
-	best, ok := e.Best()
-	if !ok {
-		fmt.Printf("log search terminated before stop\n")
-		return
-	}
+	best := e.SearchInfo.Best()
 	fmt.Printf("bestmove %s\n", MoveString(best.Move))
 	fmt.Printf("info score %d\n", best.Score)
 	fmt.Printf("info nodes %d\n", best.Nodes)
@@ -74,23 +83,21 @@ func (e *Engine) startSearch() {
 	if p.moveNum == 1 {
 		// TODO(ajzaff): Find best setup moves using a specialized search.
 		// For now, choose a random setup.
-		e.mu.Lock()
-		e.best = SearchResult{
+		e.SearchInfo.setBest(SearchResult{
 			Move: e.RandomSetup(),
-		}
-		e.mu.Unlock()
+		})
 		return
 	}
 	start := time.Now()
 	e.TimeInfo.Start[p.side] = start
+	var best SearchResult
 	for d := 1; atomic.LoadInt32(&e.stopping) == 0 && atomic.LoadInt32(&e.running) == 1; d++ {
-		best := e.searchRoot(p, d)
-		e.mu.Lock()
-		e.best = best
-		e.mu.Unlock()
+		best = e.searchRoot(p, d)
+		e.SearchInfo.setBest(best)
 	}
 	e.table.Clear()
-	e.best.Time = time.Now().Sub(start)
+	best.Time = time.Now().Sub(start)
+	e.SearchInfo.setBest(best)
 }
 
 func (e *Engine) searchRoot(p *Pos, depth int) SearchResult {

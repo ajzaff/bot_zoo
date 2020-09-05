@@ -58,6 +58,6 @@ type TimeInfo struct {
 	Nodes [3]int
 }
 
-func (t *TimeInfo) RemainingTime() time.Duration {
+func (e *Engine) RemainingTime() time.Duration {
 	return 0
 }
