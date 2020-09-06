@@ -1,6 +1,9 @@
 package zoo
 
-import "container/list"
+import (
+	"container/list"
+	"fmt"
+)
 
 type Bound int
 
@@ -26,7 +29,7 @@ type TableEntry struct {
 
 type Table struct {
 	cap   int
-	list  list.List
+	list  *list.List
 	table map[int64]*list.Element
 }
 
@@ -34,13 +37,13 @@ func NewTable(cap int) *Table {
 	return &Table{
 		cap:   cap,
 		table: make(map[int64]*list.Element),
-		list:  list.List{},
+		list:  list.New(),
 	}
 }
 
 func (t *Table) Clear() {
 	t.table = make(map[int64]*list.Element)
-	t.list = list.List{}
+	t.list.Init()
 }
 
 func (t *Table) ProbeDepth(key int64, depth int) (e *TableEntry, ok bool) {
@@ -84,8 +87,7 @@ func (t *Table) Store(e *TableEntry) {
 		t.list.MoveToBack(elem)
 		return
 	}
-	elem := t.list.PushBack(e)
-	t.table[e.ZHash] = elem
+	t.table[e.ZHash] = t.list.PushBack(e)
 }
 
 // Best returns the best move by probing the table.
@@ -100,15 +102,15 @@ func (t *Table) Best(p *Pos) (move []Step, score int, err error) {
 		if i == 0 {
 			score = e.Value
 		}
+		move = append(move, *e.Step)
 		if err := p.Step(*e.Step); err != nil {
 			return nil, 0, err
 		}
-		move = append(move, *e.Step)
-	}
-	for range move {
-		if err := p.Unstep(); err != nil {
-			return nil, 0, err
-		}
+		defer func() {
+			if err := p.Unstep(); err != nil {
+				panic(fmt.Errorf("best_unstep: %v", err))
+			}
+		}()
 	}
 	return move, score, nil
 }
@@ -124,15 +126,15 @@ func (t *Table) PV(p *Pos) (pv []Step, score int, err error) {
 		if i == 0 {
 			score = e.Value
 		}
+		pv = append(pv, *e.Step)
 		if err := p.Step(*e.Step); err != nil {
 			return nil, 0, err
 		}
-		pv = append(pv, *e.Step)
-	}
-	for range pv {
-		if err := p.Unstep(); err != nil {
-			return nil, 0, err
-		}
+		defer func() {
+			if err := p.Unstep(); err != nil {
+				panic(fmt.Errorf("PV_unstep: %v", err))
+			}
+		}()
 	}
 	return pv, score, nil
 }

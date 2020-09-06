@@ -94,6 +94,19 @@ func (a *AEI) handleOption(text string) error {
 			return fmt.Errorf("depth < 0")
 		}
 		a.engine.fixedDepth = v
+
+		// Custom Zoo engine options:
+
+	case "mindepth":
+		v, err := strconv.Atoi(value)
+		if err != nil {
+			return err
+		}
+		if v < 0 {
+			return fmt.Errorf("depth < 0")
+		}
+		a.engine.minDepth = v
+
 	default:
 		return fmt.Errorf("unsupported option: %q", option)
 	}

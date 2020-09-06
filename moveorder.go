@@ -59,6 +59,8 @@ func (e *Engine) sortMoves(p *Pos, moves [][]Step) []ScoredMove {
 			continue
 		}
 
+		var illegal bool
+
 		// 2a. Try the move.
 		// In the unlikely case it's illegal give a score of -inf.
 		// We want to prune this move from the results.
@@ -68,12 +70,14 @@ func (e *Engine) sortMoves(p *Pos, moves [][]Step) []ScoredMove {
 			}
 			a[i].score = -inf
 			numIllegal++
-			continue
+			illegal = true
 		}
 
-		// Step 2b: Get the evaluation and set the score.
-		// Negate the score since sides have changed.
-		a[i].score = -p.Score()
+		if !illegal {
+			// Step 2b: Get the evaluation and set the score.
+			// Negate the score since sides have changed.
+			a[i].score = -p.Score()
+		}
 
 		// Step 2c. Undo the move.
 		if err := p.Unmove(); err != nil {
@@ -83,6 +87,19 @@ func (e *Engine) sortMoves(p *Pos, moves [][]Step) []ScoredMove {
 	sort.Sort(byLen(a))
 	sort.Stable(byScore(a))
 	a = a[:len(a)-numIllegal]
+
+	// Experimental:
+	// Remove all bad moves.
+	// if len(a) > 0 {
+	// 	i := 1
+	// 	for ; i < len(a); i++ {
+	// 		if a[i].score < a[0].score-1000 {
+	// 			break
+	// 		}
+	// 	}
+	// 	a = a[:i]
+	// }
+
 	return a
 }
 
@@ -112,21 +129,24 @@ func (e *Engine) sortSteps(p *Pos, steps []Step) []ScoredStep {
 		}
 
 		initSide := p.Side()
+		var illegal bool
 
 		// 2a. Try the step.
 		// In the unlikely case it's illegal give a score of -inf.
 		if err := p.Step(step); err != nil {
 			a[i].score = -inf
-			continue
+			illegal = true
 		}
 
-		// Step 2b: Get the evaluation and set the score.
-		// Negate the score if sides changed.
-		score := p.Score()
-		if p.Side() != initSide {
-			score = -score
+		if !illegal {
+			// Step 2b: Get the evaluation and set the score.
+			// Negate the score if sides changed.
+			score := p.Score()
+			if p.Side() != initSide {
+				score = -score
+			}
+			a[i].score = score
 		}
-		a[i].score = score
 
 		// Step 2c. Undo the step.
 		if err := p.Unstep(); err != nil {

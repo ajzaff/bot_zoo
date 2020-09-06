@@ -165,8 +165,8 @@ func (e *Engine) Stop() {
 
 // Stop search immediately and print the best move info.
 func (e *Engine) stop() {
-	best := e.searchInfo.Best()
 	if !e.ponder {
+		best := e.searchInfo.Best()
 		fmt.Printf("bestmove %s\n", MoveString(best.Move))
 		fmt.Printf("info score %d\n", best.Score)
 		fmt.Printf("info nodes %d\n", e.searchInfo.Nodes())
@@ -190,6 +190,9 @@ func (e *Engine) iterativeDeepeningRoot() {
 		}
 	}()
 
+	if e.ponder {
+		e.table.Clear()
+	}
 	e.searchInfo = newSearchInfo()
 	if !e.ponder {
 		if e.timeInfo == nil {
@@ -218,10 +221,10 @@ func (e *Engine) iterativeDeepeningRoot() {
 		}
 		if e.fixedDepth > 0 && d > e.fixedDepth {
 			go e.Stop()
-			fmt.Printf("log stop search at fixed ply depth=%d\n", d)
+			fmt.Printf("log stop fixed_depth search before ply=%d\n", d)
 			break
 		}
-		if !e.ponder && d > 4 {
+		if !e.ponder && d > e.minDepth && e.fixedDepth == 0 {
 			if next, rem := e.searchInfo.guessNextPlyDuration(), e.timeControl.GameTimeRemaining(e.timeInfo, p.side); rem <= next {
 				go e.Stop()
 				fmt.Printf("log stop deepening before ply=%d (ebf=%f, cost=%s, budget=%s)\n", d, e.searchInfo.EBF(), next, rem)
@@ -256,7 +259,7 @@ func (e *Engine) searchRoot(p *Pos, depth int) SearchResult {
 		if err := p.Move(entry.move); err != nil {
 			panic(fmt.Sprintf("search_move_root: %s: %v", entry.move, err))
 		}
-		score := -e.search(p, -inf, inf, MoveLen(entry.move), depth)
+		score := -e.search(p, -inf, -best.Score, MoveLen(entry.move), depth)
 		if err := p.Unmove(); err != nil {
 			panic(fmt.Sprintf("search_unmove_root: %s: %v", entry.move, err))
 		}

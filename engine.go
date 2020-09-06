@@ -19,6 +19,9 @@ type Engine struct {
 	// Search won't stop unless a terminal score is achieved.
 	fixedDepth int
 
+	// minDepth for time based iterative deepening.
+	minDepth int
+
 	// ponder implies we will search until we're asked explicitly to stop.
 	// We don't set the best move after a ponder.
 	// We don't clear the transposition table when we're done.
@@ -36,6 +39,7 @@ func NewEngine(seed int64) *Engine {
 	return &Engine{
 		p:        NewEmptyPosition(),
 		r:        rand.New(rand.NewSource(seed)),
+		minDepth: 8,
 		table:    NewTable(transposeTableSize),
 		useTable: true,
 	}
