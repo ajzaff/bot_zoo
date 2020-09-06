@@ -99,16 +99,13 @@ func (e *Engine) sortSteps(p *Pos, steps []Step) []ScoredStep {
 		func() {
 			defer func() {
 				if err := p.Unstep(); err != nil {
-					panic(fmt.Sprintf("moveorder: %v", err))
+					panic(fmt.Sprintf("steporder: %v", err))
 				}
 			}()
 
 			initSide := p.side
 
 			if err := p.Step(step); err != nil {
-				if err != errRecurringPosition {
-					panic(fmt.Sprintf("moveorder: %v", err))
-				}
 				a[i].score = -inf
 				numIllegal++
 				return

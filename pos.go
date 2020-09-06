@@ -58,6 +58,10 @@ func newPos(
 	}
 }
 
+func (p *Pos) Side() Color {
+	return p.side
+}
+
 func (p *Pos) Terminal() bool {
 	return p.terminalGoalValue() != 0 || p.terminalEliminationValue() != 0 || p.terminalImmobilizedValue() != 0
 }

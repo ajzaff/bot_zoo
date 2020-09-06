@@ -57,8 +57,10 @@ func (a *AEI) handleExt(text string) error {
 	case strings.HasPrefix(text, "step"):
 		parts := strings.SplitN(text, " ", 2)
 		if len(parts) < 2 {
-			for _, step := range a.engine.Pos().Steps() {
-				a.Logf(step.String())
+			steps := a.engine.Pos().Steps()
+			sortedSteps := a.engine.sortSteps(a.engine.Pos(), steps)
+			for _, e := range sortedSteps {
+				a.Logf("[%d] %s", e.score, e.step)
 			}
 			return nil
 		}
