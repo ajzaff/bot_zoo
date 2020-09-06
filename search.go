@@ -289,22 +289,23 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 	// TODO(ajzaff): Use scored steps to order these better.
 	// This could have massive benefits to search performance.
 	steps := p.Steps()
+	sortedSteps := e.sortSteps(p, steps)
 
 	// Step 3: Main search.
 	best := -inf
 	nodes := 0
-	for _, step := range steps {
+	for _, entry := range sortedSteps {
 		if e.stopping != 0 {
 			break
 		}
-		n := step.Len()
+		n := entry.step.Len()
 		if depth+n > maxDepth {
 			continue
 		}
 		nodes++
 		initSide := p.side
 
-		if err := p.Step(step); err != nil {
+		if err := p.Step(entry.step); err != nil {
 			panic(fmt.Sprintf("search_step: %v", err))
 		}
 		var score int
@@ -363,16 +364,17 @@ func (e *Engine) quiescence(p *Pos, alpha, beta int) int {
 	}
 
 	steps := p.Steps()
+	sortedSteps := e.sortSteps(p, steps)
 	nodes := 0
-	for _, step := range steps {
-		if !step.Capture() {
+	for _, entry := range sortedSteps {
+		if !entry.step.Capture() {
 			continue
 		}
 
 		nodes++
 		initSide := p.side
 
-		if err := p.Step(step); err != nil {
+		if err := p.Step(entry.step); err != nil {
 			panic(fmt.Sprintf("quiescense_step: %v", err))
 		}
 		var score int
