@@ -44,13 +44,12 @@ func (e *Engine) sortMoves(p *Pos, moves [][]Step) []ScoredMove {
 
 	for i, move := range moves {
 		func() {
-			err := p.Move(move)
 			defer func() {
 				if err := p.Unmove(); err != nil {
 					panic(fmt.Sprintf("moveorder: %v", err))
 				}
 			}()
-			if err != nil {
+			if err := p.Move(move); err != nil {
 				if err != errRecurringPosition {
 					panic(fmt.Sprintf("moveorder: %v", err))
 				}
@@ -80,10 +79,9 @@ func (e *Engine) sortMoves(p *Pos, moves [][]Step) []ScoredMove {
 		}()
 	}
 
-	a = a[:len(a)-numIllegal]
-
 	sort.Sort(byLen(a))
 	sort.Stable(byScore(a))
+	a = a[:len(a)-numIllegal]
 
 	return a
 }

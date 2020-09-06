@@ -137,7 +137,7 @@ func (p *Pos) Unpass() error {
 	if p.side = p.side.Opposite(); p.side == Silver {
 		p.moveNum--
 	}
-	p.stepsLeft = 4
+	p.stepsLeft = 4 - MoveLen(p.steps)
 	if p.moveNum == 1 {
 		p.stepsLeft = 16
 	}
@@ -209,16 +209,16 @@ func (p *Pos) Step(step Step) error {
 }
 
 func (p *Pos) Unstep() error {
-	var step Step
 	if len(p.steps) == 0 {
 		return p.Unpass()
 	}
-	step = p.steps[len(p.steps)-1]
+	step := p.steps[len(p.steps)-1]
 	p.steps = p.steps[:len(p.steps)-1]
 	if step.Pass {
 		p.Unpass()
 		return nil
 	}
+	p.stepsLeft += step.Len()
 	if step.Capture() {
 		if err := p.Place(step.Cap.Piece, step.Cap.Src); err != nil {
 			return fmt.Errorf("%s: %v", step, err)
@@ -269,7 +269,6 @@ func (p *Pos) Unstep() error {
 	case KindInvalid:
 		return fmt.Errorf("invalid step: %s", step)
 	}
-	p.stepsLeft += step.Len()
 	return nil
 }
 

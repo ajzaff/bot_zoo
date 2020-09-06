@@ -198,9 +198,6 @@ func (p *Pos) Steps() []Step {
 	c1, c2 := p.side, p.side.Opposite()
 	canPush := p.stepsLeft > 1
 	for t := GRabbit.MakeColor(c1); t <= GElephant.MakeColor(c1); t++ {
-		if !t.Valid() {
-			continue
-		}
 		ts := p.bitboards[t]
 		if ts == 0 {
 			continue
@@ -249,16 +246,27 @@ func (p *Pos) Steps() []Step {
 				steps = append(steps, step)
 
 				// Generate all pulls to this dest (if canPush):
-				// for i := range pullPieces {
-				// 	step.Alt = pullAlts[i].Square()
-				// 	step.Piece2 = pullPieces[i]
-				// 	if !step.Capture() {
-				// 		if cap := p.capture(p.presence[c2], pullAlts[i], sb); cap.Valid() {
-				// 			step.Cap = cap
-				// 		}
-				// 	}
-				// 	steps = append(steps, step)
-				// }
+				for i := range pullPieces {
+					step.Alt = pullAlts[i].Square()
+					step.Piece2 = pullPieces[i]
+					if !step.Capture() {
+						if cap := p.capture(p.presence[c2], pullAlts[i], sb); cap.Valid() {
+							step.Cap = cap
+						}
+					}
+					steps = append(steps, step)
+
+					// initStr := p.String()
+					// err1 := p.Step(step)
+					// err2 := p.Unstep()
+					// if initStr != p.String() || err1 != nil || err2 != nil {
+					// 	fmt.Println(initStr)
+					// 	fmt.Println("  -- vs --")
+					// fmt.Println(p.String())
+					// fmt.Printf("log ---------------------- pull step for %s: %s\n", c1, step)
+					// 	fmt.Printf("err1=%v err2=%v", err1, err2)
+					// }
+				}
 			})
 		})
 	}

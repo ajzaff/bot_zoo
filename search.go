@@ -136,7 +136,8 @@ func (s *SearchInfo) guessNextPlyDuration() time.Duration {
 	return time.Duration(v * float64(time.Second))
 }
 
-// Go starts the search routine.
+// Go starts the search routine and blocks until it finishes.
+// The AEI command may start the search in a new goroutine.
 func (e *Engine) Go() {
 	if atomic.CompareAndSwapInt32(&e.running, 0, 1) {
 		go e.iterativeDeepeningRoot()
@@ -176,6 +177,11 @@ func (e *Engine) stop() {
 func (e *Engine) iterativeDeepeningRoot() {
 	e.stopping = 0
 	defer func() { e.stop() }()
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("log SEARCH_ERROR recovered: %v\n", r)
+		}
+	}()
 
 	e.searchInfo = newSearchInfo()
 	if e.timeInfo == nil {
@@ -228,29 +234,21 @@ func (e *Engine) searchRoot(p *Pos, depth int) SearchResult {
 		if e.stopping != 0 {
 			break
 		}
-		func() {
-			err := p.Move(entry.move)
-			defer func() {
-				if err := p.Unmove(); err != nil {
-					panic(fmt.Sprintf("search_unmove_root: %v", err))
-				}
-			}()
-			if err != nil {
-				if err != errRecurringPosition {
-					panic(fmt.Sprintf("search_move_root: %v", err))
-				}
-				return
-			}
-			score := -e.search(p, -inf, inf, MoveLen(entry.move), depth)
-			if score > best.Score {
-				best.Score = score
-				best.Move = entry.move
-				fmt.Printf("log depth %d\n", depth)
-				fmt.Printf("log score %d\n", score)
-				fmt.Printf("log pv %s\n", entry.move)
-				fmt.Printf("log transpositions %d\n", e.table.Len())
-			}
-		}()
+		if err := p.Move(entry.move); err != nil {
+			panic(fmt.Sprintf("search_move_root: %s: %v", entry.move, err))
+		}
+		score := -e.search(p, -inf, inf, MoveLen(entry.move), depth)
+		if err := p.Unmove(); err != nil {
+			panic(fmt.Sprintf("search_unmove_root: %s: %v", entry.move, err))
+		}
+		if score > best.Score {
+			best.Score = score
+			best.Move = entry.move
+			fmt.Printf("log depth %d\n", depth)
+			fmt.Printf("log score %d\n", score)
+			fmt.Printf("log pv %s\n", entry.move)
+			fmt.Printf("log transpositions %d\n", e.table.Len())
+		}
 	}
 	return best
 }
@@ -288,6 +286,8 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 	// Step 2a: Assertions.
 	assert("!(0 < depth && depth < maxDepth)", 0 < depth && depth < maxDepth)
 
+	// TODO(ajzaff): Use scored steps to order these better.
+	// This could have massive benefits to search performance.
 	steps := p.Steps()
 
 	// Step 3: Main search.
@@ -362,12 +362,12 @@ func (e *Engine) quiescence(p *Pos, alpha, beta int) int {
 	steps := p.Steps()
 	nodes := 0
 	for _, step := range steps {
-		nodes++
-		initSide := p.side
-
 		if !step.Capture() {
 			continue
 		}
+
+		nodes++
+		initSide := p.side
 
 		if err := p.Step(step); err != nil {
 			panic(fmt.Sprintf("quiescense_step: %v", err))

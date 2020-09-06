@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func (a *AEI) handleExt(text string) error {
@@ -17,6 +18,12 @@ func (a *AEI) handleExt(text string) error {
 		pos.moveNum = 2
 		a.engine.SetPos(pos)
 		return nil
+	case text == "movenow":
+		a.engine.Go()
+		time.Sleep(time.Second)
+		a.engine.Stop()
+		best := a.engine.searchInfo.Best()
+		a.engine.Pos().Move(best.Move)
 	case strings.HasPrefix(text, "move"), strings.HasPrefix(text, "moves"):
 		parts := strings.SplitN(text, " ", 2)
 		n := 0
@@ -118,6 +125,7 @@ func (a *AEI) handleExt(text string) error {
 	default:
 		return fmt.Errorf("unsupported command: %q", text)
 	}
+	return nil
 }
 
 func (a *AEI) logEval() {

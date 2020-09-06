@@ -9,7 +9,7 @@ import (
 const (
 	posEmpty     = `g [                                                                ]`
 	posStandard  = `g [rrrrrrrrhdcemcdh                                HDCMECDHRRRRRRRR]`
-	posStandardG = `g [rrrrrrrrhdcemcdh                                                ]`
+	posStandardG = `s [rrrrrrrrhdcemcdh                                                ]`
 )
 
 var shortPosPattern = regexp.MustCompile(`^([wbgs]) \[([ RCDHMErcdhme]{64})\]$`)
