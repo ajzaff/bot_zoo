@@ -1,6 +1,9 @@
 package zoo
 
-import "strconv"
+import (
+	"fmt"
+	"strconv"
+)
 
 const (
 	ranks = "12345678"
@@ -67,7 +70,7 @@ func NewDelta(d int8) string {
 	case -1:
 		return "w"
 	default:
-		return ""
+		return fmt.Sprintf("?(%d)", d)
 	}
 }
 

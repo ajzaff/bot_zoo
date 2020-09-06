@@ -79,7 +79,9 @@ func (p *Pos) Place(piece Piece, i Square) error {
 	if piece == Empty {
 		return p.Remove(i)
 	}
-	assert("invalid piece", piece.Valid())
+	if !piece.Valid() {
+		return fmt.Errorf("invalid piece: %s", piece)
+	}
 	b := i.Bitboard()
 	if p.bitboards[Empty]&b == 0 {
 		return fmt.Errorf("piece already present on %s", i)
@@ -97,7 +99,9 @@ func (p *Pos) Remove(i Square) error {
 		return fmt.Errorf("no piece present on %s", i)
 	}
 	piece := p.atB(b)
-	assert("inconsistent board state", piece.Valid())
+	if !piece.Valid() {
+		return fmt.Errorf("inconsistent board state on %s: %s", i, piece)
+	}
 	p.bitboards[piece] &= ^b
 	p.bitboards[Empty] |= b
 	p.presence[piece.Color()] &= ^b

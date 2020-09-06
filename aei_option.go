@@ -34,7 +34,7 @@ func (a *AEI) handleOption(text string) error {
 			return err
 		}
 		if v < 0 || v > 100 {
-			return fmt.Errorf("percentage out of range [0-100%]: %d", v)
+			return fmt.Errorf("percentage out of range [0-100%%]: %d", v)
 		}
 		a.engine.timeControl.MoveReservePercent = v
 	case "tcmax":

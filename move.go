@@ -284,10 +284,12 @@ func (s Step) Kind() StepKind {
 			switch {
 			case p1e || p2e:
 				return KindInvalid
-			case s.Dest == s.Alt:
+			case s.Dest.AdjacentTo(s.Alt):
 				return KindPush
-			default: // This could still be an illegal pull:
+			case s.Src.AdjacentTo(s.Alt):
 				return KindPull
+			default:
+				return KindInvalid
 			}
 		case !p1e:
 			return KindSetup
@@ -323,21 +325,44 @@ func (s Step) String() string {
 	switch s.Kind() {
 	case KindSetup:
 		fmt.Fprintf(&sb, "%c%s", s.Piece1.Byte(), s.Alt)
+		if s.Capture() {
+			fmt.Fprintf(&sb, " %c?%sx", s.Cap.Piece.Byte(), s.Cap.Src)
+		}
 	case KindPush:
-		fmt.Fprintf(&sb, "%c%s%s %c%s%s",
-			s.Piece1.Byte(), s.Dest, NewDelta(s.Dest.Delta(s.Alt)),
-			s.Piece2.Byte(), s.Src, NewDelta(s.Src.Delta(s.Dest)),
-		)
+		fmt.Fprintf(&sb, "%c%s%s", s.Piece2.Byte(), s.Dest, NewDelta(s.Dest.Delta(s.Alt)))
+		if s.Cap.Piece == s.Piece2 {
+			fmt.Fprintf(&sb, " %c%sx ", s.Cap.Piece.Byte(), s.Cap.Src)
+		}
+		fmt.Fprintf(&sb, "%c%s%s", s.Piece1.Byte(), s.Src, NewDelta(s.Src.Delta(s.Dest)))
+		if s.Cap.Piece == s.Piece1 {
+			fmt.Fprintf(&sb, " %c%sx", s.Cap.Piece.Byte(), s.Cap.Src)
+		}
+		if s.Capture() && s.Cap.Piece != s.Piece1 && s.Cap.Piece != s.Piece2 {
+			fmt.Fprintf(&sb, " %c?%sx", s.Cap.Piece.Byte(), s.Cap.Src)
+		}
 	case KindPull:
-		fmt.Fprintf(&sb, "%c%s%s %c%s%s",
-			s.Piece1.Byte(), s.Src, NewDelta(s.Src.Delta(s.Dest)),
-			s.Piece2.Byte(), s.Alt, NewDelta(s.Alt.Delta(s.Src)),
-		)
+		fmt.Fprintf(&sb, "%c%s%s", s.Piece1.Byte(), s.Src, NewDelta(s.Src.Delta(s.Dest)))
+		if s.Cap.Piece == s.Piece1 {
+			fmt.Fprintf(&sb, " %c%sx", s.Cap.Piece.Byte(), s.Cap.Src)
+		}
+		fmt.Fprintf(&sb, " %c%s%s", s.Piece2.Byte(), s.Alt, NewDelta(s.Alt.Delta(s.Src)))
+		if s.Cap.Piece == s.Piece2 {
+			fmt.Fprintf(&sb, " %c%sx", s.Cap.Piece.Byte(), s.Cap.Src)
+		}
+		if s.Capture() && s.Cap.Piece != s.Piece1 && s.Cap.Piece != s.Piece2 {
+			fmt.Fprintf(&sb, " %c?%sx", s.Cap.Piece.Byte(), s.Cap.Src)
+		}
 	case KindDefault:
 		fmt.Fprintf(&sb, "%c%s%s", s.Piece1.Byte(), s.Src, NewDelta(s.Src.Delta(s.Dest)))
+		if s.Capture() {
+			fmt.Fprintf(&sb, " %c%sx", s.Cap.Piece.Byte(), s.Cap.Src)
+		}
 	default: // Invalid
 		if s.Pass {
-			return "(pass)"
+			fmt.Fprint(&sb, "(pass)")
+			if s.Capture() {
+				fmt.Fprintf(&sb, " %c?%sx", s.Cap.Piece.Byte(), s.Cap.Src)
+			}
 		}
 		return s.GoString()
 	}
