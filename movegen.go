@@ -23,71 +23,6 @@ func init() {
 	}
 }
 
-// func (p *Pos) pieceSteps(piece Piece, table [64]Bitboard) []Step {
-// 	var steps []Step
-// 	piece = piece.MakeColor(p.side)
-// 	p.bitboards[piece].Each(func(b Bitboard) {
-// 		if p.frozenB(b) {
-// 			return
-// 		}
-// 		src := b.Square()
-// 		stepsB[src].Each(func(d Bitboard) {
-// 			if p.bitboards[Empty]&d == 0 {
-// 				return
-// 			}
-// 			dest := d.Square()
-// 			steps = append(steps, p.completeCapture(Step{
-// 				Src:    src,
-// 				Dest:   dest,
-// 				Alt:    invalidSquare,
-// 				Piece1: piece,
-// 			}))
-// 		})
-// 	})
-// 	return steps
-// }
-
-// func (p *Pos) getPulls(steps *[]Step) {
-// 	s2 := p.side.Opposite()
-
-// 	if len(p.steps) == 0 {
-// 		return
-// 	}
-// 	i := len(p.steps) - 1
-// 	for ; i >= 0 && p.steps[i].Capture(); i-- {
-// 	}
-// 	assert("i < 0", i >= 0)
-// 	t1 := p.steps[i].Piece1
-// 	if t1.SameType(GRabbit) {
-// 		return
-// 	}
-// 	dest := p.steps[i].Src
-// 	db := dest.Bitboard()
-
-// 	if p.presence[s2].Neighbors()&db == 0 {
-// 		return
-// 	}
-
-// 	for t2 := GRabbit.MakeColor(s2); t2 < t1; t2++ {
-// 		t2b := p.bitboards[t2]
-// 		if t2b == 0 || t2b.Neighbors()&db == 0 {
-// 			continue
-// 		}
-// 		for t2b > 0 {
-// 			b := t2b & -t2b
-// 			t2b &= ^b
-// 			src := b.Square()
-// 			assert("src == dest", src != dest)
-// 			*steps = append(*steps, p.completeCapture(Step{
-// 				Src:    src,
-// 				Dest:   dest,
-// 				Alt:    invalidSquare,
-// 				Piece1: t2,
-// 			}))
-// 		}
-// 	}
-// }
-
 // func (p *Pos) getPushes(steps *[]Step) {
 // 	s1, s2 := p.side, p.side.Opposite()
 // 	s2n := p.presence[s2].Neighbors()
@@ -125,35 +60,6 @@ func init() {
 // 						Piece1: p2,
 // 					})
 // 				})
-// 			})
-// 		}
-// 	}
-// }
-
-// func (p *Pos) completePush(steps *[]Step) {
-// 	i := len(p.steps) - 1
-// 	for ; i >= 0 && p.steps[i].Capture(); i-- {
-// 	}
-// 	assert("i < 0", i >= 0)
-// 	push := p.steps[i]
-// 	p2 := push.Piece1
-// 	dest := push.Src
-// 	destB := dest.Bitboard()
-
-// 	for p1 := p2.MakeColor(p.side) + 1; p1 < GElephant.MakeColor(p.side); p1++ {
-// 		p1b := p.bitboards[p1]
-// 		if p1b == 0 || p1b.Neighbors()&destB == 0 {
-// 			continue
-// 		}
-// 		for p1b > 0 {
-// 			b := p1b & -p1b
-// 			p1b &= ^b
-// 			src := b.Square()
-// 			assert("src == dest", src != dest)
-// 			*steps = append(*steps, Step{
-// 				Src:    src,
-// 				Dest:   dest,
-// 				Piece1: p2,
 // 			})
 // 		}
 // 	}
@@ -231,6 +137,29 @@ func (p *Pos) Steps() []Step {
 
 			sB[src].Each(func(db Bitboard) {
 				if p.bitboards[Empty]&db == 0 {
+					if p.presence[c2]&db == 0 {
+						return
+					}
+					// Generate all pushes out of this dest (if canPush):
+					// Check that there's an empty place to push them to.
+					if canPush {
+						if r := p.atB(db); r.WeakerThan(t) {
+							dbn := db.Neighbors()
+							(dbn & p.bitboards[Empty]).Each(func(ab Bitboard) {
+								step := Step{
+									Src:    src,
+									Dest:   db.Square(),
+									Alt:    ab.Square(),
+									Piece1: t,
+									Piece2: r,
+								}
+								if cap := p.capture(p.presence[c2], db, ab); cap.Valid() {
+									step.Cap = cap
+								}
+								steps = append(steps, step)
+							})
+						}
+					}
 					return
 				}
 				dest := db.Square()
@@ -255,17 +184,6 @@ func (p *Pos) Steps() []Step {
 						}
 					}
 					steps = append(steps, step)
-
-					// initStr := p.String()
-					// err1 := p.Step(step)
-					// err2 := p.Unstep()
-					// if initStr != p.String() || err1 != nil || err2 != nil {
-					// 	fmt.Println(initStr)
-					// 	fmt.Println("  -- vs --")
-					// fmt.Println(p.String())
-					// fmt.Printf("log ---------------------- pull step for %s: %s\n", c1, step)
-					// 	fmt.Printf("err1=%v err2=%v", err1, err2)
-					// }
 				}
 			})
 		})
