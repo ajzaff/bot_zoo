@@ -322,13 +322,18 @@ func (s Step) Len() int {
 
 func (s Step) String() string {
 	var sb strings.Builder
-	switch s.Kind() {
-	case KindSetup:
+	switch kind := s.Kind(); {
+	case s.Pass:
+		fmt.Fprint(&sb, "(pass)")
+		if s.Capture() {
+			fmt.Fprintf(&sb, " %c?%sx", s.Cap.Piece.Byte(), s.Cap.Src)
+		}
+	case kind == KindSetup:
 		fmt.Fprintf(&sb, "%c%s", s.Piece1.Byte(), s.Alt)
 		if s.Capture() {
 			fmt.Fprintf(&sb, " %c?%sx", s.Cap.Piece.Byte(), s.Cap.Src)
 		}
-	case KindPush:
+	case kind == KindPush:
 		fmt.Fprintf(&sb, "%c%s%s", s.Piece2.Byte(), s.Dest, NewDelta(s.Dest.Delta(s.Alt)))
 		if s.Cap.Piece == s.Piece2 {
 			fmt.Fprintf(&sb, " %c%sx ", s.Cap.Piece.Byte(), s.Cap.Src)
@@ -340,7 +345,7 @@ func (s Step) String() string {
 		if s.Capture() && s.Cap.Piece != s.Piece1 && s.Cap.Piece != s.Piece2 {
 			fmt.Fprintf(&sb, " %c?%sx", s.Cap.Piece.Byte(), s.Cap.Src)
 		}
-	case KindPull:
+	case kind == KindPull:
 		fmt.Fprintf(&sb, "%c%s%s", s.Piece1.Byte(), s.Src, NewDelta(s.Src.Delta(s.Dest)))
 		if s.Cap.Piece == s.Piece1 {
 			fmt.Fprintf(&sb, " %c%sx", s.Cap.Piece.Byte(), s.Cap.Src)
@@ -352,22 +357,13 @@ func (s Step) String() string {
 		if s.Capture() && s.Cap.Piece != s.Piece1 && s.Cap.Piece != s.Piece2 {
 			fmt.Fprintf(&sb, " %c?%sx", s.Cap.Piece.Byte(), s.Cap.Src)
 		}
-	case KindDefault:
+	case kind == KindDefault:
 		fmt.Fprintf(&sb, "%c%s%s", s.Piece1.Byte(), s.Src, NewDelta(s.Src.Delta(s.Dest)))
 		if s.Capture() {
 			fmt.Fprintf(&sb, " %c%sx", s.Cap.Piece.Byte(), s.Cap.Src)
 		}
 	default: // Invalid
-		if s.Pass {
-			fmt.Fprint(&sb, "(pass)")
-			if s.Capture() {
-				fmt.Fprintf(&sb, " %c?%sx", s.Cap.Piece.Byte(), s.Cap.Src)
-			}
-		}
 		return s.GoString()
-	}
-	if s.Capture() {
-		fmt.Fprintf(&sb, " %c%sx", s.Cap.Piece.Byte(), s.Cap.Src)
 	}
 	return sb.String()
 }

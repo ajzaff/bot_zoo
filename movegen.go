@@ -195,14 +195,9 @@ func (p *Pos) Steps() []Step {
 		return []Step{{Pass: true}}
 	}
 	var steps []Step
-	canPush := p.stepsLeft > 1
-	lo, hi := GRabbit, SElephant
 	c1, c2 := p.side, p.side.Opposite()
-	_ = c2
-	if !canPush {
-		lo, hi = GRabbit.MakeColor(c1), GElephant.MakeColor(c1)
-	}
-	for t := lo; t <= hi; t++ {
+	canPush := p.stepsLeft > 1
+	for t := GRabbit.MakeColor(c1); t <= GElephant.MakeColor(c1); t++ {
 		if !t.Valid() {
 			continue
 		}
@@ -210,37 +205,62 @@ func (p *Pos) Steps() []Step {
 		if ts == 0 {
 			continue
 		}
-		// Generate sliding steps.
-		if t.Color() == c1 {
-			sB := stepsB
+		sB := stepsB
 
-			// My rabbits can only step forward.
-			if t.SameType(GRabbit) {
-				sB = rabbitStepsB[p.side]
+		// My rabbits can only step forward.
+		if t.SameType(GRabbit) {
+			sB = rabbitStepsB[p.side]
+		}
+		ts.Each(func(sb Bitboard) {
+			if p.frozenB(sb) {
+				return
 			}
-			ts.Each(func(sb Bitboard) {
-				if p.frozenB(sb) {
+			src := sb.Square()
+
+			// Find pullable pieces next to src (if canPush):
+			var pullPieces []Piece
+			var pullAlts []Bitboard
+			if canPush && GRabbit.WeakerThan(t) {
+				(sb.Neighbors() & p.presence[c2]).Each(func(nb Bitboard) {
+					for r := GRabbit.MakeColor(c2); r < t.MakeColor(c2); r++ {
+						if p.bitboards[r]&nb == 0 {
+							continue
+						}
+						pullPieces = append(pullPieces, r)
+						pullAlts = append(pullAlts, nb)
+					}
+				})
+			}
+
+			sB[src].Each(func(db Bitboard) {
+				if p.bitboards[Empty]&db == 0 {
 					return
 				}
-				src := sb.Square()
-				sB[src].Each(func(db Bitboard) {
-					if p.bitboards[Empty]&db == 0 {
-						return
-					}
-					dest := db.Square()
-					step := Step{
-						Src:    src,
-						Dest:   dest,
-						Alt:    invalidSquare,
-						Piece1: t,
-					}
-					if cap := p.capture(p.presence[c1], sb, db); cap.Valid() {
-						step.Cap = cap
-					}
-					steps = append(steps, step)
-				})
+				dest := db.Square()
+				step := Step{
+					Src:    src,
+					Dest:   dest,
+					Alt:    invalidSquare,
+					Piece1: t,
+				}
+				if cap := p.capture(p.presence[c1], sb, db); cap.Valid() {
+					step.Cap = cap
+				}
+				steps = append(steps, step)
+
+				// Generate all pulls to this dest (if canPush):
+				// for i := range pullPieces {
+				// 	step.Alt = pullAlts[i].Square()
+				// 	step.Piece2 = pullPieces[i]
+				// 	if !step.Capture() {
+				// 		if cap := p.capture(p.presence[c2], pullAlts[i], sb); cap.Valid() {
+				// 			step.Cap = cap
+				// 		}
+				// 	}
+				// 	steps = append(steps, step)
+				// }
 			})
-		}
+		})
 	}
 	if p.stepsLeft < 4 {
 		steps = append(steps, Step{Pass: true})
@@ -248,27 +268,30 @@ func (p *Pos) Steps() []Step {
 	return steps
 }
 
-func (p *Pos) getRootMoves(prefix []Step, moves *[][]Step, movesLeft int) {
-	if movesLeft == 0 {
+func (p *Pos) getRootMoves(prefix []Step, moves *[][]Step, stepsLeft int) {
+	if stepsLeft == 0 {
 		if !prefix[len(prefix)-1].Pass {
 			prefix = append(prefix, Step{Pass: true})
 		}
 		*moves = append(*moves, prefix)
 		return
 	}
-	assert("movesLeft < 0", movesLeft > 0)
+	assert("movesLeft < 0", stepsLeft > 0)
 	for _, step := range p.Steps() {
-		move := append(prefix, step)
+		if step.Len() > stepsLeft {
+			continue
+		}
+		newPrefix := make([]Step, 1+len(prefix))
+		copy(newPrefix, prefix)
+		newPrefix[len(newPrefix)-1] = step
 		if step.Pass {
-			*moves = append(*moves, move)
-			break
+			*moves = append(*moves, newPrefix)
+			continue
 		}
 		if err := p.Step(step); err != nil {
 			panic(err)
 		}
-		newPrefix := make([]Step, len(move))
-		copy(newPrefix, move)
-		p.getRootMoves(newPrefix, moves, movesLeft-1)
+		p.getRootMoves(newPrefix, moves, stepsLeft-step.Len())
 		if err := p.Unstep(); err != nil {
 			panic(err)
 		}
@@ -278,6 +301,9 @@ func (p *Pos) getRootMoves(prefix []Step, moves *[][]Step, movesLeft int) {
 func (e *Engine) getRootMovesLen(p *Pos, depth int) [][]Step {
 	if depth <= 0 || depth > 4 {
 		panic("depth <= 0 || depth > 4")
+	}
+	if e.p.stepsLeft-depth < 0 {
+		panic("stepsLeft < depth")
 	}
 	var moves [][]Step
 	for i := 1; i <= depth; i++ {
