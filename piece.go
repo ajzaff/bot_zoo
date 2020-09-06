@@ -94,8 +94,12 @@ func (p Piece) SameType(piece Piece) bool {
 	return p&decolorMask == piece&decolorMask
 }
 
+func (p Piece) HasColor() bool {
+	return p > 0 && p < 15 && p != 7 && p != 8
+}
+
 func (p Piece) SameColor(piece Piece) bool {
-	return p&colorMask == piece&colorMask
+	return p.HasColor() && piece.HasColor() && p&colorMask == piece&colorMask
 }
 
 func (p Piece) WeakerThan(piece Piece) bool {

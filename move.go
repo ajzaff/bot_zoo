@@ -335,27 +335,21 @@ func (s Step) String() string {
 		}
 	case kind == KindPush:
 		fmt.Fprintf(&sb, "%c%s%s", s.Piece2.Byte(), s.Dest, NewDelta(s.Dest.Delta(s.Alt)))
-		if s.Cap.Piece == s.Piece2 {
+		if s.Cap.Piece.SameColor(s.Piece2) {
 			fmt.Fprintf(&sb, " %c%sx", s.Cap.Piece.Byte(), s.Cap.Src)
 		}
 		fmt.Fprintf(&sb, " %c%s%s", s.Piece1.Byte(), s.Src, NewDelta(s.Src.Delta(s.Dest)))
-		if s.Cap.Piece == s.Piece1 {
+		if s.Cap.Piece.SameColor(s.Piece1) {
 			fmt.Fprintf(&sb, " %c%sx", s.Cap.Piece.Byte(), s.Cap.Src)
-		}
-		if s.Capture() && s.Cap.Piece != s.Piece1 && s.Cap.Piece != s.Piece2 {
-			fmt.Fprintf(&sb, " %c?%sx", s.Cap.Piece.Byte(), s.Cap.Src)
 		}
 	case kind == KindPull:
 		fmt.Fprintf(&sb, "%c%s%s", s.Piece1.Byte(), s.Src, NewDelta(s.Src.Delta(s.Dest)))
-		if s.Cap.Piece == s.Piece1 {
+		if s.Cap.Piece.SameColor(s.Piece1) {
 			fmt.Fprintf(&sb, " %c%sx", s.Cap.Piece.Byte(), s.Cap.Src)
 		}
 		fmt.Fprintf(&sb, " %c%s%s", s.Piece2.Byte(), s.Alt, NewDelta(s.Alt.Delta(s.Src)))
-		if s.Cap.Piece == s.Piece2 {
+		if s.Cap.Piece.SameColor(s.Piece2) {
 			fmt.Fprintf(&sb, " %c%sx", s.Cap.Piece.Byte(), s.Cap.Src)
-		}
-		if s.Capture() && s.Cap.Piece != s.Piece1 && s.Cap.Piece != s.Piece2 {
-			fmt.Fprintf(&sb, " %c?%sx", s.Cap.Piece.Byte(), s.Cap.Src)
 		}
 	case kind == KindDefault:
 		fmt.Fprintf(&sb, "%c%s%s", s.Piece1.Byte(), s.Src, NewDelta(s.Src.Delta(s.Dest)))
