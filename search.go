@@ -294,21 +294,24 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 	best := -inf
 	nodes := 0
 	for _, step := range steps {
-		nodes++
-		initSide := p.side
-
 		if e.stopping != 0 {
 			break
 		}
+		n := step.Len()
+		if depth+n > maxDepth {
+			continue
+		}
+		nodes++
+		initSide := p.side
 
 		if err := p.Step(step); err != nil {
 			panic(fmt.Sprintf("search_step: %v", err))
 		}
 		var score int
 		if p.side == initSide {
-			score = e.search(p, alpha, beta, depth+step.Len(), maxDepth)
+			score = e.search(p, alpha, beta, depth+n, maxDepth)
 		} else {
-			score = -e.search(p, -beta, -alpha, depth+step.Len(), maxDepth)
+			score = -e.search(p, -beta, -alpha, depth+n, maxDepth)
 		}
 		if err := p.Unstep(); err != nil {
 			panic(fmt.Sprintf("search_unstep: %v", err))
