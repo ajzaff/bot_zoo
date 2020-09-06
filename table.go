@@ -11,14 +11,17 @@ const (
 	ExactBound
 )
 
+// EntrySize is the approximate TableEntry size in bytes.
+// This can be calculated using the unsafe package:
+//	unsafe.Sizeof(TableEntry{})
+const EntrySize = 40
+
 type TableEntry struct {
 	Bound
 	ZHash int64
 	Depth int
 	Value int
-	Move  []Step
-	prev  *TableEntry
-	next  *TableEntry
+	Step  *Step
 }
 
 type Table struct {
@@ -43,7 +46,6 @@ func (t *Table) Clear() {
 func (t *Table) ProbeDepth(key int64, depth int) (e *TableEntry, ok bool) {
 	if e, ok := t.table[key]; ok {
 		t.list.MoveToBack(e)
-		// TODO(ajzaff): Currently the table is cleared after each search so entry.Depth > depth is not possible.
 		if entry := e.Value.(*TableEntry); entry.Depth >= depth {
 			return entry, true
 		}
@@ -77,6 +79,60 @@ func (t *Table) Store(e *TableEntry) {
 	for t.Len() >= t.Cap() {
 		t.pop()
 	}
+	if elem, ok := t.table[e.ZHash]; ok {
+		elem.Value = e
+		t.list.MoveToBack(elem)
+		return
+	}
 	elem := t.list.PushBack(e)
 	t.table[e.ZHash] = elem
+}
+
+// Best returns the best move by probing the table.
+// This is similar to PV but only returns steps for the current side.
+func (t *Table) Best(p *Pos) (move []Step, score int, err error) {
+	initSide := p.Side()
+	for i := 0; initSide == p.Side(); i++ {
+		e, ok := t.ProbeDepth(p.zhash, 0)
+		if !ok || e.Bound != ExactBound || e.Step == nil {
+			break
+		}
+		if i == 0 {
+			score = e.Value
+		}
+		if err := p.Step(*e.Step); err != nil {
+			return nil, 0, err
+		}
+		move = append(move, *e.Step)
+	}
+	for range move {
+		if err := p.Unstep(); err != nil {
+			return nil, 0, err
+		}
+	}
+	return move, score, nil
+}
+
+// PV returns the principal variation by probing the table.
+// The PV has a maximum length of 50 steps.
+func (t *Table) PV(p *Pos) (pv []Step, score int, err error) {
+	for i := 0; i < 50; i++ {
+		e, ok := t.ProbeDepth(p.zhash, 0)
+		if !ok || e.Bound != ExactBound || e.Step == nil {
+			break
+		}
+		if i == 0 {
+			score = e.Value
+		}
+		if err := p.Step(*e.Step); err != nil {
+			return nil, 0, err
+		}
+		pv = append(pv, *e.Step)
+	}
+	for range pv {
+		if err := p.Unstep(); err != nil {
+			return nil, 0, err
+		}
+	}
+	return pv, score, nil
 }

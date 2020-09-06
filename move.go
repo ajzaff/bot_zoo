@@ -108,14 +108,16 @@ func ParseMove(s string) ([]Step, error) {
 // MoveString outputs a legal move string.
 func MoveString(move []Step) string {
 	var sb strings.Builder
-	for i, step := range move {
+	var join bool
+	for _, step := range move {
 		if step.Pass {
 			continue
 		}
-		sb.WriteString(step.String())
-		if i+1 < len(move) {
+		if join {
 			sb.WriteByte(' ')
 		}
+		join = true
+		sb.WriteString(step.String())
 	}
 	return sb.String()
 }
@@ -126,6 +128,18 @@ func MoveLen(move []Step) int {
 		n += step.Len()
 	}
 	return n
+}
+
+func MoveEqual(a, b []Step) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 type Capture struct {

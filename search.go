@@ -11,11 +11,8 @@ import (
 const inf = 1000000
 
 type SearchResult struct {
-	ZHash int64
-	Depth int
 	Score int
 	Move  []Step
-	PV    []Step
 }
 
 type SearchInfo struct {
@@ -140,16 +137,22 @@ func (s *SearchInfo) guessNextPlyDuration() time.Duration {
 // The AEI command may start the search in a new goroutine.
 func (e *Engine) Go() {
 	if atomic.CompareAndSwapInt32(&e.running, 0, 1) {
+		e.ponder = false
 		go e.iterativeDeepeningRoot()
 	}
 }
 
 // GoPonder starts the search routine in ponder mode.
 func (e *Engine) GoPonder() {
+	if atomic.CompareAndSwapInt32(&e.running, 0, 1) {
+		e.ponder = true
+		go e.iterativeDeepeningRoot()
+	}
 }
 
-// GoInfinite starts an infinite routine.
+// GoInfinite starts an infinite routine (same as GoPonder).
 func (e *Engine) GoInfinite() {
+	e.GoPonder()
 }
 
 // Stop stops the search immediately and blocks until stopped.
@@ -163,13 +166,17 @@ func (e *Engine) Stop() {
 // Stop search immediately and print the best move info.
 func (e *Engine) stop() {
 	best := e.searchInfo.Best()
-	fmt.Printf("bestmove %s\n", MoveString(best.Move))
-	fmt.Printf("info score %d\n", best.Score)
-	fmt.Printf("info nodes %d\n", e.searchInfo.Nodes())
-	fmt.Printf("info time %d\n", e.searchInfo.Seconds())
-	fmt.Printf("info ebf %f\n", e.searchInfo.EBF())
-	fmt.Printf("info pv %s\n", MoveString(best.PV))
-	fmt.Printf("info curmovenumber %d\n", e.Pos().moveNum)
+	if !e.ponder {
+		fmt.Printf("bestmove %s\n", MoveString(best.Move))
+		fmt.Printf("info score %d\n", best.Score)
+		fmt.Printf("info nodes %d\n", e.searchInfo.Nodes())
+		fmt.Printf("info time %d\n", e.searchInfo.Seconds())
+		fmt.Printf("info ebf %f\n", e.searchInfo.EBF())
+		if pv, _, _ := e.table.PV(e.Pos()); len(pv) > 0 {
+			fmt.Printf("info pv %s", MoveString(pv))
+		}
+		fmt.Printf("info curmovenumber %d\n", e.Pos().moveNum)
+	}
 	atomic.SwapInt32(&e.running, 0)
 	e.searchInfo.done <- struct{}{}
 }
@@ -184,10 +191,12 @@ func (e *Engine) iterativeDeepeningRoot() {
 	}()
 
 	e.searchInfo = newSearchInfo()
-	if e.timeInfo == nil {
-		e.timeInfo = e.timeControl.newTimeInfo()
-	} else {
-		e.timeControl.resetTurn(e.timeInfo, e.p.side)
+	if !e.ponder {
+		if e.timeInfo == nil {
+			e.timeInfo = e.timeControl.newTimeInfo()
+		} else {
+			e.timeControl.resetTurn(e.timeInfo, e.p.side)
+		}
 	}
 
 	p := e.Pos()
@@ -204,26 +213,36 @@ func (e *Engine) iterativeDeepeningRoot() {
 	for d := 1; e.stopping == 0 && atomic.LoadInt32(&e.running) == 1; d++ {
 		if best.Score >= terminalEval {
 			go e.Stop()
-			return
+			fmt.Printf("log stop search at ply=%d for terminal eval\n", d)
+			break
 		}
-		if next, rem := e.searchInfo.guessNextPlyDuration(), e.timeControl.GameTimeRemaining(e.timeInfo, p.side); d > 4 && rem <= next {
-			fmt.Printf("log stop deepening before ply=%d (ebf=%f, cost=%s, budget=%s)\n", d, e.searchInfo.EBF(), next, rem)
+		if e.fixedDepth > 0 && d > e.fixedDepth {
 			go e.Stop()
-			return
+			fmt.Printf("log stop search at fixed ply depth=%d\n", d)
+			break
+		}
+		if !e.ponder && d > 4 {
+			if next, rem := e.searchInfo.guessNextPlyDuration(), e.timeControl.GameTimeRemaining(e.timeInfo, p.side); rem <= next {
+				go e.Stop()
+				fmt.Printf("log stop deepening before ply=%d (ebf=%f, cost=%s, budget=%s)\n", d, e.searchInfo.EBF(), next, rem)
+				break
+			}
 		}
 		e.searchInfo.newPly()
 		best = e.searchRoot(p, d)
+		if !e.ponder {
+			e.searchInfo.setBest(best)
+		}
+	}
+	if !e.ponder {
+		e.table.Clear()
 		e.searchInfo.setBest(best)
 	}
-	e.table.Clear()
-	e.searchInfo.setBest(best)
 }
 
 func (e *Engine) searchRoot(p *Pos, depth int) SearchResult {
-	best := SearchResult{
-		Depth: depth,
-		Score: -inf,
-	}
+	best := SearchResult{Score: -inf}
+
 	n := depth
 	if n > 4 {
 		n = 4
@@ -244,10 +263,38 @@ func (e *Engine) searchRoot(p *Pos, depth int) SearchResult {
 		if score > best.Score {
 			best.Score = score
 			best.Move = entry.move
+			if e.ponder {
+				fmt.Printf("log ponder\n")
+			}
 			fmt.Printf("log depth %d\n", depth)
 			fmt.Printf("log score %d\n", score)
-			fmt.Printf("log pv %s\n", entry.move)
+			if pv, _, _ := e.table.PV(e.Pos()); len(pv) > 0 {
+				fmt.Printf("log pv %s\n", MoveString(pv))
+			}
 			fmt.Printf("log transpositions %d\n", e.table.Len())
+		}
+	}
+
+	// Step 4: Store transposition table entry steps.
+	if e.useTable {
+		for _, step := range best.Move {
+			entry := &TableEntry{
+				Bound: ExactBound,
+				ZHash: p.zhash,
+				Depth: depth,
+				Value: best.Score,
+				Step:  new(Step),
+			}
+			*entry.Step = step
+			e.table.Store(entry)
+			if err := p.Step(step); err != nil {
+				panic(fmt.Sprintf("root_store_step: %s: %s: %v", best.Move, step, err))
+			}
+		}
+		for i := len(best.Move) - 1; i >= 0; i-- {
+			if err := p.Unstep(); err != nil {
+				panic(fmt.Sprintf("root_store_unstep: %s: %s: %v", best.Move, best.Move[i], err))
+			}
 		}
 	}
 	return best
@@ -255,10 +302,12 @@ func (e *Engine) searchRoot(p *Pos, depth int) SearchResult {
 
 func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 	alphaOrig := alpha
+	var bestStep *Step
 
 	// Step 1: Check the transposition table.
 	if e.useTable {
 		if entry, ok := e.table.ProbeDepth(p.zhash, maxDepth); ok {
+			bestStep = entry.Step
 			switch entry.Bound {
 			case ExactBound:
 				return entry.Value
@@ -319,6 +368,10 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 		}
 		if score > best {
 			best = score
+			if bestStep == nil {
+				bestStep = new(Step)
+			}
+			*bestStep = entry.step
 		}
 		if score > alpha {
 			alpha = score
@@ -336,6 +389,7 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 			ZHash: p.zhash,
 			Depth: maxDepth,
 			Value: best,
+			Step:  bestStep,
 		}
 		switch {
 		case best <= alphaOrig:

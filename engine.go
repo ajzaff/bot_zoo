@@ -16,7 +16,14 @@ type Engine struct {
 	r *rand.Rand
 
 	// depth != 0 implies fixed depth.
-	depth int
+	// Search won't stop unless a terminal score is achieved.
+	fixedDepth int
+
+	// ponder implies we will search until we're asked explicitly to stop.
+	// We don't set the best move after a ponder.
+	// We don't clear the transposition table when we're done.
+	// Ponder will stop terminal score is achieved.
+	ponder bool
 
 	table    *Table
 	useTable bool

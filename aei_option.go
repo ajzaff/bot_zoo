@@ -5,7 +5,6 @@ import (
 	"regexp"
 	"strconv"
 	"time"
-	"unsafe"
 )
 
 var optionPattern = regexp.MustCompile(`^setoption name (\S+) value (\S+)$`)
@@ -83,8 +82,7 @@ func (a *AEI) handleOption(text string) error {
 		if err != nil {
 			return err
 		}
-		size := unsafe.Sizeof(TableEntry{})
-		n := 1e6 * v / int(size)
+		n := 1e6 * v / EntrySize
 		a.Logf("setting hash table size to %d entries (%d MiB)", n, v)
 		a.engine.table = NewTable(n)
 	case "depth":
@@ -95,7 +93,7 @@ func (a *AEI) handleOption(text string) error {
 		if v < 0 {
 			return fmt.Errorf("depth < 0")
 		}
-		a.engine.depth = v
+		a.engine.fixedDepth = v
 	default:
 		return fmt.Errorf("unsupported option: %q", option)
 	}

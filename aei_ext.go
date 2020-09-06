@@ -24,7 +24,7 @@ func (a *AEI) handleExt(text string) error {
 		a.engine.Stop()
 		best := a.engine.searchInfo.Best()
 		a.engine.Pos().Move(best.Move)
-	case strings.HasPrefix(text, "move"), strings.HasPrefix(text, "moves"):
+	case strings.HasPrefix(text, "moves"):
 		parts := strings.SplitN(text, " ", 2)
 		n := 0
 		if len(parts) == 2 {
@@ -39,7 +39,7 @@ func (a *AEI) handleExt(text string) error {
 			if i >= n {
 				break
 			}
-			a.Logf("[%d] %s", e.score, e.move)
+			a.Logf("[%d] %s", e.score, MoveString(e.move))
 		}
 		a.Logf("%d", len(scoredMoves))
 		return nil
@@ -52,7 +52,16 @@ func (a *AEI) handleExt(text string) error {
 		}
 		return nil
 	case text == "hash":
-		a.Logf("%X", a.engine.Pos().zhash)
+		a.Logf("%d", a.engine.Pos().zhash)
+		return nil
+	case text == "pv":
+		pv, score, err := a.engine.table.PV(a.engine.Pos())
+		if err != nil {
+			a.Logf("PV error: %v", err)
+		}
+		if len(pv) > 0 {
+			a.Logf("[%d] %s", score, MoveString(pv))
+		}
 		return nil
 	case strings.HasPrefix(text, "step"):
 		parts := strings.SplitN(text, " ", 2)
