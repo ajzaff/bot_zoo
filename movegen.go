@@ -153,7 +153,9 @@ func (p *Pos) Steps() []Step {
 									Piece1: t,
 									Piece2: r,
 								}
-								if cap := p.capture(p.presence[c2], db, ab); cap.Valid() {
+								if cap := p.capture(p.presence[c1], sb, db); cap.Valid() {
+									step.Cap = cap
+								} else if cap := p.capture(p.presence[c2], db, ab); cap.Valid() {
 									step.Cap = cap
 								}
 								steps = append(steps, step)
