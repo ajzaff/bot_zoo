@@ -280,11 +280,9 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 	}
 
 	// Step 2: Is this a terminal node or depth==0?
+	// Start quiescense search.
 	if depth == maxDepth || p.Terminal() {
-		// TODO(ajzaff): Add quiescence search.
-		// Among other things, check statically whether any pieces
-		// can be flipped into a trap on the next turn.
-		return p.Score()
+		return e.quiescence(p, alpha, beta)
 	}
 
 	// Step 2a: Assertions.
@@ -348,4 +346,48 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 
 	// Return best score.
 	return best
+}
+
+// TODO(ajzaff): Measure the effect of counting quienscence nodes on the EBF.
+// This has direct consequences on move timings.
+func (e *Engine) quiescence(p *Pos, alpha, beta int) int {
+	eval := p.Score()
+	if eval >= beta {
+		return beta
+	}
+	if alpha < eval {
+		alpha = eval
+	}
+
+	steps := p.Steps()
+	nodes := 0
+	for _, step := range steps {
+		nodes++
+		initSide := p.side
+
+		if !step.Capture() {
+			continue
+		}
+
+		if err := p.Step(step); err != nil {
+			panic(fmt.Sprintf("quiescense_step: %v", err))
+		}
+		var score int
+		if p.side == initSide {
+			score = e.quiescence(p, alpha, beta)
+		} else {
+			score = -e.quiescence(p, -beta, -alpha)
+		}
+		if err := p.Unstep(); err != nil {
+			panic(fmt.Sprintf("quiescense_unstep: %v", err))
+		}
+		if score >= beta {
+			return beta
+		}
+		if score > alpha {
+			alpha = score
+		}
+	}
+	e.searchInfo.addNodes(nodes)
+	return alpha
 }

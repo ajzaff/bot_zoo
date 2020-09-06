@@ -43,9 +43,8 @@ func (t *Table) Clear() {
 func (t *Table) ProbeDepth(key int64, depth int) (e *TableEntry, ok bool) {
 	if e, ok := t.table[key]; ok {
 		t.list.MoveToBack(e)
-		// TODO(ajzaff): Change this to `e.Depth >= depth`
-		// once quiescence search is added.
-		if entry := e.Value.(*TableEntry); entry.Depth == depth {
+		// TODO(ajzaff): Currently the table is cleared after each search so entry.Depth > depth is not possible.
+		if entry := e.Value.(*TableEntry); entry.Depth >= depth {
 			return entry, true
 		}
 	}
