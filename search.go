@@ -216,6 +216,7 @@ func (e *Engine) printSearchInfo() {
 		fmt.Printf("log ponder\n")
 	}
 	fmt.Printf("log depth %d\n", len(s.nodes))
+	fmt.Printf("log time %d\n", s.Seconds())
 	s.m.Lock()
 	fmt.Printf("log score %d\n", s.best.Score)
 	fmt.Printf("log move %s\n", MoveString(s.best.Move))
@@ -227,6 +228,7 @@ func (e *Engine) printSearchInfo() {
 }
 
 func (e *Engine) stopInternal() {
+	e.printSearchInfo()
 	if !e.ponder {
 		best := e.searchInfo.Best()
 		fmt.Printf("bestmove %s\n", MoveString(best.Move))
