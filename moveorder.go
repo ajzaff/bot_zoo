@@ -33,6 +33,18 @@ func (a byScore) Len() int           { return len(a) }
 func (a byScore) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a byScore) Less(i, j int) bool { return a[i].score > a[j].score }
 
+// shuffleMoves is intended to be called before sortMoves to
+// provide varied results to sortMove amongst equal moves
+// which is useful in Lazy-SMP parallel searches.
+func (e *Engine) shuffleMoves(moves [][]Step) {
+	e.r.Shuffle(len(moves), func(i, j int) {
+		moves[i], moves[j] = moves[j], moves[i]
+	})
+}
+
+// sortMoves computes move scores and sorts them by length then
+// by score, stably. Call shuffleMoves beforehand to ranzomize the
+// output order among equal-valued moves.
 func (e *Engine) sortMoves(p *Pos, moves [][]Step) []ScoredMove {
 	a := make([]ScoredMove, len(moves))
 	for i := range a {
