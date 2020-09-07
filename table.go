@@ -50,9 +50,9 @@ func (t *Table) Clear() {
 }
 
 func (t *Table) ProbeDepth(key int64, depth int) (e *TableEntry, ok bool) {
-	t.m.Lock()
-	defer t.m.Unlock()
 	if e, ok := t.table[key]; ok {
+		t.m.Lock()
+		defer t.m.Unlock()
 		t.list.MoveToBack(e)
 		if entry := e.Value.(*TableEntry); depth <= entry.Depth {
 			return entry, true
