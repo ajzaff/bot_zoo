@@ -365,7 +365,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 			fmt.Printf("log stop search at depth=%d with terminal eval\n", d)
 			break
 		}
-		if e.fixedDepth > 0 && d > e.fixedDepth {
+		if e.fixedDepth > 0 && d >= e.fixedDepth {
 			go e.Stop()
 			fmt.Printf("log stop fixed_depth search at depth=%d\n", d)
 			break
