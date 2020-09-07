@@ -32,34 +32,31 @@ type TableEntry struct {
 type Table struct {
 	cap   int
 	list  *list.List
-	table map[int64]*list.Element
-	rw    sync.RWMutex
+	table sync.Map // zhash => *list.Element
+	m     sync.RWMutex
 }
 
 func NewTable(cap int) *Table {
 	return &Table{
-		cap:   cap,
-		table: make(map[int64]*list.Element),
-		list:  list.New(),
+		cap:  cap,
+		list: list.New(),
 	}
 }
 
 func (t *Table) Clear() {
-	t.table = make(map[int64]*list.Element)
+	t.table = sync.Map{}
 	t.list.Init()
 }
 
 func (t *Table) ProbeDepth(key int64, depth int) (e *TableEntry, ok bool) {
-	t.rw.RLock()
-	elem, ok := t.table[key]
-	t.rw.RUnlock()
+	elem, ok := t.table.Load(key)
 	if !ok {
 		return nil, false
 	}
-	t.rw.Lock()
-	defer t.rw.Unlock()
-	t.list.MoveToBack(elem)
-	if e := elem.Value.(*TableEntry); depth <= e.Depth {
+	t.m.Lock()
+	defer t.m.Unlock()
+	t.list.MoveToBack(elem.(*list.Element))
+	if e := elem.(*list.Element).Value.(*TableEntry); depth <= e.Depth {
 		return e, true
 	}
 	return nil, false
@@ -80,7 +77,7 @@ func (t *Table) SetCap(cap int) {
 // locks excluded: t.m
 func (t *Table) remove(e *list.Element) {
 	t.list.Remove(e)
-	delete(t.table, e.Value.(*TableEntry).ZHash)
+	t.table.Delete(e.Value.(*TableEntry).ZHash)
 }
 
 // locks excluded: t.m
@@ -95,23 +92,24 @@ func (t *Table) pop() {
 		elem = next
 	}
 	e := t.list.Remove(elem)
-	delete(t.table, e.(*TableEntry).ZHash)
+	t.table.Delete(e.(*TableEntry).ZHash)
 }
 
 func (t *Table) Store(e *TableEntry) {
-	t.rw.Lock()
-	defer t.rw.Unlock()
-	if elem, ok := t.table[e.ZHash]; ok {
+	if v, ok := t.table.Load(e.ZHash); ok {
+		elem := v.(*list.Element)
 		t.list.MoveToBack(elem)
 		if elem.Value.(*TableEntry).Depth < e.Depth {
 			elem.Value = e
 		}
 		return
 	}
+	t.m.Lock()
+	defer t.m.Unlock()
 	for t.Len() >= t.Cap() {
 		t.pop()
 	}
-	t.table[e.ZHash] = t.list.PushBack(e)
+	t.table.Store(e.ZHash, t.list.PushBack(e))
 }
 
 // Best returns the best move by probing the table.
