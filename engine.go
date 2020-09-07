@@ -30,6 +30,10 @@ type Engine struct {
 	// advantage of the increased randomness.
 	rootOrderNoise float64
 
+	// Null move depth reduction factor R.
+	// TODO(ajzaff): Use an adaptive value of R.
+	nullMoveR int
+
 	// concurrency setting of Lazy-SMP search in number of goroutines.
 	concurrency int
 
@@ -47,6 +51,7 @@ func NewEngine(seed int64) *Engine {
 		minDepth:       4,
 		concurrency:    4,
 		rootOrderNoise: 200,
+		nullMoveR:      4,
 		table:          NewTable(transposeTableSize),
 		useTable:       true,
 	}

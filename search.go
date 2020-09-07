@@ -467,8 +467,16 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 	// Step 2a: Assertions.
 	assert("!(0 < depth && depth < maxDepth)", 0 < depth && depth < maxDepth)
 
-	// TODO(ajzaff): Use scored steps to order these better.
-	// This could have massive benefits to search performance.
+	// Step 2c. Try null move pruning.
+	if e.nullMoveR > 0 && depth+e.nullMoveR < maxDepth {
+		p.Pass()
+		score := -e.search(p, -beta, -alpha, depth+e.nullMoveR+1, maxDepth)
+		p.Unpass()
+		if score >= beta {
+			return beta // null move pruning
+		}
+	}
+
 	steps := p.Steps()
 	scoredSteps := e.scoreSteps(p, steps)
 	sortSteps(scoredSteps)

@@ -140,10 +140,8 @@ func (p *Pos) Remove(i Square) error {
 
 func (p *Pos) Pass() {
 	p.depth++
-	if len(p.steps) > 0 {
-		p.moves = append(p.moves, p.steps)
-		p.steps = nil
-	}
+	p.moves = append(p.moves, p.steps)
+	p.steps = nil
 	p.zhash ^= ZSilverKey()
 	if p.side = p.side.Opposite(); p.side == Gold {
 		p.moveNum++
