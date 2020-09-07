@@ -210,6 +210,22 @@ func (e *Engine) Stop() {
 	}
 }
 
+func (e *Engine) printSearchInfo() {
+	s := e.searchInfo
+	if e.ponder {
+		fmt.Printf("log ponder\n")
+	}
+	fmt.Printf("log depth %d\n", len(s.nodes))
+	s.m.Lock()
+	fmt.Printf("log score %d\n", s.best.Score)
+	fmt.Printf("log move %s\n", MoveString(s.best.Move))
+	s.m.Unlock()
+	if pv, _, _ := e.table.PV(e.p); len(pv) > 0 {
+		fmt.Printf("log pv %s\n", MoveString(pv))
+	}
+	fmt.Printf("log transpositions %d\n", e.table.Len())
+}
+
 func (e *Engine) stopInternal() {
 	if !e.ponder {
 		best := e.searchInfo.Best()
@@ -256,6 +272,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 
 	alpha, beta := -inf, +inf
 	best := e.searchRoot(p, e.sortMoves(p, e.getRootMovesLen(p, 1)), alpha, beta, 1)
+	e.printSearchInfo()
 
 	for d := 2; e.stopping == 0 && atomic.LoadInt32(&e.running) == 1 && d < 256; d++ {
 		if !e.ponder && d > e.minDepth && e.fixedDepth == 0 {
@@ -307,8 +324,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 					moves := e.getRootMovesLen(newPos, n)
 					e.shuffleMoves(r, moves)
 					sortedMoves := e.sortMoves(newPos, moves)
-					res := e.searchRoot(newPos, sortedMoves, alpha, beta, adjustedDepth)
-					if res.Score <= alpha {
+					if res := e.searchRoot(newPos, sortedMoves, alpha, beta, adjustedDepth); res.Score <= alpha {
 						m.Lock()
 						beta = (alpha + beta) / 2
 						alpha = res.Score - delta
@@ -344,21 +360,10 @@ func (e *Engine) iterativeDeepeningRoot() {
 			}()
 		}
 		wg.Wait()
-		if !e.ponder {
-			e.searchInfo.setBest(best)
-		}
+		e.searchInfo.setBest(best)
 
 		// Print search info for depth d:
-		if e.ponder {
-			fmt.Printf("log ponder\n")
-		}
-		fmt.Printf("log depth %d\n", d)
-		fmt.Printf("log score %d\n", best.Score)
-		fmt.Printf("log move %s\n", MoveString(best.Move))
-		if pv, _, _ := e.table.PV(p); len(pv) > 0 {
-			fmt.Printf("log pv %s\n", MoveString(pv))
-		}
-		fmt.Printf("log transpositions %d\n", e.table.Len())
+		e.printSearchInfo()
 
 		if best.Score >= terminalEval || -best.Score >= terminalEval {
 			go e.Stop()
@@ -371,9 +376,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 			break
 		}
 	}
-	if !e.ponder {
-		e.searchInfo.setBest(best)
-	}
+	e.searchInfo.setBest(best)
 }
 
 func (e *Engine) searchRoot(p *Pos, scoredMoves []ScoredMove, alpha, beta, depth int) SearchResult {

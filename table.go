@@ -76,26 +76,18 @@ func (t *Table) SetCap(cap int) {
 
 // locks excluded: t.m
 func (t *Table) remove(e *list.Element) {
-	t.list.Remove(e)
-	t.table.Delete(e.Value.(*TableEntry).ZHash)
+	t.table.Delete(t.list.Remove(e).(*TableEntry).ZHash)
 }
 
 // locks excluded: t.m
 func (t *Table) pop() {
-	elem := t.list.Front()
-	for elem.Value.(*TableEntry).pv {
-		next := elem.Next()
-		if next == nil {
-			break
-		}
-		t.list.MoveToBack(elem)
-		elem = next
-	}
-	e := t.list.Remove(elem)
-	t.table.Delete(e.(*TableEntry).ZHash)
+	t.remove(t.list.Front())
 }
 
 func (t *Table) Store(e *TableEntry) {
+	if t.Cap() == 0 {
+		return
+	}
 	if v, ok := t.table.Load(e.ZHash); ok {
 		elem := v.(*list.Element)
 		t.list.MoveToBack(elem)
