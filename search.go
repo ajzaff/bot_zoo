@@ -250,6 +250,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 		e.searchInfo.setBest(SearchResult{
 			Move: e.RandomSetup(),
 		})
+		go e.Stop()
 		return
 	}
 
