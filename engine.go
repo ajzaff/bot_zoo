@@ -28,6 +28,8 @@ type Engine struct {
 	// Ponder will stop terminal score is achieved.
 	ponder bool
 
+	lastPonder bool
+
 	table    *Table
 	useTable bool
 

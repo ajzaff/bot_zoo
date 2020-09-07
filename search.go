@@ -169,7 +169,6 @@ func (e *Engine) Go() {
 }
 
 // GoFixed starts a fixed-depth search routine and blocks until it finishes.
-// The AEI command may start the search in a new goroutine.
 func (e *Engine) GoFixed(fixedDepth int) {
 	if atomic.CompareAndSwapInt32(&e.running, 0, 1) {
 		e.ponder = false
@@ -228,6 +227,10 @@ func (e *Engine) iterativeDeepeningRoot() {
 	e.stopping = 0
 	defer func() { e.stopInternal() }()
 
+	if !e.lastPonder {
+		e.table.Clear()
+	}
+	e.lastPonder = e.ponder
 	e.searchInfo = newSearchInfo()
 	if !e.ponder {
 		if e.timeInfo == nil {
@@ -304,36 +307,37 @@ func (e *Engine) searchRoot(p *Pos, depth int) SearchResult {
 			if e.ponder {
 				fmt.Printf("log ponder\n")
 			}
+
+			// Store transposition table entry steps now to update the PV.
+			if e.useTable {
+				for _, step := range best.Move {
+					entry := &TableEntry{
+						Bound: ExactBound,
+						ZHash: p.zhash,
+						Depth: depth,
+						Value: best.Score,
+						Step:  new(Step),
+						pv:    true,
+					}
+					*entry.Step = step
+					e.table.Store(entry)
+					if err := p.Step(step); err != nil {
+						panic(fmt.Sprintf("root_store_step: %s: %s: %v", best.Move, step, err))
+					}
+				}
+				for i := len(best.Move) - 1; i >= 0; i-- {
+					if err := p.Unstep(); err != nil {
+						panic(fmt.Sprintf("root_store_unstep: %s: %s: %v", best.Move, best.Move[i], err))
+					}
+				}
+			}
+
 			fmt.Printf("log depth %d\n", depth)
 			fmt.Printf("log score %d\n", score)
 			if pv, _, _ := e.table.PV(e.Pos()); len(pv) > 0 {
 				fmt.Printf("log pv %s\n", MoveString(pv))
 			}
 			fmt.Printf("log transpositions %d\n", e.table.Len())
-		}
-	}
-
-	// Step 4: Store transposition table entry steps.
-	if e.useTable {
-		for _, step := range best.Move {
-			entry := &TableEntry{
-				Bound: ExactBound,
-				ZHash: p.zhash,
-				Depth: depth,
-				Value: best.Score,
-				Step:  new(Step),
-				pv:    true,
-			}
-			*entry.Step = step
-			e.table.Store(entry)
-			if err := p.Step(step); err != nil {
-				panic(fmt.Sprintf("root_store_step: %s: %s: %v", best.Move, step, err))
-			}
-		}
-		for i := len(best.Move) - 1; i >= 0; i-- {
-			if err := p.Unstep(); err != nil {
-				panic(fmt.Sprintf("root_store_unstep: %s: %s: %v", best.Move, best.Move[i], err))
-			}
 		}
 	}
 	return best
