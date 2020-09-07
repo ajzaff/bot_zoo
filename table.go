@@ -3,6 +3,7 @@ package zoo
 import (
 	"container/list"
 	"fmt"
+	"sync"
 )
 
 type Bound int
@@ -32,6 +33,7 @@ type Table struct {
 	cap   int
 	list  *list.List
 	table map[int64]*list.Element
+	m     sync.Mutex
 }
 
 func NewTable(cap int) *Table {
@@ -48,6 +50,8 @@ func (t *Table) Clear() {
 }
 
 func (t *Table) ProbeDepth(key int64, depth int) (e *TableEntry, ok bool) {
+	t.m.Lock()
+	defer t.m.Unlock()
 	if e, ok := t.table[key]; ok {
 		t.list.MoveToBack(e)
 		if entry := e.Value.(*TableEntry); depth <= entry.Depth {
@@ -69,11 +73,13 @@ func (t *Table) SetCap(cap int) {
 	t.cap = cap
 }
 
+// locks excluded: t.m
 func (t *Table) remove(e *list.Element) {
 	t.list.Remove(e)
 	delete(t.table, e.Value.(*TableEntry).ZHash)
 }
 
+// locks excluded: t.m
 func (t *Table) pop() {
 	elem := t.list.Front()
 	for elem.Value.(*TableEntry).pv {
@@ -89,6 +95,8 @@ func (t *Table) pop() {
 }
 
 func (t *Table) Store(e *TableEntry) {
+	t.m.Lock()
+	defer t.m.Unlock()
 	if elem, ok := t.table[e.ZHash]; ok {
 		t.list.MoveToBack(elem)
 		if elem.Value.(*TableEntry).Depth < e.Depth {

@@ -283,38 +283,51 @@ func (e *Engine) iterativeDeepeningRoot() {
 
 func (e *Engine) searchRoot(p *Pos, depth int) SearchResult {
 	best := SearchResult{Score: -inf}
+	var m sync.Mutex
 
 	n := depth
 	if n > 4 {
 		n = 4
 	}
+	var wg sync.WaitGroup
 	moves := e.getRootMovesLen(p, n)
 	sortedMoves := e.sortMoves(p, moves)
 	for _, entry := range sortedMoves {
 		if e.stopping != 0 {
 			break
 		}
-		if err := p.Move(entry.move); err != nil {
-			panic(fmt.Sprintf("search_move_root: %s: %v", entry.move, err))
-		}
-		score := -e.search(p, -inf, -best.Score, MoveLen(entry.move), depth)
-		if err := p.Unmove(); err != nil {
-			panic(fmt.Sprintf("search_unmove_root: %s: %v", entry.move, err))
-		}
-		if score > best.Score {
-			best.Score = score
-			best.Move = entry.move
-			if e.ponder {
-				fmt.Printf("log ponder\n")
+		wg.Add(1)
+		go func(parent *Pos, move []Step) {
+			p := parent.Clone()
+			if err := p.Move(move); err != nil {
+				panic(fmt.Sprintf("search_move_root: %s: %v", move, err))
 			}
-			fmt.Printf("log depth %d\n", depth)
-			fmt.Printf("log score %d\n", score)
-			fmt.Printf("log move %s\n", MoveString(best.Move))
-			if pv, _, _ := e.table.PV(e.Pos()); len(pv) > 0 {
-				fmt.Printf("log pv %s\n", MoveString(pv))
+			score := -e.search(p, -inf, -best.Score, MoveLen(move), depth)
+			if err := p.Unmove(); err != nil {
+				panic(fmt.Sprintf("search_unmove_root: %s: %v", move, err))
 			}
-			fmt.Printf("log transpositions %d\n", e.table.Len())
-		}
+			if score > best.Score {
+				m.Lock()
+				defer m.Unlock()
+				best.Score = score
+				best.Move = move
+				if e.ponder {
+					fmt.Printf("log ponder\n")
+				}
+				fmt.Printf("log depth %d\n", depth)
+				fmt.Printf("log score %d\n", score)
+				fmt.Printf("log move %s\n", MoveString(best.Move))
+				if pv, _, _ := e.table.PV(p); len(pv) > 0 {
+					fmt.Printf("log pv %s\n", MoveString(pv))
+				}
+				fmt.Printf("log transpositions %d\n", e.table.Len())
+			}
+			wg.Done()
+		}(p, entry.move)
+	}
+
+	if e.stopping == 0 {
+		wg.Wait()
 	}
 
 	// Store transposition table entry steps.
