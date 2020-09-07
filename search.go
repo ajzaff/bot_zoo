@@ -257,7 +257,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 	alpha, beta := -inf, +inf
 	best := e.searchRoot(p, e.sortMoves(p, e.getRootMovesLen(p, 1)), alpha, beta, 1)
 
-	for d := 2; e.stopping == 0 && atomic.LoadInt32(&e.running) == 1; d++ {
+	for d := 2; e.stopping == 0 && atomic.LoadInt32(&e.running) == 1 && d < 256; d++ {
 		if !e.ponder && d > e.minDepth && e.fixedDepth == 0 {
 			if next, rem := e.searchInfo.guessNextPlyDuration(), e.timeControl.TurnTimeRemaining(e.timeInfo, p.side); rem <= next {
 				go e.Stop()
@@ -296,9 +296,9 @@ func (e *Engine) iterativeDeepeningRoot() {
 				for e.stopping == 0 {
 					r := rand.New(rand.NewSource(time.Now().UnixNano()))
 					newPos := p.Clone()
-					adjustedDepth := d + failedHighCnt
-					if d < 1 {
-						d = 1
+					adjustedDepth := d - failedHighCnt
+					if adjustedDepth < 1 {
+						adjustedDepth = 1
 					}
 					n := adjustedDepth
 					if n > 4 {
