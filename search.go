@@ -147,7 +147,7 @@ func (s *SearchInfo) guessNextPlyDuration() time.Duration {
 	b, _ := s.EBF()
 	lastDuration := float64(time.Now().UnixNano() - s.times[d])
 	lastNodes := float64(s.nodes[d])
-	nextNodes := lastNodes + math.Pow(b, float64(d))
+	nextNodes := lastNodes + math.Pow(b, float64(1+d))
 	v := lastDuration / lastNodes * nextNodes
 	if v > math.MaxInt64 {
 		return math.MaxInt64

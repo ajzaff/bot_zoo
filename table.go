@@ -99,9 +99,10 @@ func (t *Table) Store(e *TableEntry) {
 	if v, ok := t.table.Load(e.ZHash); ok {
 		elem := v.(*list.Element)
 		t.list.MoveToBack(elem)
-		if elem.Value.(*TableEntry).Depth < e.Depth {
-			elem.Value = e
-		}
+		// TODO(ajzaff): I just experimented with using an always rewrite strategy
+		// which seemed to reduce the EBF somewhat. More testing is needed to determine
+		// the right strategy.
+		elem.Value = e
 		return
 	}
 	t.m.Lock()
