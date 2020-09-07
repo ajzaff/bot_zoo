@@ -19,7 +19,7 @@ type SearchResult struct {
 type SearchInfo struct {
 	// cumulative nodes at the given ply
 	// which can be used to compute the EBF.
-	nodes []int
+	nodes []int // guarded by m
 
 	// ply start times (unix nanoseconds) per ply.
 	// Used to determine remaining time to search.
@@ -30,9 +30,10 @@ type SearchInfo struct {
 	// best move
 	// time (unix nanoseconds) when best was last set.
 	// Corresponds to end of search.
-	bestTime int64        // guarded by mu
-	best     SearchResult // guarded by mu
-	mu       sync.Mutex
+	bestTime int64        // guarded by m
+	best     SearchResult // guarded by m
+
+	m sync.Mutex
 }
 
 func newSearchInfo() *SearchInfo {
@@ -45,15 +46,15 @@ func newSearchInfo() *SearchInfo {
 
 // Best returns the current best move.
 func (s *SearchInfo) Best() SearchResult {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.m.Lock()
+	defer s.m.Unlock()
 	return s.best
 }
 
 // setBest sets the current best move.
 func (s *SearchInfo) setBest(best SearchResult) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.m.Lock()
+	defer s.m.Unlock()
 	s.best = best
 	s.bestTime = time.Now().UnixNano()
 }
@@ -68,6 +69,8 @@ func (s *SearchInfo) newPly() {
 }
 
 func (s *SearchInfo) addNodes(n int) {
+	s.m.Lock()
+	defer s.m.Unlock()
 	s.nodes[len(s.nodes)-1] += n
 }
 
@@ -78,9 +81,9 @@ func (s *SearchInfo) Nodes() int {
 
 // Seconds returns the number of seconds searched in all ply.
 func (s *SearchInfo) Seconds() int64 {
-	s.mu.Lock()
+	s.m.Lock()
 	end := s.bestTime
-	s.mu.Unlock()
+	s.m.Unlock()
 	if end == 0 {
 		end = s.times[len(s.times)-1]
 	}
@@ -215,14 +218,12 @@ func (e *Engine) stopInternal() {
 	e.searchInfo.done <- struct{}{}
 }
 
-const expWindowBase = 4
-
-func expWindow(i, x int) int {
-	v := 1
-	for i > 0 {
-		v *= expWindowBase
+func initWindowDelta(x int) int {
+	v := x
+	if v < 0 {
+		v = -v
 	}
-	return x + v
+	return 21 + v/256
 }
 
 func (e *Engine) iterativeDeepeningRoot() {
@@ -252,7 +253,8 @@ func (e *Engine) iterativeDeepeningRoot() {
 		return
 	}
 
-	best := e.searchRoot(p, e.sortMoves(p, e.getRootMovesLen(p, 1)), -25, 25, 1)
+	alpha, beta := -inf, +inf
+	best := e.searchRoot(p, e.sortMoves(p, e.getRootMovesLen(p, 1)), alpha, beta, 1)
 
 	for d := 2; e.stopping == 0 && atomic.LoadInt32(&e.running) == 1; d++ {
 		if !e.ponder && d > e.minDepth && e.fixedDepth == 0 {
@@ -265,26 +267,77 @@ func (e *Engine) iterativeDeepeningRoot() {
 		}
 		e.searchInfo.newPly()
 
+		// Aspiration window tracks the previous score for search.
+		// Whenever we fail high or low widen the window.
+		var delta int
+		if d >= 4 {
+			delta = initWindowDelta(best.Score)
+			alpha, beta = best.Score-delta, best.Score+delta
+			if alpha < -inf {
+				alpha = -inf
+			}
+			if beta > inf {
+				beta = inf
+			}
+		}
+
 		var m sync.Mutex
 		var wg sync.WaitGroup
 		wg.Add(e.concurrency)
 		for i := 0; i < e.concurrency; i++ {
+			// Implementation of Lazy SMP which runs parallel searches over
+			// the same nodes.
 			go func() {
-				r := rand.New(rand.NewSource(time.Now().UnixNano()))
-				newPos := p.Clone()
-				newDepth := d
-				n := d
-				if n > 4 {
-					n = 4
-				}
-				moves := e.getRootMovesLen(newPos, n)
-				e.shuffleMoves(r, moves)
-				sortedMoves := e.sortMoves(newPos, moves)
-				res := e.searchRoot(newPos, sortedMoves, -25, 25, newDepth)
-				m.Lock()
-				defer m.Unlock()
-				if res.Score > best.Score {
-					best = res
+				// Start with a small aspiration window and, in the case of a fail
+				// high/low, re-search with a bigger window until we don't fail
+				// high/low anymore.
+				failedHighCnt := 0
+				for e.stopping == 0 {
+					r := rand.New(rand.NewSource(time.Now().UnixNano()))
+					newPos := p.Clone()
+					adjustedDepth := d + failedHighCnt
+					if d < 1 {
+						d = 1
+					}
+					n := adjustedDepth
+					if n > 4 {
+						n = 4
+					}
+					moves := e.getRootMovesLen(newPos, n)
+					e.shuffleMoves(r, moves)
+					sortedMoves := e.sortMoves(newPos, moves)
+					res := e.searchRoot(newPos, sortedMoves, alpha, beta, adjustedDepth)
+					if res.Score <= alpha {
+						m.Lock()
+						beta = (alpha + beta) / 2
+						alpha = res.Score - delta
+						if alpha < -inf {
+							alpha = -inf
+						}
+						m.Unlock()
+						failedHighCnt = 0
+						fmt.Printf("log failed_LOW: retry with new aspiration window: [%d, %d] (delta=%d)\n", alpha, beta, delta)
+					} else if res.Score >= beta {
+						m.Lock()
+						beta = res.Score + delta
+						if beta > inf {
+							beta = inf
+						}
+						m.Unlock()
+						failedHighCnt++
+						fmt.Printf("log failed_HIGH: retry with new aspiration window: [%d, %d] (delta=%d)\n", alpha, beta, delta)
+					} else {
+						m.Lock()
+						if res.Score > best.Score {
+							best = res
+						}
+						m.Unlock()
+						break
+					}
+					// Update aspiration window delta
+					delta += delta/4 + 5
+
+					assert("!(alpha >= -inf && beta <= inf)", alpha >= -inf && beta <= inf)
 				}
 				wg.Done()
 			}()
@@ -414,9 +467,6 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 	best := -inf
 	nodes := 0
 	for _, entry := range sortedSteps {
-		if e.stopping != 0 {
-			break
-		}
 		n := entry.step.Len()
 		if depth+n > maxDepth {
 			continue
