@@ -289,6 +289,14 @@ func (e *Engine) iterativeDeepeningRoot() {
 		}
 		e.searchInfo.newPly()
 
+		// Generate moves to be copied by each goroutine.
+		n := d
+		if n > 4 {
+			n = 4
+		}
+		scoredMoves := e.scoreMoves(p, e.getRootMovesLen(p, n))
+		sortMoves(scoredMoves)
+
 		// Aspiration window tracks the previous score for search.
 		// Whenever we fail high or low widen the window.
 		var delta int
@@ -311,6 +319,17 @@ func (e *Engine) iterativeDeepeningRoot() {
 			// the same nodes.
 			go func() {
 				r := rand.New(rand.NewSource(time.Now().UnixNano()))
+				moves := make([]ScoredMove, len(scoredMoves))
+				for i := range moves {
+					score := scoredMoves[i].score
+					if f := e.rootOrderNoise; f > 0 {
+						score += int(f * r.NormFloat64())
+					}
+					moves[i].score = score
+					moves[i].move = make([]Step, len(scoredMoves[i].move))
+					copy(moves[i].move, scoredMoves[i].move)
+				}
+				sortMoves(moves)
 				// Start with a small aspiration window and, in the case of a fail
 				// high/low, re-search with a bigger window until we don't fail
 				// high/low anymore.
@@ -325,13 +344,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 					if n > 4 {
 						n = 4
 					}
-					moves := e.getRootMovesLen(newPos, n)
-					scoredMoves := e.scoreMoves(newPos, moves)
-					if e.rootOrderNoise > 0 {
-						e.perturbMoves(r, e.rootOrderNoise, scoredMoves)
-					}
-					sortMoves(scoredMoves)
-					if res := e.searchRoot(newPos, scoredMoves, alpha, beta, adjustedDepth); res.Score <= alpha {
+					if res := e.searchRoot(newPos, moves, alpha, beta, adjustedDepth); res.Score <= alpha {
 						m.Lock()
 						beta = (alpha + beta) / 2
 						alpha = res.Score - delta
@@ -340,7 +353,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 						}
 						m.Unlock()
 						failedHighCnt = 0
-						fmt.Printf("log failed_LOW: retry with new aspiration window: [%d, %d] (delta=%d)\n", alpha, beta, delta)
+						fmt.Printf("log failed_LOW %d: retry with new aspiration window: [%d, %d] (delta=%d)\n", res.Score, alpha, beta, delta)
 					} else if res.Score >= beta {
 						m.Lock()
 						beta = res.Score + delta
@@ -349,7 +362,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 						}
 						m.Unlock()
 						failedHighCnt++
-						fmt.Printf("log failed_HIGH: retry with new aspiration window: [%d, %d] (delta=%d)\n", alpha, beta, delta)
+						fmt.Printf("log failed_HIGH %d: retry with new aspiration window: [%d, %d] (delta=%d)\n", res.Score, alpha, beta, delta)
 					} else {
 						m.Lock()
 						if res.Score > best.Score {
@@ -480,6 +493,12 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 	}
 
 	steps := p.Steps()
+
+	// Check if immobilized.
+	if len(steps) == 0 {
+		return -terminalEval
+	}
+
 	scoredSteps := e.scoreSteps(p, steps)
 	sortSteps(scoredSteps)
 
@@ -506,6 +525,9 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 		if err := p.Unstep(); err != nil {
 			panic(fmt.Sprintf("search_unstep: %v", err))
 		}
+
+		assert("!(score > -inf && score < inf)", score > -inf && score < inf)
+
 		if score > best {
 			best = score
 			if bestStep == nil {
@@ -549,6 +571,9 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 // TODO(ajzaff): Measure the effect of counting quienscence nodes on the EBF.
 // This has direct consequences on move timings.
 func (e *Engine) quiescence(p *Pos, alpha, beta int) int {
+	assert("!(alpha >= -inf && alpha < beta && beta <= inf)",
+		alpha >= -inf && alpha < beta && beta <= inf)
+
 	eval := p.Score()
 	if eval >= beta {
 		return beta
