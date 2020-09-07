@@ -61,6 +61,24 @@ func newPos(
 	}
 }
 
+func (p *Pos) Clone() *Pos {
+	bs := make([]Bitboard, 15)
+	ps := make([]Bitboard, 2)
+	steps := make([]Step, len(p.steps))
+	moves := make([][]Step, len(p.moves))
+	copy(bs, p.bitboards)
+	copy(ps, p.presence)
+	copy(steps, p.steps)
+	for i := range moves {
+		moves[i] = make([]Step, len(p.moves[i]))
+		copy(moves[i], p.moves[i])
+	}
+	return newPos(
+		bs, ps, p.side, p.depth, p.moveNum,
+		moves, steps, p.stepsLeft, p.zhash,
+	)
+}
+
 func (p *Pos) Depth() int {
 	return p.depth
 }
