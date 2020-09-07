@@ -307,39 +307,40 @@ func (e *Engine) searchRoot(p *Pos, depth int) SearchResult {
 			if e.ponder {
 				fmt.Printf("log ponder\n")
 			}
-
-			// Store transposition table entry steps now to update the PV.
-			if e.useTable {
-				for _, step := range best.Move {
-					entry := &TableEntry{
-						Bound: ExactBound,
-						ZHash: p.zhash,
-						Depth: depth,
-						Value: best.Score,
-						Step:  new(Step),
-						pv:    true,
-					}
-					*entry.Step = step
-					e.table.Store(entry)
-					if err := p.Step(step); err != nil {
-						panic(fmt.Sprintf("root_store_step: %s: %s: %v", best.Move, step, err))
-					}
-				}
-				for i := len(best.Move) - 1; i >= 0; i-- {
-					if err := p.Unstep(); err != nil {
-						panic(fmt.Sprintf("root_store_unstep: %s: %s: %v", best.Move, best.Move[i], err))
-					}
-				}
-			}
-
 			fmt.Printf("log depth %d\n", depth)
 			fmt.Printf("log score %d\n", score)
+			fmt.Printf("log move %s\n", MoveString(best.Move))
 			if pv, _, _ := e.table.PV(e.Pos()); len(pv) > 0 {
 				fmt.Printf("log pv %s\n", MoveString(pv))
 			}
 			fmt.Printf("log transpositions %d\n", e.table.Len())
 		}
 	}
+
+	// Store transposition table entry steps.
+	if e.useTable {
+		for _, step := range best.Move {
+			entry := &TableEntry{
+				Bound: ExactBound,
+				ZHash: p.zhash,
+				Depth: depth,
+				Value: best.Score,
+				Step:  new(Step),
+				pv:    true,
+			}
+			*entry.Step = step
+			e.table.Store(entry)
+			if err := p.Step(step); err != nil {
+				panic(fmt.Sprintf("root_store_step: %s: %s: %v", best.Move, step, err))
+			}
+		}
+		for i := len(best.Move) - 1; i >= 0; i-- {
+			if err := p.Unstep(); err != nil {
+				panic(fmt.Sprintf("root_store_unstep: %s: %s: %v", best.Move, best.Move[i], err))
+			}
+		}
+	}
+
 	return best
 }
 

@@ -90,11 +90,10 @@ func (t *Table) pop() {
 
 func (t *Table) Store(e *TableEntry) {
 	if elem, ok := t.table[e.ZHash]; ok {
-		if e.Depth <= elem.Value.(*TableEntry).Depth {
-			return
-		}
-		elem.Value = e
 		t.list.MoveToBack(elem)
+		if elem.Value.(*TableEntry).Depth < e.Depth {
+			elem.Value = e
+		}
 		return
 	}
 	for t.Len() >= t.Cap() {
@@ -109,7 +108,7 @@ func (t *Table) Best(p *Pos) (move []Step, score int, err error) {
 	initSide := p.Side()
 	for i := 0; initSide == p.Side(); i++ {
 		e, ok := t.ProbeDepth(p.zhash, 0)
-		if !ok || e.Bound != ExactBound || e.Step == nil {
+		if !ok || e.Step == nil {
 			break
 		}
 		if i == 0 {
@@ -129,11 +128,12 @@ func (t *Table) Best(p *Pos) (move []Step, score int, err error) {
 }
 
 // PV returns the principal variation by probing the table.
+// Despite the name it can return scores that are outside the window.
 // The PV has a maximum length of 50 steps.
 func (t *Table) PV(p *Pos) (pv []Step, score int, err error) {
 	for i := 0; i < 50; i++ {
 		e, ok := t.ProbeDepth(p.zhash, 0)
-		if !ok || e.Bound != ExactBound || e.Step == nil {
+		if !ok || e.Step == nil {
 			break
 		}
 		if i == 0 {
