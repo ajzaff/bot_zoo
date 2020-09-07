@@ -21,11 +21,11 @@ const EntrySize = 40
 
 type TableEntry struct {
 	Bound
-	ZHash  int64
-	Height int
-	Value  int
-	pv     bool
-	Step   *Step
+	ZHash int64
+	Depth int
+	Value int
+	pv    bool
+	Step  *Step
 }
 
 type Table struct {
@@ -47,10 +47,10 @@ func (t *Table) Clear() {
 	t.list.Init()
 }
 
-func (t *Table) ProbeDepth(key int64, height int) (e *TableEntry, ok bool) {
+func (t *Table) ProbeDepth(key int64, depth int) (e *TableEntry, ok bool) {
 	if e, ok := t.table[key]; ok {
 		t.list.MoveToBack(e)
-		if entry := e.Value.(*TableEntry); height <= entry.Height {
+		if entry := e.Value.(*TableEntry); depth <= entry.Depth {
 			return entry, true
 		}
 	}
@@ -90,7 +90,7 @@ func (t *Table) pop() {
 
 func (t *Table) Store(e *TableEntry) {
 	if elem, ok := t.table[e.ZHash]; ok {
-		if e.Height <= elem.Value.(*TableEntry).Height {
+		if e.Depth <= elem.Value.(*TableEntry).Depth {
 			return
 		}
 		elem.Value = e

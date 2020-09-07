@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 )
 
 func (a *AEI) handleExt(text string) error {
@@ -19,9 +18,7 @@ func (a *AEI) handleExt(text string) error {
 		a.engine.SetPos(pos)
 		return nil
 	case text == "movenow":
-		a.engine.Go()
-		time.Sleep(time.Second)
-		a.engine.Stop()
+		a.engine.GoFixed(8)
 		best := a.engine.searchInfo.Best()
 		a.engine.Pos().Move(best.Move)
 	case strings.HasPrefix(text, "moves"):
@@ -53,6 +50,9 @@ func (a *AEI) handleExt(text string) error {
 		return nil
 	case text == "hash":
 		a.Logf("%d", a.engine.Pos().zhash)
+		return nil
+	case text == "depth":
+		a.Logf("%d", a.engine.Pos().Depth())
 		return nil
 	case text == "pv":
 		pv, score, err := a.engine.table.PV(a.engine.Pos())

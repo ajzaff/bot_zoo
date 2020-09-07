@@ -160,8 +160,7 @@ func (e *Engine) startNow() {
 	go e.iterativeDeepeningRoot()
 }
 
-// Go starts the search routine and blocks until it finishes.
-// The AEI command may start the search in a new goroutine.
+// Go starts the search routine in a new goroutine.
 func (e *Engine) Go() {
 	if atomic.CompareAndSwapInt32(&e.running, 0, 1) {
 		e.ponder = false
@@ -169,7 +168,24 @@ func (e *Engine) Go() {
 	}
 }
 
-// GoPonder starts the search routine in ponder mode.
+// GoFixed starts a fixed-depth search routine and blocks until it finishes.
+// The AEI command may start the search in a new goroutine.
+func (e *Engine) GoFixed(fixedDepth int) {
+	if atomic.CompareAndSwapInt32(&e.running, 0, 1) {
+		e.ponder = false
+		prevDepth := e.fixedDepth
+		e.fixedDepth = fixedDepth
+		defer func() {
+			if r := recover(); r != nil {
+				panic(fmt.Sprintf("log SEARCH_ERROR_FIXED recovered: %v\n", r))
+			}
+		}()
+		e.iterativeDeepeningRoot()
+		e.fixedDepth = prevDepth
+	}
+}
+
+// GoPonder starts the ponder search in a new goroutine.
 func (e *Engine) GoPonder() {
 	if atomic.CompareAndSwapInt32(&e.running, 0, 1) {
 		e.ponder = true
@@ -187,11 +203,11 @@ func (e *Engine) Stop() {
 	if atomic.LoadInt32(&e.running) == 1 {
 		e.stopping = 1
 		<-e.searchInfo.done
+		atomic.SwapInt32(&e.running, 0)
 	}
 }
 
-// Stop search immediately and print the best move info.
-func (e *Engine) stop() {
+func (e *Engine) stopInternal() {
 	if !e.ponder {
 		best := e.searchInfo.Best()
 		fmt.Printf("bestmove %s\n", MoveString(best.Move))
@@ -205,13 +221,12 @@ func (e *Engine) stop() {
 		}
 		fmt.Printf("info curmovenumber %d\n", e.Pos().moveNum)
 	}
-	atomic.SwapInt32(&e.running, 0)
 	e.searchInfo.done <- struct{}{}
 }
 
 func (e *Engine) iterativeDeepeningRoot() {
 	e.stopping = 0
-	defer func() { e.stop() }()
+	defer func() { e.stopInternal() }()
 
 	e.searchInfo = newSearchInfo()
 	if !e.ponder {
@@ -302,12 +317,12 @@ func (e *Engine) searchRoot(p *Pos, depth int) SearchResult {
 	if e.useTable {
 		for _, step := range best.Move {
 			entry := &TableEntry{
-				Bound:  ExactBound,
-				ZHash:  p.zhash,
-				Height: p.Height() + depth,
-				Value:  best.Score,
-				Step:   new(Step),
-				pv:     true,
+				Bound: ExactBound,
+				ZHash: p.zhash,
+				Depth: depth,
+				Value: best.Score,
+				Step:  new(Step),
+				pv:    true,
 			}
 			*entry.Step = step
 			e.table.Store(entry)
@@ -330,7 +345,7 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 
 	// Step 1: Check the transposition table.
 	if e.useTable {
-		if entry, ok := e.table.ProbeDepth(p.zhash, maxDepth); ok {
+		if entry, ok := e.table.ProbeDepth(p.zhash, maxDepth-depth); ok {
 			bestStep = entry.Step
 			switch entry.Bound {
 			case ExactBound:
@@ -410,10 +425,10 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 	// Step 4: Store transposition table entry.
 	if e.useTable {
 		entry := &TableEntry{
-			ZHash:  p.zhash,
-			Height: p.Height() + depth,
-			Value:  best,
-			Step:   bestStep,
+			ZHash: p.zhash,
+			Depth: maxDepth - depth,
+			Value: best,
+			Step:  bestStep,
 		}
 		switch {
 		case best <= alphaOrig:
