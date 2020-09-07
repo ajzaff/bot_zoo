@@ -31,8 +31,8 @@ type TableEntry struct {
 
 type Table struct {
 	cap   int
-	list  *list.List
-	table sync.Map // zhash => *list.Element
+	list  *list.List // guarded by m
+	table sync.Map   // zhash => *list.Element
 	m     sync.RWMutex
 }
 
@@ -90,6 +90,8 @@ func (t *Table) Store(e *TableEntry) {
 	}
 	if v, ok := t.table.Load(e.ZHash); ok {
 		elem := v.(*list.Element)
+		t.m.Lock()
+		defer t.m.Unlock()
 		t.list.MoveToBack(elem)
 		// TODO(ajzaff): I just experimented with using an always rewrite strategy
 		// which seemed to reduce the EBF somewhat. More testing is needed to determine
