@@ -21,6 +21,7 @@ func NewEmptyPosition() *Pos {
 	}
 	pos.stepsLeft = 16
 	pos.moveNum = 1
+	pos.depth = 0
 	return pos
 }
 
@@ -30,7 +31,7 @@ func ParseShortPosition(s string) (*Pos, error) {
 		return nil, fmt.Errorf("input does not match /%s/", shortPosPattern)
 	}
 	side := ParseColor(matches[1])
-	pos := newPos(nil, nil, side, 0, 2, nil, nil, 4, 0)
+	pos := newPos(nil, nil, side, 34, 2, nil, nil, 4, 0)
 	for i, b := range []byte(matches[2]) {
 		square := Square(8*(7-i/8) + i%8)
 		piece, err := ParsePiece(b)

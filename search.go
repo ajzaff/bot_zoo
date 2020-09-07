@@ -263,7 +263,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 			break
 		}
 		if !e.ponder && d > e.minDepth && e.fixedDepth == 0 {
-			if next, rem := e.searchInfo.guessNextPlyDuration(), e.timeControl.GameTimeRemaining(e.timeInfo, p.side); rem <= next {
+			if next, rem := e.searchInfo.guessNextPlyDuration(), e.timeControl.TurnTimeRemaining(e.timeInfo, p.side); rem <= next {
 				go e.Stop()
 				b, err := e.searchInfo.EBF()
 				fmt.Printf("log stop deepening before ply=%d (ebf=%f(err=%f), cost=%s, budget=%s)\n", d, b, err, next, rem)

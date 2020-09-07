@@ -1,6 +1,41 @@
 package zoo
 
+import (
+	"fmt"
+	"log"
+)
+
+const randomSetupAttempts = 100
+
+// RandomSetup creates setup moves by trying positions randomly and evaluating results.
+// It repeats this a few times and returns the best setup. This keeps setups generally
+// kosher while allowing for the rare "fun" setup.
 func (e *Engine) RandomSetup() []Step {
+	p := e.Pos()
+	side := p.Side()
+
+	var best []Step
+	bestScore := -inf
+	for i := 0; i < randomSetupAttempts; i++ {
+		move := e.randomSetup()
+		if err := p.Move(move); err != nil {
+			log.Println(fmt.Errorf("random_setup_move: %v", err))
+			panic(fmt.Errorf("random_setup_move: %v", err))
+		}
+		if score := p.positionScore(side); score > bestScore {
+			best = move
+			bestScore = score
+		}
+		if err := p.Unmove(); err != nil {
+			log.Println(fmt.Errorf("random_setup_unmove: %v", err))
+
+			panic(fmt.Errorf("random_setup_unmove: %v", err))
+		}
+	}
+	return best
+}
+
+func (e *Engine) randomSetup() []Step {
 	p := e.Pos()
 	c := p.side
 	rank := 7

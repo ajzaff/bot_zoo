@@ -174,7 +174,9 @@ func (p *Pos) Step(step Step) error {
 		if p.moveNum > 1 {
 			return fmt.Errorf("%s: setup move after first turn", step)
 		}
-		return p.Place(step.Piece1, step.Alt)
+		if err := p.Place(step.Piece1, step.Alt); err != nil {
+			return fmt.Errorf("%s: %v", step, err)
+		}
 	case KindPush:
 		if err := p.Remove(step.Dest); err != nil {
 			return fmt.Errorf("%s: %v", step, err)
