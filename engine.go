@@ -25,6 +25,11 @@ type Engine struct {
 
 	lastPonder bool
 
+	// rootOrderNoise applied during search to root moves.
+	// works in conjunction with concurrency to take
+	// advantage of the increased randomness.
+	rootOrderNoise float64
+
 	// concurrency setting of Lazy-SMP search in number of goroutines.
 	concurrency int
 
@@ -37,12 +42,13 @@ type Engine struct {
 
 func NewEngine(seed int64) *Engine {
 	return &Engine{
-		timeControl: makeTimeControl(),
-		p:           NewEmptyPosition(),
-		minDepth:    4,
-		concurrency: 4,
-		table:       NewTable(transposeTableSize),
-		useTable:    true,
+		timeControl:    makeTimeControl(),
+		p:              NewEmptyPosition(),
+		minDepth:       4,
+		concurrency:    4,
+		rootOrderNoise: 200,
+		table:          NewTable(transposeTableSize),
+		useTable:       true,
 	}
 }
 

@@ -34,28 +34,24 @@ func (a byScore) Len() int           { return len(a) }
 func (a byScore) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a byScore) Less(i, j int) bool { return a[i].score > a[j].score }
 
-// shuffleMoves is intended to be called before sortMoves to
-// provide varied results to sortMove amongst equal moves
-// which is useful in Lazy-SMP parallel searches.
-func (e *Engine) shuffleMoves(r *rand.Rand, moves [][]Step) {
-	if n := len(moves); n > 0 {
-		r.Shuffle(n, func(i, j int) {
-			moves[i], moves[j] = moves[j], moves[i]
-		})
+// perturbMoves adds noise to the scoredMoves in [-f, +f].
+// Intended to be used for parallel Lazy-SMP search.
+func (e *Engine) perturbMoves(r *rand.Rand, f float64, scoredMoves []ScoredMove) {
+	for i := range scoredMoves {
+		scoredMoves[i].score += int(2*f*r.Float64() - f)
 	}
+}
+
+func sortMoves(a []ScoredMove) {
+	sort.Stable(byLen(a))
+	sort.Stable(byScore(a))
 }
 
 // sortMoves computes move scores and sorts them by length then
 // by score, stably. Call shuffleMoves beforehand to ranzomize the
 // output order among equal-valued moves.
-func (e *Engine) sortMoves(p *Pos, moves [][]Step) []ScoredMove {
-	a := make([]ScoredMove, len(moves))
-	for i := range a {
-		a[i].move = moves[i]
-		a[i].score = -terminalEval
-	}
-
-	numIllegal := 0
+func (e *Engine) scoreMoves(p *Pos, moves [][]Step) []ScoredMove {
+	a := make([]ScoredMove, 0, len(moves))
 
 	// 1: Check the table to get the best move if any.
 	var best []Step
@@ -66,15 +62,16 @@ func (e *Engine) sortMoves(p *Pos, moves [][]Step) []ScoredMove {
 	}
 
 	// 2: Range over all moves.
-	for i, move := range moves {
+	for _, move := range moves {
 
 		// 2a: Update the best move from the table to +inf.
 		if e.useTable && MoveEqual(move, best) {
-			a[i].score = +inf
+			a = append(a, ScoredMove{
+				score: +inf,
+				move:  move,
+			})
 			continue
 		}
-
-		var illegal bool
 
 		// 2a. Try the move.
 		// In the unlikely case it's illegal give a score of -inf.
@@ -83,15 +80,13 @@ func (e *Engine) sortMoves(p *Pos, moves [][]Step) []ScoredMove {
 			if err != errRecurringPosition {
 				panic(fmt.Sprintf("moveorder_move: %v", err))
 			}
-			a[i].score = -inf
-			numIllegal++
-			illegal = true
-		}
-
-		if !illegal {
+		} else {
 			// Step 2b: Get the evaluation and set the score.
 			// Negate the score since sides have changed.
-			a[i].score = -p.Score()
+			a = append(a, ScoredMove{
+				score: -p.Score(),
+				move:  move,
+			})
 		}
 
 		// Step 2c. Undo the move.
@@ -99,31 +94,23 @@ func (e *Engine) sortMoves(p *Pos, moves [][]Step) []ScoredMove {
 			panic(fmt.Sprintf("moveorder_unmove: %v", err))
 		}
 	}
-	sort.Sort(byLen(a))
-	sort.Stable(byScore(a))
-	a = a[:len(a)-numIllegal]
-
-	// Experimental:
-	// Remove all bad moves.
-	// if len(a) > 0 {
-	// 	i := 1
-	// 	for ; i < len(a); i++ {
-	// 		if a[i].score < a[0].score-1000 {
-	// 			break
-	// 		}
-	// 	}
-	// 	a = a[:i]
-	// }
-
 	return a
 }
 
-func (e *Engine) sortSteps(p *Pos, steps []Step) []ScoredStep {
-	a := make([]ScoredStep, len(steps))
-	for i := range a {
-		a[i].step = steps[i]
-		a[i].score = -terminalEval
+// perturbMoves adds noise to the scoredMoves in [-f, +f].
+// Intended to be used for parallel Lazy-SMP search.
+func (e *Engine) perturbSteps(r *rand.Rand, f float64, scoredSteps []ScoredStep) {
+	for i := range scoredSteps {
+		scoredSteps[i].score += int(2*f*r.Float64() - f)
 	}
+}
+
+func sortSteps(a []ScoredStep) {
+	sort.Stable(byStepScore(a))
+}
+
+func (e *Engine) scoreSteps(p *Pos, steps []Step) []ScoredStep {
+	a := make([]ScoredStep, 0, len(steps))
 
 	// 1: Check the table to get the PV step if any.
 	var pv Step
@@ -135,32 +122,34 @@ func (e *Engine) sortSteps(p *Pos, steps []Step) []ScoredStep {
 	}
 
 	// 2: Range over all steps.
-	for i, step := range steps {
+	for _, step := range steps {
 
 		// 2a: Update the PV score to +inf.
 		if e.useTable && step == pv {
-			a[i].score = +inf
+			a = append(a, ScoredStep{
+				score: +inf,
+				step:  step,
+			})
 			continue
 		}
 
 		initSide := p.Side()
-		var illegal bool
 
 		// 2a. Try the step.
 		// In the unlikely case it's illegal give a score of -inf.
 		if err := p.Step(step); err != nil {
-			a[i].score = -inf
-			illegal = true
-		}
-
-		if !illegal {
+			// TODO(ajzaff): Handle error.
+		} else {
 			// Step 2b: Get the evaluation and set the score.
 			// Negate the score if sides changed.
 			score := p.Score()
 			if p.Side() != initSide {
 				score = -score
 			}
-			a[i].score = score
+			a = append(a, ScoredStep{
+				score: score,
+				step:  step,
+			})
 		}
 
 		// Step 2c. Undo the step.
@@ -168,6 +157,5 @@ func (e *Engine) sortSteps(p *Pos, steps []Step) []ScoredStep {
 			panic(fmt.Sprintf("steporder: %v", err))
 		}
 	}
-	sort.Stable(byStepScore(a))
 	return a
 }

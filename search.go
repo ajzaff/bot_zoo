@@ -271,7 +271,9 @@ func (e *Engine) iterativeDeepeningRoot() {
 	}
 
 	alpha, beta := -inf, +inf
-	best := e.searchRoot(p, e.sortMoves(p, e.getRootMovesLen(p, 1)), alpha, beta, 1)
+	scoredMoves := e.scoreMoves(p, e.getRootMovesLen(p, 1))
+	sortMoves(scoredMoves)
+	best := e.searchRoot(p, scoredMoves, alpha, beta, 1)
 	e.printSearchInfo()
 
 	for d := 2; e.stopping == 0 && atomic.LoadInt32(&e.running) == 1 && d < 256; d++ {
@@ -306,12 +308,12 @@ func (e *Engine) iterativeDeepeningRoot() {
 			// Implementation of Lazy SMP which runs parallel searches over
 			// the same nodes.
 			go func() {
+				r := rand.New(rand.NewSource(time.Now().UnixNano()))
 				// Start with a small aspiration window and, in the case of a fail
 				// high/low, re-search with a bigger window until we don't fail
 				// high/low anymore.
 				failedHighCnt := 0
 				for e.stopping == 0 {
-					r := rand.New(rand.NewSource(time.Now().UnixNano()))
 					newPos := p.Clone()
 					adjustedDepth := d - failedHighCnt
 					if adjustedDepth < 1 {
@@ -322,9 +324,12 @@ func (e *Engine) iterativeDeepeningRoot() {
 						n = 4
 					}
 					moves := e.getRootMovesLen(newPos, n)
-					e.shuffleMoves(r, moves)
-					sortedMoves := e.sortMoves(newPos, moves)
-					if res := e.searchRoot(newPos, sortedMoves, alpha, beta, adjustedDepth); res.Score <= alpha {
+					scoredMoves := e.scoreMoves(newPos, moves)
+					if e.rootOrderNoise > 0 {
+						e.perturbMoves(r, e.rootOrderNoise, scoredMoves)
+					}
+					sortMoves(scoredMoves)
+					if res := e.searchRoot(newPos, scoredMoves, alpha, beta, adjustedDepth); res.Score <= alpha {
 						m.Lock()
 						beta = (alpha + beta) / 2
 						alpha = res.Score - delta
@@ -465,12 +470,13 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 	// TODO(ajzaff): Use scored steps to order these better.
 	// This could have massive benefits to search performance.
 	steps := p.Steps()
-	sortedSteps := e.sortSteps(p, steps)
+	scoredSteps := e.scoreSteps(p, steps)
+	sortSteps(scoredSteps)
 
 	// Step 3: Main search.
 	best := -inf
 	nodes := 0
-	for _, entry := range sortedSteps {
+	for _, entry := range scoredSteps {
 		n := entry.step.Len()
 		if depth+n > maxDepth {
 			continue
@@ -542,9 +548,10 @@ func (e *Engine) quiescence(p *Pos, alpha, beta int) int {
 	}
 
 	steps := p.Steps()
-	sortedSteps := e.sortSteps(p, steps)
+	scoredSteps := e.scoreSteps(p, steps)
+	sortSteps(scoredSteps)
 	nodes := 0
-	for _, entry := range sortedSteps {
+	for _, entry := range scoredSteps {
 		if !entry.step.Capture() {
 			continue
 		}

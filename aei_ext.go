@@ -28,7 +28,8 @@ func (a *AEI) handleExt(text string) error {
 			n, _ = strconv.Atoi(parts[1])
 		}
 		moves := a.engine.getRootMovesLen(a.engine.Pos(), 4)
-		scoredMoves := a.engine.sortMoves(a.engine.Pos(), moves)
+		scoredMoves := a.engine.scoreMoves(a.engine.Pos(), moves)
+		sortMoves(scoredMoves)
 		if n == 0 {
 			n = len(scoredMoves)
 		}
@@ -67,8 +68,9 @@ func (a *AEI) handleExt(text string) error {
 		parts := strings.SplitN(text, " ", 2)
 		if len(parts) < 2 {
 			steps := a.engine.Pos().Steps()
-			sortedSteps := a.engine.sortSteps(a.engine.Pos(), steps)
-			for _, e := range sortedSteps {
+			scoredSteps := a.engine.scoreSteps(a.engine.Pos(), steps)
+			sortSteps(scoredSteps)
+			for _, e := range scoredSteps {
 				a.Logf("[%d] %s", e.score, e.step)
 			}
 			return nil
