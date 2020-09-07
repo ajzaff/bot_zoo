@@ -9,6 +9,7 @@ type Pos struct {
 	bitboards []Bitboard // bitboard data
 	presence  []Bitboard // board presence for each side
 	side      Color      // side to play
+	height    int        // number of steps to arrive at the position
 	moveNum   int        // number of moves left for this turn
 	moves     [][]Step   // moves to arrive at this position after appending steps
 	steps     []Step     // steps of the current move
@@ -20,6 +21,7 @@ func newPos(
 	bitboards []Bitboard,
 	presence []Bitboard,
 	side Color,
+	height int,
 	moveNum int,
 	moves [][]Step,
 	steps []Step,
@@ -52,10 +54,15 @@ func newPos(
 		presence:  presence,
 		side:      side,
 		stepsLeft: stepsLeft,
+		height:    height,
 		moveNum:   moveNum,
 		steps:     steps,
 		zhash:     zhash,
 	}
+}
+
+func (p *Pos) Height() int {
+	return p.height
 }
 
 func (p *Pos) Side() Color {
@@ -114,6 +121,7 @@ func (p *Pos) Remove(i Square) error {
 }
 
 func (p *Pos) Pass() {
+	p.height++
 	if len(p.steps) > 0 {
 		p.moves = append(p.moves, p.steps)
 		p.steps = nil
@@ -135,6 +143,7 @@ func (p *Pos) Unpass() error {
 	if len(p.steps) != 0 {
 		return fmt.Errorf("steps were made since passing")
 	}
+	p.height--
 	p.steps = p.moves[len(p.moves)-1]
 	p.moves = p.moves[:len(p.moves)-1]
 	p.zhash ^= ZSilverKey()
@@ -202,6 +211,7 @@ func (p *Pos) Step(step Step) error {
 	case KindInvalid:
 		return fmt.Errorf("invalid step: %s", step)
 	}
+	p.height += n
 	p.stepsLeft -= n
 	p.steps = append(p.steps, step)
 	if step.Capture() {
@@ -222,7 +232,9 @@ func (p *Pos) Unstep() error {
 		p.Unpass()
 		return nil
 	}
-	p.stepsLeft += step.Len()
+	n := step.Len()
+	p.height -= n
+	p.stepsLeft += n
 	if step.Capture() {
 		if err := p.Place(step.Cap.Piece, step.Cap.Src); err != nil {
 			return fmt.Errorf("%s: %v", step, err)

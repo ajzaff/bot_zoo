@@ -21,10 +21,11 @@ const EntrySize = 40
 
 type TableEntry struct {
 	Bound
-	ZHash int64
-	Depth int
-	Value int
-	Step  *Step
+	ZHash  int64
+	Height int
+	Value  int
+	pv     bool
+	Step   *Step
 }
 
 type Table struct {
@@ -46,10 +47,10 @@ func (t *Table) Clear() {
 	t.list.Init()
 }
 
-func (t *Table) ProbeDepth(key int64, depth int) (e *TableEntry, ok bool) {
+func (t *Table) ProbeDepth(key int64, height int) (e *TableEntry, ok bool) {
 	if e, ok := t.table[key]; ok {
 		t.list.MoveToBack(e)
-		if entry := e.Value.(*TableEntry); entry.Depth >= depth {
+		if entry := e.Value.(*TableEntry); height <= entry.Height {
 			return entry, true
 		}
 	}
@@ -74,18 +75,30 @@ func (t *Table) remove(e *list.Element) {
 }
 
 func (t *Table) pop() {
-	e := t.list.Remove(t.list.Front())
+	elem := t.list.Front()
+	for elem.Value.(*TableEntry).pv {
+		next := elem.Next()
+		if next == nil {
+			break
+		}
+		t.list.MoveToBack(elem)
+		elem = next
+	}
+	e := t.list.Remove(elem)
 	delete(t.table, e.(*TableEntry).ZHash)
 }
 
 func (t *Table) Store(e *TableEntry) {
-	for t.Len() >= t.Cap() {
-		t.pop()
-	}
 	if elem, ok := t.table[e.ZHash]; ok {
+		if e.Height <= elem.Value.(*TableEntry).Height {
+			return
+		}
 		elem.Value = e
 		t.list.MoveToBack(elem)
 		return
+	}
+	for t.Len() >= t.Cap() {
+		t.pop()
 	}
 	t.table[e.ZHash] = t.list.PushBack(e)
 }

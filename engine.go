@@ -37,11 +37,12 @@ type Engine struct {
 
 func NewEngine(seed int64) *Engine {
 	return &Engine{
-		p:        NewEmptyPosition(),
-		r:        rand.New(rand.NewSource(seed)),
-		minDepth: 8,
-		table:    NewTable(transposeTableSize),
-		useTable: true,
+		timeControl: makeTimeControl(),
+		p:           NewEmptyPosition(),
+		r:           rand.New(rand.NewSource(seed)),
+		minDepth:    4,
+		table:       NewTable(transposeTableSize),
+		useTable:    true,
 	}
 }
 

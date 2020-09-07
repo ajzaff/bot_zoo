@@ -20,14 +20,14 @@ type SearchInfo struct {
 	// which can be used to compute the EBF.
 	nodes []int
 
-	// ply start times (unix seconds) per ply.
+	// ply start times (unix nanoseconds) per ply.
 	// Used to determine remaining time to search.
 	times []int64
 
 	done chan struct{}
 
 	// best move
-	// time (unix seconds) when best was last set.
+	// time (unix nanoseconds) when best was last set.
 	// Corresponds to end of search.
 	bestTime int64        // guarded by mu
 	best     SearchResult // guarded by mu
@@ -54,7 +54,7 @@ func (s *SearchInfo) setBest(best SearchResult) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.best = best
-	s.bestTime = time.Now().Unix()
+	s.bestTime = time.Now().UnixNano()
 }
 
 func (s *SearchInfo) newPly() {
@@ -63,7 +63,7 @@ func (s *SearchInfo) newPly() {
 		n = s.nodes[len(s.nodes)-1]
 	}
 	s.nodes = append(s.nodes, n)
-	s.times = append(s.times, time.Now().Unix())
+	s.times = append(s.times, time.Now().UnixNano())
 }
 
 func (s *SearchInfo) addNodes(n int) {
@@ -83,30 +83,24 @@ func (s *SearchInfo) Seconds() int64 {
 	if end == 0 {
 		end = s.times[len(s.times)-1]
 	}
-	return end - s.times[0]
+	return int64(time.Duration(end-s.times[0]) / time.Second)
 }
 
 func computebfNd(d int, b float64) float64 {
 	n := b
 	for i := 2; i <= d; i++ {
-		n *= math.Pow(b, float64(i))
+		n += math.Pow(b, float64(i))
 	}
 	return n
 }
 
-// EBF experimentally computes the effective branching factor.
-// This helps compute the nodes required to search to depth d
-// and by extension the duration of time required to complete
-// another ply.
-func (s *SearchInfo) EBF() float64 {
+func (s *SearchInfo) ebf(d int, N float64) (b float64, err float64) {
 	const (
-		tol   = 10000.
+		tol   = 1000.
 		small = 1e-4
 	)
-	d := len(s.nodes) - 1
-	N := float64(s.Nodes())
-	b := 0.
-	for n, lo, hi := 0., 1., 50.; hi-lo > small; {
+	var n = 0.
+	for lo, hi := 1., 10.; hi-lo > small; {
 		mid := (hi-lo)/2 + lo
 		b = mid
 		n = computebfNd(d, b)
@@ -120,17 +114,50 @@ func (s *SearchInfo) EBF() float64 {
 			hi = mid
 		}
 	}
-	return b
+	return b, n - N
+}
+
+// EBF experimentally computes the effective branching factor using per-ply node count.
+// This helps compute the time required to search to depth d.
+func (s *SearchInfo) EBF() (b float64, err float64) {
+	d := len(s.nodes) - 1
+	if d < 4 {
+		// Avoid EBF instability in small values.
+		return 1, 0
+	}
+	return s.ebf(d, float64(s.nodes[d]))
 }
 
 func (s *SearchInfo) guessNextPlyDuration() time.Duration {
-	now := time.Now().Unix()
-	d := len(s.nodes)
-	v := float64(now-s.times[d-1]) * math.Pow(s.EBF(), float64(d))
+	d := len(s.times) - 1
+	if d < 4 {
+		// These searches are basically free.
+		// We use len < 5 (instead of < 3) to avoid EBF instability in these small values.
+		return 0
+	}
+	// Compute the ratio of the amount of time spent and nodes and solve for X.
+	//  Time[d-1]        X
+	// ----------  =  --------
+	// Nodes[d-1]     Nodes[d]
+
+	b, _ := s.EBF()
+	lastDuration := float64(time.Now().UnixNano() - s.times[d])
+	lastNodes := float64(s.nodes[d])
+	nextNodes := lastNodes + math.Pow(b, float64(d))
+	v := lastDuration / lastNodes * nextNodes
 	if v > math.MaxInt64 {
 		return math.MaxInt64
 	}
-	return time.Duration(v * float64(time.Second))
+	return time.Duration(v)
+}
+
+func (e *Engine) startNow() {
+	defer func() {
+		if r := recover(); r != nil {
+			panic(fmt.Sprintf("log SEARCH_ERROR recovered: %v\n", r))
+		}
+	}()
+	go e.iterativeDeepeningRoot()
 }
 
 // Go starts the search routine and blocks until it finishes.
@@ -138,7 +165,7 @@ func (s *SearchInfo) guessNextPlyDuration() time.Duration {
 func (e *Engine) Go() {
 	if atomic.CompareAndSwapInt32(&e.running, 0, 1) {
 		e.ponder = false
-		go e.iterativeDeepeningRoot()
+		e.startNow()
 	}
 }
 
@@ -146,7 +173,7 @@ func (e *Engine) Go() {
 func (e *Engine) GoPonder() {
 	if atomic.CompareAndSwapInt32(&e.running, 0, 1) {
 		e.ponder = true
-		go e.iterativeDeepeningRoot()
+		e.startNow()
 	}
 }
 
@@ -171,9 +198,10 @@ func (e *Engine) stop() {
 		fmt.Printf("info score %d\n", best.Score)
 		fmt.Printf("info nodes %d\n", e.searchInfo.Nodes())
 		fmt.Printf("info time %d\n", e.searchInfo.Seconds())
-		fmt.Printf("info ebf %f\n", e.searchInfo.EBF())
+		b, err := e.searchInfo.EBF()
+		fmt.Printf("info ebf %f(err=%f)\n", b, err)
 		if pv, _, _ := e.table.PV(e.Pos()); len(pv) > 0 {
-			fmt.Printf("info pv %s", MoveString(pv))
+			fmt.Printf("info pv %s\n", MoveString(pv))
 		}
 		fmt.Printf("info curmovenumber %d\n", e.Pos().moveNum)
 	}
@@ -184,15 +212,7 @@ func (e *Engine) stop() {
 func (e *Engine) iterativeDeepeningRoot() {
 	e.stopping = 0
 	defer func() { e.stop() }()
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Printf("log SEARCH_ERROR recovered: %v\n", r)
-		}
-	}()
 
-	if e.ponder {
-		e.table.Clear()
-	}
 	e.searchInfo = newSearchInfo()
 	if !e.ponder {
 		if e.timeInfo == nil {
@@ -227,7 +247,8 @@ func (e *Engine) iterativeDeepeningRoot() {
 		if !e.ponder && d > e.minDepth && e.fixedDepth == 0 {
 			if next, rem := e.searchInfo.guessNextPlyDuration(), e.timeControl.GameTimeRemaining(e.timeInfo, p.side); rem <= next {
 				go e.Stop()
-				fmt.Printf("log stop deepening before ply=%d (ebf=%f, cost=%s, budget=%s)\n", d, e.searchInfo.EBF(), next, rem)
+				b, err := e.searchInfo.EBF()
+				fmt.Printf("log stop deepening before ply=%d (ebf=%f(err=%f), cost=%s, budget=%s)\n", d, b, err, next, rem)
 				break
 			}
 		}
@@ -238,7 +259,6 @@ func (e *Engine) iterativeDeepeningRoot() {
 		}
 	}
 	if !e.ponder {
-		e.table.Clear()
 		e.searchInfo.setBest(best)
 	}
 }
@@ -282,11 +302,12 @@ func (e *Engine) searchRoot(p *Pos, depth int) SearchResult {
 	if e.useTable {
 		for _, step := range best.Move {
 			entry := &TableEntry{
-				Bound: ExactBound,
-				ZHash: p.zhash,
-				Depth: depth,
-				Value: best.Score,
-				Step:  new(Step),
+				Bound:  ExactBound,
+				ZHash:  p.zhash,
+				Height: p.Height() + depth,
+				Value:  best.Score,
+				Step:   new(Step),
+				pv:     true,
 			}
 			*entry.Step = step
 			e.table.Store(entry)
@@ -389,10 +410,10 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 	// Step 4: Store transposition table entry.
 	if e.useTable {
 		entry := &TableEntry{
-			ZHash: p.zhash,
-			Depth: maxDepth,
-			Value: best,
-			Step:  bestStep,
+			ZHash:  p.zhash,
+			Height: p.Height() + depth,
+			Value:  best,
+			Step:   bestStep,
 		}
 		switch {
 		case best <= alphaOrig:

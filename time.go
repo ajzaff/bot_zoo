@@ -53,6 +53,18 @@ type TimeControl struct {
 	Turns int
 }
 
+// makeTimeControl creates a default blitz game time control equal to "30s/3/100/5/8".
+// See http://arimaa.com/arimaa/learn/matchRules.html for time control notation.
+func makeTimeControl() TimeControl {
+	return TimeControl{
+		Move:               60 * time.Second,
+		Reserve:            3 * time.Minute,
+		MoveReservePercent: 100,
+		MaxReserve:         5 * time.Minute,
+		GameTotal:          8 * time.Hour,
+	}
+}
+
 func (tc TimeControl) newTimeInfo() *TimeInfo {
 	now := time.Now()
 	return &TimeInfo{
