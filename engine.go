@@ -1,9 +1,5 @@
 package zoo
 
-import (
-	"math/rand"
-)
-
 const transposeTableSize = 2000000
 
 type Engine struct {
@@ -13,7 +9,6 @@ type Engine struct {
 	searchInfo *SearchInfo
 
 	p *Pos
-	r *rand.Rand
 
 	// depth != 0 implies fixed depth.
 	// Search won't stop unless a terminal score is achieved.
@@ -30,6 +25,9 @@ type Engine struct {
 
 	lastPonder bool
 
+	// concurrency setting of Lazy-SMP search in number of goroutines.
+	concurrency int
+
 	table    *Table
 	useTable bool
 
@@ -41,8 +39,8 @@ func NewEngine(seed int64) *Engine {
 	return &Engine{
 		timeControl: makeTimeControl(),
 		p:           NewEmptyPosition(),
-		r:           rand.New(rand.NewSource(seed)),
 		minDepth:    4,
+		concurrency: 4,
 		table:       NewTable(transposeTableSize),
 		useTable:    true,
 	}

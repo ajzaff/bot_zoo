@@ -33,7 +33,7 @@ type Table struct {
 	cap   int
 	list  *list.List
 	table map[int64]*list.Element
-	m     sync.Mutex
+	rw    sync.RWMutex
 }
 
 func NewTable(cap int) *Table {
@@ -50,13 +50,17 @@ func (t *Table) Clear() {
 }
 
 func (t *Table) ProbeDepth(key int64, depth int) (e *TableEntry, ok bool) {
-	if e, ok := t.table[key]; ok {
-		t.m.Lock()
-		defer t.m.Unlock()
-		t.list.MoveToBack(e)
-		if entry := e.Value.(*TableEntry); depth <= entry.Depth {
-			return entry, true
-		}
+	t.rw.RLock()
+	elem, ok := t.table[key]
+	t.rw.RUnlock()
+	if !ok {
+		return nil, false
+	}
+	t.rw.Lock()
+	defer t.rw.Unlock()
+	t.list.MoveToBack(elem)
+	if e := elem.Value.(*TableEntry); depth <= e.Depth {
+		return e, true
 	}
 	return nil, false
 }
@@ -95,8 +99,8 @@ func (t *Table) pop() {
 }
 
 func (t *Table) Store(e *TableEntry) {
-	t.m.Lock()
-	defer t.m.Unlock()
+	t.rw.Lock()
+	defer t.rw.Unlock()
 	if elem, ok := t.table[e.ZHash]; ok {
 		t.list.MoveToBack(elem)
 		if elem.Value.(*TableEntry).Depth < e.Depth {

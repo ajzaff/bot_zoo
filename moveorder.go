@@ -2,6 +2,7 @@ package zoo
 
 import (
 	"fmt"
+	"math/rand"
 	"sort"
 )
 
@@ -36,10 +37,12 @@ func (a byScore) Less(i, j int) bool { return a[i].score > a[j].score }
 // shuffleMoves is intended to be called before sortMoves to
 // provide varied results to sortMove amongst equal moves
 // which is useful in Lazy-SMP parallel searches.
-func (e *Engine) shuffleMoves(moves [][]Step) {
-	e.r.Shuffle(len(moves), func(i, j int) {
-		moves[i], moves[j] = moves[j], moves[i]
-	})
+func (e *Engine) shuffleMoves(r *rand.Rand, moves [][]Step) {
+	if n := len(moves); n > 0 {
+		r.Shuffle(n, func(i, j int) {
+			moves[i], moves[j] = moves[j], moves[i]
+		})
+	}
 }
 
 // sortMoves computes move scores and sorts them by length then

@@ -3,6 +3,7 @@ package zoo
 import (
 	"fmt"
 	"math"
+	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -210,17 +211,18 @@ func (e *Engine) stopInternal() {
 	if !e.ponder {
 		best := e.searchInfo.Best()
 		fmt.Printf("bestmove %s\n", MoveString(best.Move))
-		fmt.Printf("info score %d\n", best.Score)
-		fmt.Printf("info nodes %d\n", e.searchInfo.Nodes())
-		fmt.Printf("info time %d\n", e.searchInfo.Seconds())
-		b, err := e.searchInfo.EBF()
-		fmt.Printf("info ebf %f(err=%f)\n", b, err)
-		if pv, _, _ := e.table.PV(e.Pos()); len(pv) > 0 {
-			fmt.Printf("info pv %s\n", MoveString(pv))
-		}
-		fmt.Printf("info curmovenumber %d\n", e.Pos().moveNum)
 	}
 	e.searchInfo.done <- struct{}{}
+}
+
+const expWindowBase = 4
+
+func expWindow(i, x int) int {
+	v := 1
+	for i > 0 {
+		v *= expWindowBase
+	}
+	return x + v
 }
 
 func (e *Engine) iterativeDeepeningRoot() {
@@ -250,18 +252,9 @@ func (e *Engine) iterativeDeepeningRoot() {
 		return
 	}
 
-	var best SearchResult
-	for d := 1; e.stopping == 0 && atomic.LoadInt32(&e.running) == 1; d++ {
-		if best.Score >= terminalEval {
-			go e.Stop()
-			fmt.Printf("log stop search at ply=%d for terminal eval\n", d)
-			break
-		}
-		if e.fixedDepth > 0 && d > e.fixedDepth {
-			go e.Stop()
-			fmt.Printf("log stop fixed_depth search before ply=%d\n", d)
-			break
-		}
+	best := e.searchRoot(p, e.sortMoves(p, e.getRootMovesLen(p, 1)), -25, 25, 1)
+
+	for d := 2; e.stopping == 0 && atomic.LoadInt32(&e.running) == 1; d++ {
 		if !e.ponder && d > e.minDepth && e.fixedDepth == 0 {
 			if next, rem := e.searchInfo.guessNextPlyDuration(), e.timeControl.TurnTimeRemaining(e.timeInfo, p.side); rem <= next {
 				go e.Stop()
@@ -271,16 +264,57 @@ func (e *Engine) iterativeDeepeningRoot() {
 			}
 		}
 		e.searchInfo.newPly()
-		n := d
-		if n > 4 {
-			n = 4
+
+		var m sync.Mutex
+		var wg sync.WaitGroup
+		wg.Add(e.concurrency)
+		for i := 0; i < e.concurrency; i++ {
+			go func() {
+				r := rand.New(rand.NewSource(time.Now().UnixNano()))
+				newPos := p.Clone()
+				newDepth := d
+				n := d
+				if n > 4 {
+					n = 4
+				}
+				moves := e.getRootMovesLen(newPos, n)
+				e.shuffleMoves(r, moves)
+				sortedMoves := e.sortMoves(newPos, moves)
+				res := e.searchRoot(newPos, sortedMoves, -25, 25, newDepth)
+				m.Lock()
+				defer m.Unlock()
+				if res.Score > best.Score {
+					best = res
+				}
+				wg.Done()
+			}()
 		}
-		moves := e.getRootMovesLen(p, n)
-		e.shuffleMoves(moves)
-		sortedMoves := e.sortMoves(p, moves)
-		best = e.searchRoot(p, sortedMoves, d)
+		wg.Wait()
 		if !e.ponder {
 			e.searchInfo.setBest(best)
+		}
+
+		// Print search info for depth d:
+		if e.ponder {
+			fmt.Printf("log ponder\n")
+		}
+		fmt.Printf("log depth %d\n", d)
+		fmt.Printf("log score %d\n", best.Score)
+		fmt.Printf("log move %s\n", MoveString(best.Move))
+		if pv, _, _ := e.table.PV(p); len(pv) > 0 {
+			fmt.Printf("log pv %s\n", MoveString(pv))
+		}
+		fmt.Printf("log transpositions %d\n", e.table.Len())
+
+		if best.Score >= terminalEval || -best.Score >= terminalEval {
+			go e.Stop()
+			fmt.Printf("log stop search at depth=%d with terminal eval\n", d)
+			break
+		}
+		if e.fixedDepth > 0 && d > e.fixedDepth {
+			go e.Stop()
+			fmt.Printf("log stop fixed_depth search at depth=%d\n", d)
+			break
 		}
 	}
 	if !e.ponder {
@@ -288,7 +322,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 	}
 }
 
-func (e *Engine) searchRoot(p *Pos, scoredMoves []ScoredMove, depth int) SearchResult {
+func (e *Engine) searchRoot(p *Pos, scoredMoves []ScoredMove, alpha, beta, depth int) SearchResult {
 	best := SearchResult{Score: -inf}
 	for _, entry := range scoredMoves {
 		if e.stopping != 0 {
@@ -297,23 +331,16 @@ func (e *Engine) searchRoot(p *Pos, scoredMoves []ScoredMove, depth int) SearchR
 		if err := p.Move(entry.move); err != nil {
 			panic(fmt.Sprintf("search_move_root: %s: %v", entry.move, err))
 		}
-		score := -e.search(p, -inf, -best.Score, MoveLen(entry.move), depth)
+		score := -e.search(p, -beta, -alpha, MoveLen(entry.move), depth)
 		if err := p.Unmove(); err != nil {
 			panic(fmt.Sprintf("search_unmove_root: %s: %v", entry.move, err))
+		}
+		if score > alpha {
+			alpha = score
 		}
 		if score > best.Score {
 			best.Score = score
 			best.Move = entry.move
-			if e.ponder {
-				fmt.Printf("log ponder\n")
-			}
-			fmt.Printf("log depth %d\n", depth)
-			fmt.Printf("log score %d\n", score)
-			fmt.Printf("log move %s\n", MoveString(best.Move))
-			if pv, _, _ := e.table.PV(p); len(pv) > 0 {
-				fmt.Printf("log pv %s\n", MoveString(pv))
-			}
-			fmt.Printf("log transpositions %d\n", e.table.Len())
 		}
 	}
 
@@ -340,7 +367,6 @@ func (e *Engine) searchRoot(p *Pos, scoredMoves []ScoredMove, depth int) SearchR
 			}
 		}
 	}
-
 	return best
 }
 

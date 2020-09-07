@@ -3,6 +3,8 @@ package zoo
 import (
 	"fmt"
 	"log"
+	"math/rand"
+	"time"
 )
 
 const randomSetupAttempts = 100
@@ -14,10 +16,12 @@ func (e *Engine) RandomSetup() []Step {
 	p := e.Pos()
 	side := p.Side()
 
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
 	var best []Step
 	bestScore := -inf
 	for i := 0; i < randomSetupAttempts; i++ {
-		move := e.randomSetup()
+		move := e.randomSetup(r)
 		if err := p.Move(move); err != nil {
 			log.Println(fmt.Errorf("random_setup_move: %v", err))
 			panic(fmt.Errorf("random_setup_move: %v", err))
@@ -35,7 +39,7 @@ func (e *Engine) RandomSetup() []Step {
 	return best
 }
 
-func (e *Engine) randomSetup() []Step {
+func (e *Engine) randomSetup(r *rand.Rand) []Step {
 	p := e.Pos()
 	c := p.side
 	rank := 7
@@ -60,7 +64,7 @@ func (e *Engine) randomSetup() []Step {
 		GCamel.MakeColor(c),
 		GElephant.MakeColor(c),
 	}
-	e.r.Shuffle(len(ps), func(i, j int) {
+	r.Shuffle(len(ps), func(i, j int) {
 		ps[i], ps[j] = ps[j], ps[i]
 	})
 	var setup []Step
