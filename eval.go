@@ -102,6 +102,14 @@ var positionValue = [][]int{{}, { // Rabbit
 	-22, -13, -13, -13, -13, -13, -13, -22,
 }}
 
+func isInfinite(score int) bool {
+	return score >= inf || score <= -inf
+}
+
+func isTerminal(score int) bool {
+	return score >= terminalEval || score <= -terminalEval
+}
+
 func (p *Pos) mobilityScore(side Color) (score int) {
 	var count int
 	b := p.presence[side]

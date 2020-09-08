@@ -215,15 +215,17 @@ func (e *Engine) printSearchInfo() {
 	if e.ponder {
 		fmt.Printf("log ponder\n")
 	}
-	fmt.Printf("log depth %d\n", len(s.nodes))
-	fmt.Printf("log time %d\n", s.Seconds())
+	fmt.Printf("info depth %d\n", len(s.nodes))
+	fmt.Printf("info time %d\n", s.Seconds())
 	s.m.Lock()
-	fmt.Printf("log score %d\n", s.best.Score)
-	fmt.Printf("log move %s\n", MoveString(s.best.Move))
+	fmt.Printf("info score %d\n", s.best.Score)
+	fmt.Printf("info move %s\n", MoveString(s.best.Move))
 	s.m.Unlock()
 	if pv, _, _ := e.table.PV(e.p); len(pv) > 0 {
-		fmt.Printf("log pv %s\n", MoveString(pv))
+		fmt.Printf("info pv %s\n", MoveString(pv))
 	}
+	fmt.Printf("info nodes %d\n", s.nodes[len(s.nodes)-1])
+	fmt.Printf("log rate %d kN/s\n", int64(s.nodes[len(s.nodes)-1])/(1+1000*s.Seconds()))
 	fmt.Printf("log transpositions %d\n", e.table.Len())
 }
 
@@ -281,7 +283,8 @@ func (e *Engine) iterativeDeepeningRoot() {
 	best := e.searchRoot(p, scoredMoves, alpha, beta, 1)
 	e.printSearchInfo()
 
-	for d := 2; e.stopping == 0 && atomic.LoadInt32(&e.running) == 1 && d < 256; d++ {
+	// Main search loop.
+	for d := 2; d < 256; d++ {
 		if !e.ponder && d > e.minDepth && e.fixedDepth == 0 {
 			if next, rem := e.searchInfo.guessNextPlyDuration(), e.timeControl.TurnTimeRemaining(e.timeInfo, p.side); rem <= next {
 				go e.Stop()
@@ -318,7 +321,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 				moves := make([]ScoredMove, len(scoredMoves))
 				for i := range moves {
 					score := scoredMoves[i].score
-					if f := e.rootOrderNoise; f > 0 {
+					if f := e.rootOrderNoise; f > 0 && !isTerminal(score) {
 						score += int(f * r.NormFloat64())
 					}
 					moves[i].score = score
@@ -378,10 +381,14 @@ func (e *Engine) iterativeDeepeningRoot() {
 		wg.Wait()
 		e.searchInfo.setBest(best)
 
-		// Print search info for depth d:
+		if e.stopping == 1 || atomic.LoadInt32(&e.running) == 0 {
+			break
+		}
+
+		// Print search info for depth d.
 		e.printSearchInfo()
 
-		if best.Score >= terminalEval || -best.Score >= terminalEval {
+		if isTerminal(best.Score) {
 			go e.Stop()
 			fmt.Printf("log stop search at depth=%d with terminal eval\n", d)
 			break
