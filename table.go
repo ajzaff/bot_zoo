@@ -25,7 +25,6 @@ type TableEntry struct {
 	ZHash int64
 	Depth int
 	Value int
-	pv    bool
 	Step  *Step
 }
 
@@ -96,6 +95,10 @@ func (t *Table) Store(e *TableEntry) {
 		// TODO(ajzaff): I just experimented with using an always rewrite strategy
 		// which seemed to reduce the EBF somewhat. More testing is needed to determine
 		// the right strategy.
+		if step := elem.Value.(*TableEntry).Step; step != nil && e.Step == nil {
+			// Preserve any old steps for this position.
+			e.Step = step
+		}
 		elem.Value = e
 		return
 	}
@@ -115,7 +118,6 @@ func (t *Table) StoreMove(p *Pos, depth, score int, move []Step) {
 			Depth: depth,
 			Value: score,
 			Step:  new(Step),
-			pv:    true,
 		}
 		*entry.Step = step
 		t.Store(entry)
@@ -169,7 +171,8 @@ func (t *Table) PV(p *Pos) (pv []Step, score int, err error) {
 		}
 		pv = append(pv, *e.Step)
 		if err := p.Step(*e.Step); err != nil {
-			return nil, 0, err
+			// Ignore this error since we might not have stored a full step.
+			return pv, score, nil
 		}
 		defer func() {
 			if err := p.Unstep(); err != nil {
