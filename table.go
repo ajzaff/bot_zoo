@@ -144,10 +144,10 @@ func (t *Table) Best(p *Pos) (move []Step, score int, err error) {
 		if i == 0 {
 			score = e.Value
 		}
-		move = append(move, *e.Step)
 		if err := p.Step(*e.Step); err != nil {
-			return nil, 0, err
+			return move, score, err
 		}
+		move = append(move, *e.Step)
 		defer func() {
 			if err := p.Unstep(); err != nil {
 				panic(fmt.Errorf("best_unstep: %v", err))
@@ -169,11 +169,11 @@ func (t *Table) PV(p *Pos) (pv []Step, score int, err error) {
 		if i == 0 {
 			score = e.Value
 		}
-		pv = append(pv, *e.Step)
 		if err := p.Step(*e.Step); err != nil {
 			// Ignore this error since we might not have stored a full step.
 			return pv, score, nil
 		}
+		pv = append(pv, *e.Step)
 		defer func() {
 			if err := p.Unstep(); err != nil {
 				panic(fmt.Errorf("PV_unstep: %v", err))
