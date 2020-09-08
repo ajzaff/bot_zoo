@@ -467,10 +467,11 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 					beta = entry.Value
 				}
 			}
-			if alpha >= beta {
-				return entry.Value
-			}
 		}
+	}
+
+	if alpha >= beta {
+		return alpha // fail-hard cutoff
 	}
 
 	// Step 2: Is this a terminal node or depth==0?
@@ -503,7 +504,7 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 	sortSteps(scoredSteps)
 
 	// Step 3: Main search.
-	best := -inf
+	best := alpha
 	nodes := 0
 	for _, entry := range scoredSteps {
 		n := entry.step.Len()
