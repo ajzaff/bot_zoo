@@ -403,7 +403,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 }
 
 func (e *Engine) searchRoot(p *Pos, scoredMoves []ScoredMove, alpha, beta, depth int) SearchResult {
-	best := SearchResult{Score: -inf}
+	best := SearchResult{Score: alpha}
 	for _, entry := range scoredMoves {
 		if e.stopping != 0 {
 			break
