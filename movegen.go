@@ -196,12 +196,15 @@ func (p *Pos) Steps() []Step {
 	return steps
 }
 
-func (p *Pos) getRootMoves(prefix []Step, moves *[][]Step, stepsLeft int) {
+func (p *Pos) getRootMoves(set map[int64]bool, prefix []Step, moves *[][]Step, stepsLeft int) {
 	if stepsLeft == 0 {
 		if !prefix[len(prefix)-1].Pass {
 			prefix = append(prefix, Step{Pass: true})
 		}
-		*moves = append(*moves, prefix)
+		if !set[p.zhash] {
+			set[p.zhash] = true
+			*moves = append(*moves, prefix)
+		}
 		return
 	}
 	assert("movesLeft < 0", stepsLeft > 0)
@@ -212,14 +215,17 @@ func (p *Pos) getRootMoves(prefix []Step, moves *[][]Step, stepsLeft int) {
 		newPrefix := make([]Step, 1+len(prefix))
 		copy(newPrefix, prefix)
 		newPrefix[len(newPrefix)-1] = step
-		if step.Pass {
-			*moves = append(*moves, newPrefix)
-			continue
-		}
 		if err := p.Step(step); err != nil {
 			panic(err)
 		}
-		p.getRootMoves(newPrefix, moves, stepsLeft-step.Len())
+		if step.Pass {
+			if !set[p.zhash] {
+				set[p.zhash] = true
+				*moves = append(*moves, newPrefix)
+			}
+		} else {
+			p.getRootMoves(set, newPrefix, moves, stepsLeft-step.Len())
+		}
 		if err := p.Unstep(); err != nil {
 			panic(err)
 		}
@@ -234,8 +240,9 @@ func (e *Engine) getRootMovesLen(p *Pos, depth int) [][]Step {
 		panic("stepsLeft < depth")
 	}
 	var moves [][]Step
+	set := map[int64]bool{p.zhash: true}
 	for i := 1; i <= depth; i++ {
-		p.getRootMoves(nil, &moves, i)
+		p.getRootMoves(set, nil, &moves, i)
 	}
 	return moves
 }
