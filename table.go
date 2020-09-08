@@ -107,6 +107,29 @@ func (t *Table) Store(e *TableEntry) {
 	t.table.Store(e.ZHash, t.list.PushBack(e))
 }
 
+func (t *Table) StoreMove(p *Pos, depth, score int, move []Step) {
+	for _, step := range move {
+		entry := &TableEntry{
+			Bound: ExactBound,
+			ZHash: p.zhash,
+			Depth: depth,
+			Value: score,
+			Step:  new(Step),
+			pv:    true,
+		}
+		*entry.Step = step
+		t.Store(entry)
+		if err := p.Step(step); err != nil {
+			panic(fmt.Sprintf("store_step: %s: %s: %v", move, step, err))
+		}
+	}
+	for i := len(move) - 1; i >= 0; i-- {
+		if err := p.Unstep(); err != nil {
+			panic(fmt.Sprintf("store_step: %s: %s: %v", move, move[i], err))
+		}
+	}
+}
+
 // Best returns the best move by probing the table.
 // This is similar to PV but only returns steps for the current side.
 func (t *Table) Best(p *Pos) (move []Step, score int, err error) {

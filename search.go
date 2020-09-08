@@ -387,6 +387,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 			}
 		}
 		e.searchInfo.setBest(best)
+		e.table.StoreMove(p, depth, best.Score, best.Move)
 
 		if e.stopping == 1 || atomic.LoadInt32(&e.running) == 0 {
 			break
@@ -434,30 +435,7 @@ func (e *Engine) searchRoot(p *Pos, scoredMoves []ScoredMove, alpha, beta, depth
 			best.Move = entry.move
 		}
 	}
-
-	// Store transposition table entry steps.
-	if e.useTable {
-		for _, step := range best.Move {
-			entry := &TableEntry{
-				Bound: ExactBound,
-				ZHash: p.zhash,
-				Depth: depth,
-				Value: best.Score,
-				Step:  new(Step),
-				pv:    true,
-			}
-			*entry.Step = step
-			e.table.Store(entry)
-			if err := p.Step(step); err != nil {
-				panic(fmt.Sprintf("root_store_step: %s: %s: %v", best.Move, step, err))
-			}
-		}
-		for i := len(best.Move) - 1; i >= 0; i-- {
-			if err := p.Unstep(); err != nil {
-				panic(fmt.Sprintf("root_store_unstep: %s: %s: %v", best.Move, best.Move[i], err))
-			}
-		}
-	}
+	e.table.StoreMove(p, depth, best.Score, best.Move)
 	return best
 }
 
