@@ -272,9 +272,12 @@ func (e *Engine) iterativeDeepeningRoot() {
 		return
 	}
 
-	alpha, beta := -inf, +inf
-	scoredMoves := e.scoreMoves(p, e.getRootMovesLen(p, 1))
+	// Generate all root moves.
+	// These will be copied by each search goroutine.
+	scoredMoves := e.scoreMoves(p, e.getRootMovesLen(p, 4))
 	sortMoves(scoredMoves)
+
+	alpha, beta := -inf, +inf
 	best := e.searchRoot(p, scoredMoves, alpha, beta, 1)
 	e.printSearchInfo()
 
@@ -288,14 +291,6 @@ func (e *Engine) iterativeDeepeningRoot() {
 			}
 		}
 		e.searchInfo.newPly()
-
-		// Generate moves to be copied by each goroutine.
-		n := d
-		if n > 4 {
-			n = 4
-		}
-		scoredMoves := e.scoreMoves(p, e.getRootMovesLen(p, n))
-		sortMoves(scoredMoves)
 
 		// Aspiration window tracks the previous score for search.
 		// Whenever we fail high or low widen the window.
@@ -318,6 +313,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 			// Implementation of Lazy SMP which runs parallel searches over
 			// the same nodes.
 			go func() {
+				// Copy all moves for use in this goroutine and add rootOrderNoise if configured.
 				r := rand.New(rand.NewSource(time.Now().UnixNano()))
 				moves := make([]ScoredMove, len(scoredMoves))
 				for i := range moves {
@@ -405,10 +401,14 @@ func (e *Engine) searchRoot(p *Pos, scoredMoves []ScoredMove, alpha, beta, depth
 		if e.stopping != 0 {
 			break
 		}
+		n := MoveLen(entry.move)
+		if n > depth {
+			continue
+		}
 		if err := p.Move(entry.move); err != nil {
 			panic(fmt.Sprintf("search_move_root: %s: %v", entry.move, err))
 		}
-		score := -e.search(p, -beta, -alpha, MoveLen(entry.move), depth)
+		score := -e.search(p, -beta, -alpha, n, depth)
 		if err := p.Unmove(); err != nil {
 			panic(fmt.Sprintf("search_unmove_root: %s: %v", entry.move, err))
 		}
