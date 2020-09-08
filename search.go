@@ -210,6 +210,15 @@ func (e *Engine) Stop() {
 	}
 }
 
+func (s *SearchInfo) searchRateKNps() int64 {
+	ns := s.times[len(s.times)-1] - s.times[0]
+	if ns == 0 {
+		return 0
+	}
+	n := s.nodes[len(s.nodes)-1]
+	return int64(float64(n) / (float64(ns) / float64(time.Second)) / 1000)
+}
+
 func (e *Engine) printSearchInfo() {
 	s := e.searchInfo
 	if e.ponder {
@@ -225,7 +234,7 @@ func (e *Engine) printSearchInfo() {
 		fmt.Printf("info pv %s\n", MoveString(pv))
 	}
 	fmt.Printf("info nodes %d\n", s.nodes[len(s.nodes)-1])
-	fmt.Printf("log rate %d kN/s\n", int64(s.nodes[len(s.nodes)-1])/(1+1000*s.Seconds()))
+	fmt.Printf("log rate %d kN/s\n", s.searchRateKNps())
 	fmt.Printf("log transpositions %d\n", e.table.Len())
 }
 
@@ -274,22 +283,21 @@ func (e *Engine) iterativeDeepeningRoot() {
 		return
 	}
 
-	// Generate all root moves.
-	// These will be copied by each search goroutine.
-	scoredMoves := e.scoreMoves(p, e.getRootMovesLen(p, 4))
-	sortMoves(scoredMoves)
-
-	alpha, beta := -inf, +inf
-	best := e.searchRoot(p, scoredMoves, alpha, beta, 1)
+	// First ply searched on main goroutine.
+	rootSteps := e.scoreMoves(p, e.getRootMovesLen(p, 1))
+	sortMoves(rootSteps)
+	best := e.searchRoot(p, rootSteps, -inf, +inf, 1)
 	e.printSearchInfo()
 
+	const maxPly = 256
+
 	// Main search loop.
-	for d := 2; d < 256; d++ {
-		if !e.ponder && d > e.minDepth && e.fixedDepth == 0 {
+	for depth := 2; depth < maxPly; depth++ {
+		if !e.ponder && depth > e.minDepth && e.fixedDepth == 0 {
 			if next, rem := e.searchInfo.guessNextPlyDuration(), e.timeControl.TurnTimeRemaining(e.timeInfo, p.side); rem <= next {
 				go e.Stop()
 				b, err := e.searchInfo.EBF()
-				fmt.Printf("log stop deepening before ply=%d (ebf=%f(err=%f), cost=%s, budget=%s)\n", d, b, err, next, rem)
+				fmt.Printf("log stop deepening before ply=%d (ebf=%f(err=%f), cost=%s, budget=%s)\n", depth, b, err, next, rem)
 				break
 			}
 		}
@@ -301,50 +309,48 @@ func (e *Engine) iterativeDeepeningRoot() {
 			// Implementation of Lazy SMP which runs parallel searches over
 			// the same nodes.
 			go func() {
+				newPos := p.Clone()
+
 				// Copy all moves for use in this goroutine and add rootOrderNoise if configured.
 				r := rand.New(rand.NewSource(time.Now().UnixNano()))
-				moves := make([]ScoredMove, len(scoredMoves))
-				for i := range moves {
-					score := scoredMoves[i].score
-					if f := e.rootOrderNoise; f > 0 && !isTerminal(score) {
-						score += int(f * r.NormFloat64())
-					}
-					moves[i].score = score
-					moves[i].move = make([]Step, len(scoredMoves[i].move))
-					copy(moves[i].move, scoredMoves[i].move)
+				n := depth
+				if n > 4 {
+					n = 4
 				}
-				sortMoves(moves)
+				moves := e.getRootMovesLen(newPos, n)
+				// Shuffling moves increases variance in concurrent search.
+				r.Shuffle(len(moves), func(i, j int) {
+					moves[i], moves[j] = moves[j], moves[i]
+				})
+				scoredMoves := e.scoreMoves(newPos, moves)
 
 				// Aspiration window tracks the previous score for search.
 				// Whenever we fail high or low widen the window.
-				var delta int
-				if d >= 4 {
-					delta = initWindowDelta(best.Score)
-					alpha, beta = best.Score-delta, best.Score+delta
-					if alpha < -inf {
-						alpha = -inf
-					}
-					if beta > inf {
-						beta = inf
-					}
-				}
+
 				// Start with a small aspiration window and, in the case of a fail
 				// high/low, re-search with a bigger window until we don't fail
 				// high/low anymore.
+				delta := initWindowDelta(best.Score)
+				alpha, beta := best.Score-delta, best.Score+delta
+				if alpha < -inf {
+					alpha = -inf
+				}
+				if beta > inf {
+					beta = inf
+				}
 				failedHighCnt := 0
 
-				for e.stopping == 0 {
-					newPos := p.Clone()
-					adjustedDepth := d - failedHighCnt
-					if adjustedDepth < 1 {
-						adjustedDepth = 1
-					}
-					n := adjustedDepth
+				for e.stopping == 0 && !isTerminal(best.Score) {
+
+					// Rescore the PV move and sort stably.
+					e.rescorePVMoves(newPos, scoredMoves)
+					sortMoves(scoredMoves)
+
+					n := depth
 					if n > 4 {
 						n = 4
 					}
-					res := e.searchRoot(newPos, moves, alpha, beta, adjustedDepth)
-					if res.Score <= alpha {
+					if res := e.searchRoot(newPos, scoredMoves, alpha, beta, depth); res.Score <= alpha {
 						beta = (alpha + beta) / 2
 						alpha = res.Score - delta
 						if alpha < -inf {
@@ -360,9 +366,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 						failedHighCnt++
 						fmt.Printf("log failed_HIGH %d: retry with new aspiration window: [%d, %d] (delta=%d)\n", res.Score, alpha, beta, delta)
 					} else {
-						if res.Score > best.Score {
-							best = res
-						}
+						best = res
 						break
 					}
 
@@ -381,19 +385,19 @@ func (e *Engine) iterativeDeepeningRoot() {
 			break
 		}
 
-		// Print search info for depth d.
-		e.printSearchInfo()
-
 		if isTerminal(best.Score) {
 			go e.Stop()
-			fmt.Printf("log stop search at depth=%d with terminal eval\n", d)
+			fmt.Printf("log stop search at depth=%d with terminal eval\n", depth)
 			break
 		}
-		if e.fixedDepth > 0 && d >= e.fixedDepth {
+		if e.fixedDepth > 0 && depth >= e.fixedDepth {
 			go e.Stop()
-			fmt.Printf("log stop fixed_depth search at depth=%d\n", d)
+			fmt.Printf("log stop fixed_depth search at depth=%d\n", depth)
 			break
 		}
+
+		// Print search info for depth d.
+		e.printSearchInfo()
 	}
 	e.searchInfo.setBest(best)
 }

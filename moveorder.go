@@ -47,31 +47,13 @@ func sortMoves(a []ScoredMove) {
 	sort.Stable(byScore(a))
 }
 
-// sortMoves computes move scores and sorts them by length then
-// by score, stably. Call shuffleMoves beforehand to ranzomize the
-// output order among equal-valued moves.
+// sortMoves computes move scores based on naive eval.
+// call rescorePVMoves to update the score after finding a PV.
 func (e *Engine) scoreMoves(p *Pos, moves [][]Step) []ScoredMove {
 	a := make([]ScoredMove, 0, len(moves))
 
-	// 1: Check the table to get the best move if any.
-	var best []Step
-	if e.useTable {
-		if v, _, _ := e.table.Best(p); len(v) > 0 {
-			best = v
-		}
-	}
-
 	// 2: Range over all moves.
 	for _, move := range moves {
-
-		// 2a: Update the best move from the table to +inf.
-		if e.useTable && MoveEqual(move, best) {
-			a = append(a, ScoredMove{
-				score: +inf,
-				move:  move,
-			})
-			continue
-		}
 
 		// 2a. Try the move.
 		// In the unlikely case it's illegal give a score of -inf.
@@ -95,6 +77,35 @@ func (e *Engine) scoreMoves(p *Pos, moves [][]Step) []ScoredMove {
 		}
 	}
 	return a
+}
+
+// rescorePVMoves updates the scored moves for the PV
+// to +inf and sets everything else to -inf.
+func (e *Engine) rescorePVMoves(p *Pos, scoredMoves []ScoredMove) {
+
+	// 1: Check the table to get the PV move if any.
+	if !e.useTable {
+		return
+	}
+	var best []Step
+	v, _, _ := e.table.Best(p)
+	if len(v) == 0 {
+		return
+	}
+	best = v
+
+	// 2: Range over all moves.
+	for i := range scoredMoves {
+		scoredMove := scoredMoves[i]
+
+		// 2a: Update the best move from the table to +inf.
+		if MoveEqual(scoredMove.move, best) {
+			scoredMoves[i].score = +inf
+			continue
+		}
+
+		scoredMoves[i].score = -inf
+	}
 }
 
 // perturbMoves adds noise to the scoredMoves in [-f, +f].
