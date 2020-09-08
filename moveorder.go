@@ -38,7 +38,7 @@ func (a byScore) Less(i, j int) bool { return a[i].score > a[j].score }
 // Intended to be used for parallel Lazy-SMP search.
 func (e *Engine) perturbMoves(r *rand.Rand, f float64, scoredMoves []ScoredMove) {
 	for i := range scoredMoves {
-		scoredMoves[i].score += int(2*f*r.Float64() - f)
+		scoredMoves[i].score += int(f * r.NormFloat64())
 	}
 }
 
@@ -112,7 +112,7 @@ func (e *Engine) rescorePVMoves(p *Pos, scoredMoves []ScoredMove) {
 // Intended to be used for parallel Lazy-SMP search.
 func (e *Engine) perturbSteps(r *rand.Rand, f float64, scoredSteps []ScoredStep) {
 	for i := range scoredSteps {
-		scoredSteps[i].score += int(2*f*r.Float64() - f)
+		scoredSteps[i].score += int(f * r.NormFloat64())
 	}
 }
 

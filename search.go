@@ -104,7 +104,7 @@ func (s *SearchInfo) ebf(d int, N float64) (b float64, err float64) {
 		small = 1e-4
 	)
 	var n = 0.
-	for lo, hi := 1., 10.; hi-lo > small; {
+	for lo, hi := 1., 20.; hi-lo > small; {
 		mid := (hi-lo)/2 + lo
 		b = mid
 		n = computebfNd(d, b)
@@ -303,6 +303,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 		}
 		e.searchInfo.newPly()
 
+		bestChan := make(chan SearchResult)
 		var wg sync.WaitGroup
 		wg.Add(e.concurrency)
 		for i := 0; i < e.concurrency; i++ {
@@ -310,6 +311,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 			// the same nodes.
 			go func() {
 				newPos := p.Clone()
+				best := e.searchInfo.Best()
 
 				// Copy all moves for use in this goroutine and add rootOrderNoise if configured.
 				r := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -323,6 +325,9 @@ func (e *Engine) iterativeDeepeningRoot() {
 					moves[i], moves[j] = moves[j], moves[i]
 				})
 				scoredMoves := e.scoreMoves(newPos, moves)
+				if e.rootOrderNoise > 0 {
+					e.perturbMoves(r, e.rootOrderNoise, scoredMoves)
+				}
 
 				// Aspiration window tracks the previous score for search.
 				// Whenever we fail high or low widen the window.
@@ -338,32 +343,25 @@ func (e *Engine) iterativeDeepeningRoot() {
 				if beta > inf {
 					beta = inf
 				}
-				failedHighCnt := 0
 
-				for e.stopping == 0 && !isTerminal(best.Score) {
+				for e.stopping == 0 {
 
 					// Rescore the PV move and sort stably.
 					e.rescorePVMoves(newPos, scoredMoves)
 					sortMoves(scoredMoves)
 
-					n := depth
-					if n > 4 {
-						n = 4
-					}
 					if res := e.searchRoot(newPos, scoredMoves, alpha, beta, depth); res.Score <= alpha {
 						beta = (alpha + beta) / 2
 						alpha = res.Score - delta
 						if alpha < -inf {
 							alpha = -inf
 						}
-						failedHighCnt = 0
 						fmt.Printf("log failed_LOW %d: retry with new aspiration window: [%d, %d] (delta=%d)\n", res.Score, alpha, beta, delta)
 					} else if res.Score >= beta {
 						beta = res.Score + delta
 						if beta > inf {
 							beta = inf
 						}
-						failedHighCnt++
 						fmt.Printf("log failed_HIGH %d: retry with new aspiration window: [%d, %d] (delta=%d)\n", res.Score, alpha, beta, delta)
 					} else {
 						best = res
@@ -375,10 +373,19 @@ func (e *Engine) iterativeDeepeningRoot() {
 
 					assert("!(alpha >= -inf && beta <= inf)", alpha >= -inf && beta <= inf)
 				}
+				bestChan <- best
 				wg.Done()
 			}()
 		}
-		wg.Wait()
+		go func() {
+			wg.Wait()
+			close(bestChan)
+		}()
+		for b := range bestChan {
+			if b.Score > best.Score {
+				best = b
+			}
+		}
 		e.searchInfo.setBest(best)
 
 		if e.stopping == 1 || atomic.LoadInt32(&e.running) == 0 {
