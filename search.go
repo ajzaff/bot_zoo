@@ -294,7 +294,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 	// Main search loop.
 	for depth := 2; depth < maxPly; depth++ {
 		if !e.ponder && depth > e.minDepth && e.fixedDepth == 0 {
-			if next, rem := e.searchInfo.guessNextPlyDuration(), e.timeControl.TurnTimeRemaining(e.timeInfo, p.side); rem <= next {
+			if next, rem := e.searchInfo.guessNextPlyDuration(), e.timeControl.FixedOptimalTimeRemaining(e.timeInfo, p.side); rem <= next {
 				go e.Stop()
 				b, err := e.searchInfo.EBF()
 				fmt.Printf("log stop deepening before ply=%d (ebf=%f(err=%f), cost=%s, budget=%s)\n", depth, b, err, next, rem)

@@ -134,3 +134,22 @@ func (tc TimeControl) TurnTimeRemaining(t *TimeInfo, c Color) time.Duration {
 	now := time.Now()
 	return tc.turnTimeRemaining(t, c, now)
 }
+
+// FixedOptimalTimeRemaining tries to take a middle ground between game time
+// and turn time with a reasonable fixed maximum move time.
+func (tc TimeControl) FixedOptimalTimeRemaining(t *TimeInfo, c Color) time.Duration {
+	now := time.Now()
+	turn := tc.turnTimeRemaining(t, c, now)
+	if turn < 0 {
+		return turn
+	}
+	game := tc.gameTimeRemaining(t, c, now)
+	if game < 30*time.Second {
+		return game
+	}
+	game /= 3
+	if game > 120*time.Second {
+		return 120 * time.Second
+	}
+	return game
+}
