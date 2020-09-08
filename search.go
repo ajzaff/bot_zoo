@@ -250,9 +250,6 @@ func (e *Engine) iterativeDeepeningRoot() {
 	e.stopping = 0
 	defer func() { e.stopInternal() }()
 
-	if !e.lastPonder {
-		e.table.Clear()
-	}
 	e.lastPonder = e.ponder
 	e.searchInfo = newSearchInfo()
 	if !e.ponder {
