@@ -250,6 +250,9 @@ func (e *Engine) iterativeDeepeningRoot() {
 	e.stopping = 0
 	defer func() { e.stopInternal() }()
 
+	if !e.lastPonder {
+		e.table.Clear()
+	}
 	e.lastPonder = e.ponder
 	e.searchInfo = newSearchInfo()
 	if !e.ponder {
@@ -292,21 +295,6 @@ func (e *Engine) iterativeDeepeningRoot() {
 		}
 		e.searchInfo.newPly()
 
-		// Aspiration window tracks the previous score for search.
-		// Whenever we fail high or low widen the window.
-		var delta int
-		if d >= 4 {
-			delta = initWindowDelta(best.Score)
-			alpha, beta = best.Score-delta, best.Score+delta
-			if alpha < -inf {
-				alpha = -inf
-			}
-			if beta > inf {
-				beta = inf
-			}
-		}
-
-		var m sync.Mutex
 		var wg sync.WaitGroup
 		wg.Add(e.concurrency)
 		for i := 0; i < e.concurrency; i++ {
@@ -326,10 +314,25 @@ func (e *Engine) iterativeDeepeningRoot() {
 					copy(moves[i].move, scoredMoves[i].move)
 				}
 				sortMoves(moves)
+
+				// Aspiration window tracks the previous score for search.
+				// Whenever we fail high or low widen the window.
+				var delta int
+				if d >= 4 {
+					delta = initWindowDelta(best.Score)
+					alpha, beta = best.Score-delta, best.Score+delta
+					if alpha < -inf {
+						alpha = -inf
+					}
+					if beta > inf {
+						beta = inf
+					}
+				}
 				// Start with a small aspiration window and, in the case of a fail
 				// high/low, re-search with a bigger window until we don't fail
 				// high/low anymore.
 				failedHighCnt := 0
+
 				for e.stopping == 0 {
 					newPos := p.Clone()
 					adjustedDepth := d - failedHighCnt
@@ -340,33 +343,29 @@ func (e *Engine) iterativeDeepeningRoot() {
 					if n > 4 {
 						n = 4
 					}
-					if res := e.searchRoot(newPos, moves, alpha, beta, adjustedDepth); res.Score <= alpha {
-						m.Lock()
+					res := e.searchRoot(newPos, moves, alpha, beta, adjustedDepth)
+					if res.Score <= alpha {
 						beta = (alpha + beta) / 2
 						alpha = res.Score - delta
 						if alpha < -inf {
 							alpha = -inf
 						}
-						m.Unlock()
 						failedHighCnt = 0
 						fmt.Printf("log failed_LOW %d: retry with new aspiration window: [%d, %d] (delta=%d)\n", res.Score, alpha, beta, delta)
 					} else if res.Score >= beta {
-						m.Lock()
 						beta = res.Score + delta
 						if beta > inf {
 							beta = inf
 						}
-						m.Unlock()
 						failedHighCnt++
 						fmt.Printf("log failed_HIGH %d: retry with new aspiration window: [%d, %d] (delta=%d)\n", res.Score, alpha, beta, delta)
 					} else {
-						m.Lock()
 						if res.Score > best.Score {
 							best = res
 						}
-						m.Unlock()
 						break
 					}
+
 					// Update aspiration window delta
 					delta += delta/4 + 5
 

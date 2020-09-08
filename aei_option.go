@@ -84,7 +84,7 @@ func (a *AEI) handleOption(text string) error {
 		}
 		n := 1e6 * v / EntrySize
 		a.Logf("setting hash table size to %d entries (%d MiB)", n, v)
-		a.engine.table = NewTable(n)
+		a.engine.table.SetCap(n)
 	case "depth":
 		v, err := strconv.Atoi(value)
 		if err != nil {
