@@ -232,7 +232,7 @@ func (e *Engine) printSearchInfo(best searchResult) {
 	if e.ponder {
 		fmt.Printf("log ponder\n")
 	}
-	fmt.Printf("info depth %d\n", best.Depth)
+	fmt.Printf("info depth %d\n", s.Depth())
 	fmt.Printf("info time %d\n", s.Seconds())
 	s.m.Lock()
 	fmt.Printf("info score %d\n", best.Score)
@@ -432,7 +432,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 				break
 			}
 			if !e.ponder {
-				if rem < next {
+				if e.fixedDepth == 0 && rem < next {
 					// Time will soon be up! Stop the search.
 					b, errv := e.searchInfo.ebf()
 					fmt.Printf("log stop search now (b=%f{err=%f} cost=%s, budget=%s)\n", b, errv, next, rem)
