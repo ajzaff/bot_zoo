@@ -424,15 +424,15 @@ func (e *Engine) iterativeDeepeningRoot() {
 				}
 			}
 		case <-time.After(time.Second):
-			if e.fixedDepth == 0 {
+			if e.fixedDepth == 0 && !e.ponder {
 				if rem < 3*time.Second {
-					fmt.Println("log stop search now tro avoid timeout")
+					fmt.Println("log stop search now to avoid timeout")
 					if sr, ok := e.Stop(); ok {
 						best = sr
 					}
 					break
 				}
-				if !e.ponder && rem < next {
+				if rem < next {
 					// Time will soon be up! Stop the search.
 					b, errv := e.searchInfo.ebf()
 					fmt.Printf("log stop search now (b=%f{err=%f} cost=%s, budget=%s)\n", b, errv, next, rem)
