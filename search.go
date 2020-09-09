@@ -445,6 +445,9 @@ func (e *Engine) iterativeDeepeningRoot() {
 
 		if e.fixedDepth > 0 && e.searchInfo.Depth() >= e.fixedDepth {
 			fmt.Printf("log stop search after fixed depth\n")
+			if sr, ok := e.Stop(); ok {
+				best = sr
+			}
 			break
 		}
 	}
