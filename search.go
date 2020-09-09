@@ -36,23 +36,31 @@ func newSearchInfo() *SearchInfo {
 	return s
 }
 
-func (s *SearchInfo) Depth() int {
-	s.m.Lock()
-	defer s.m.Unlock()
+// locks excluded: s.m
+func (s *SearchInfo) depth() int {
 	return len(s.nodes)
 }
 
-func (s *SearchInfo) addNodes(depth, n int) {
+func (s *SearchInfo) Depth() int {
+	s.m.Lock()
+	defer s.m.Unlock()
+	return s.depth()
+}
+
+func (s *SearchInfo) addNodes(depth, v int) {
 	s.m.Lock()
 	defer s.m.Unlock()
 	if depth > 0 {
-		if len(s.nodes) <= depth {
+		if n := len(s.nodes); n <= depth {
 			// Start recording the next ply.
 			s.times = append(s.times, time.Now().UnixNano())
-			s.nodes = append(s.nodes, n)
+			if n > 0 {
+				v += s.nodes[n-1]
+			}
+			s.nodes = append(s.nodes, v)
 			return
 		}
-		s.nodes[depth] += n
+		s.nodes[depth] += v
 	}
 }
 
@@ -108,7 +116,7 @@ func (s *SearchInfo) ebfInternal(d int, N float64) (b float64, err float64) {
 // This helps compute the time required to search to depth d.
 // locks excluded: s.m.
 func (s *SearchInfo) ebf() (b float64, err float64) {
-	d := len(s.nodes) - 1
+	d := s.depth() - 1
 	if d < 4 {
 		// Avoid EBF instability in small values.
 		return 1, 0
@@ -116,11 +124,12 @@ func (s *SearchInfo) ebf() (b float64, err float64) {
 	return s.ebfInternal(d, float64(s.nodes[d]))
 }
 
-func (s *SearchInfo) GuessPlyDuration(depth int) time.Duration {
+// GuessPlyDuration guesses the duration of the next ply of search.
+func (s *SearchInfo) GuessPlyDuration() time.Duration {
 	s.m.Lock()
 	defer s.m.Unlock()
 
-	d := len(s.times) - 1
+	d := s.depth() - 1
 	if d < 4 {
 		// These searches are basically free.
 		return 0
@@ -133,7 +142,7 @@ func (s *SearchInfo) GuessPlyDuration(depth int) time.Duration {
 	b, _ := s.ebf()
 	lastDuration := float64(time.Now().UnixNano() - s.times[d])
 	lastNodes := float64(s.nodes[d])
-	nextNodes := lastNodes + math.Pow(b, float64(1+depth))
+	nextNodes := lastNodes + math.Pow(b, float64(1+d))
 	v := lastDuration / lastNodes * nextNodes
 	if v > math.MaxInt64 {
 		return math.MaxInt64
@@ -187,14 +196,26 @@ func (e *Engine) GoInfinite() {
 	e.GoPonder()
 }
 
-// Stop stops the search immediately and blocks until stopped.
-func (e *Engine) Stop() {
+// Stop stops the search immediately and collects the final search results
+// and blocks until all goroutines have stoped.
+func (e *Engine) Stop() (best searchResult, ok bool) {
 	if e.running == 1 && atomic.LoadInt32(&e.stopping) == 0 {
+		best.Depth = 1
+		ok = true
 		e.stopping = 1
-		e.wg.Wait()
+		for i := 0; i < e.concurrency; i++ {
+			b := <-e.done
+			if b.Depth > best.Depth {
+				// Select the deepest result.
+				// TODO(ajzaff): This is not actually verifying the node depth.
+				// Ideally we should move searchInfo to the goroutines to get these counts.
+				best = b
+			}
+		}
 		e.stopping = 0
 		atomic.SwapInt32(&e.running, 0)
 	}
+	return best, ok
 }
 
 func (s *SearchInfo) searchRateKNps() int64 {
@@ -277,10 +298,15 @@ func (e *Engine) iterativeDeepeningRoot() {
 	// Implementation of Lazy SMP which runs parallel searches
 	// with slightly varied root node orderings. This leads to
 	// arriving at a given (deeper) position faster on average.
-	e.wg.Add(e.concurrency)
 	for i := 0; i < e.concurrency; i++ {
 		go func(rootScore int) {
-			defer e.wg.Done()
+			defer func() {
+				// Send the best move from the last (possibly partially cancelled) search.
+				// TODO(ajzaff): In principle these searches may not be totally finished.
+				// In practice, these move are often better than the last finished ply.
+				// Find out if there's a better solution.
+				e.done <- best
+			}()
 
 			newPos := p.Clone()
 
@@ -377,7 +403,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 					break
 				}
 
-				// Send the best move for this ply.
+				// Send best move from (possibly cancelled) last ply to the done chan.
 				resultChan <- best
 			}
 		}(best.Score)
@@ -385,7 +411,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 
 	// Collect search results and manage timeout.
 	for e.running == 1 {
-		next, rem := e.searchInfo.GuessPlyDuration(1+e.searchInfo.Depth()), e.timeControl.FixedOptimalTimeRemaining(e.timeInfo, p.side)
+		next, rem := e.searchInfo.GuessPlyDuration(), e.timeControl.FixedOptimalTimeRemaining(e.timeInfo, p.side)
 		select {
 		case b := <-resultChan:
 			if b.Depth > best.Depth || (b.Depth == best.Depth && b.Score > best.Score) {
@@ -398,20 +424,20 @@ func (e *Engine) iterativeDeepeningRoot() {
 				}
 			}
 		case <-time.After(time.Second):
+			if rem < 3*time.Second {
+				fmt.Println("log stop search now tro avoid timeout")
+				if sr, ok := e.Stop(); ok {
+					best = sr
+				}
+				break
+			}
 			if !e.ponder {
-				if e.fixedDepth > 0 {
-					if rem < 3*time.Second {
-						fmt.Println("log stop search now tro avoid timeout")
-						e.Stop()
-						break
-					}
-					select {
-					case <-time.After(rem - next):
-						// Time will soon be up! Stop the search.
-						b, errv := e.searchInfo.ebf()
-						fmt.Printf("log stop search now (b=%f{err=%f} cost=%s, budget=%s)\n", b, errv, next, rem)
-						e.Stop()
-					default:
+				if rem < next {
+					// Time will soon be up! Stop the search.
+					b, errv := e.searchInfo.ebf()
+					fmt.Printf("log stop search now (b=%f{err=%f} cost=%s, budget=%s)\n", b, errv, next, rem)
+					if sr, ok := e.Stop(); ok {
+						best = sr
 					}
 				}
 			}

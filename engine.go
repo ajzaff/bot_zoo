@@ -1,7 +1,5 @@
 package zoo
 
-import "sync"
-
 const transposeTableSize = 2000000
 
 type Engine struct {
@@ -38,7 +36,7 @@ type Engine struct {
 
 	// concurrency setting of Lazy-SMP search in number of goroutines.
 	concurrency int
-	wg          sync.WaitGroup
+	done        chan searchResult
 
 	table    *Table
 	useTable bool
@@ -54,6 +52,7 @@ func NewEngine(seed int64) *Engine {
 		p:              NewEmptyPosition(),
 		minDepth:       4,
 		concurrency:    4,
+		done:           make(chan searchResult),
 		rootOrderNoise: 200,
 		nullMoveR:      4,
 		table:          NewTable(transposeTableSize),
