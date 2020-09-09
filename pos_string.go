@@ -83,7 +83,7 @@ func (p *Pos) String() string {
 		for j := 0; j < 8; j++ {
 			atB := Bitboard(1) << (8*i + j)
 			var piece Piece
-			for t := Empty; t < GElephant; t++ {
+			for t := Empty; t <= SElephant; t++ {
 				if p.bitboards[t]&atB != 0 {
 					piece = t
 					break

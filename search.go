@@ -9,12 +9,9 @@ import (
 	"time"
 )
 
-const inf = 1000000
+const maxPly = 1024
 
-type SearchResult struct {
-	Score int
-	Move  []Step
-}
+const inf = 1000000
 
 type SearchInfo struct {
 	// cumulative nodes at the given ply
@@ -25,53 +22,38 @@ type SearchInfo struct {
 	// Used to determine remaining time to search.
 	times []int64
 
-	done chan struct{}
-
 	// best move
 	// time (unix nanoseconds) when best was last set.
 	// Corresponds to end of search.
-	bestTime int64        // guarded by m
-	best     SearchResult // guarded by m
+	bestTime int64 // guarded by m
 
 	m sync.Mutex
 }
 
 func newSearchInfo() *SearchInfo {
-	s := &SearchInfo{
-		done: make(chan struct{}),
-	}
-	s.newPly()
+	s := &SearchInfo{}
+	s.addNodes(1, 0)
 	return s
 }
 
-// Best returns the current best move.
-func (s *SearchInfo) Best() SearchResult {
+func (s *SearchInfo) Depth() int {
 	s.m.Lock()
 	defer s.m.Unlock()
-	return s.best
+	return len(s.nodes)
 }
 
-// setBest sets the current best move.
-func (s *SearchInfo) setBest(best SearchResult) {
+func (s *SearchInfo) addNodes(depth, n int) {
 	s.m.Lock()
 	defer s.m.Unlock()
-	s.best = best
-	s.bestTime = time.Now().UnixNano()
-}
-
-func (s *SearchInfo) newPly() {
-	n := 0
-	if len(s.nodes) > 0 {
-		n = s.nodes[len(s.nodes)-1]
+	if depth > 0 {
+		if len(s.nodes) <= depth {
+			// Start recording the next ply.
+			s.times = append(s.times, time.Now().UnixNano())
+			s.nodes = append(s.nodes, n)
+			return
+		}
+		s.nodes[depth] += n
 	}
-	s.nodes = append(s.nodes, n)
-	s.times = append(s.times, time.Now().UnixNano())
-}
-
-func (s *SearchInfo) addNodes(n int) {
-	s.m.Lock()
-	defer s.m.Unlock()
-	s.nodes[len(s.nodes)-1] += n
 }
 
 // Nodes returns the number of nodes searched in all ply.
@@ -98,7 +80,8 @@ func computebfNd(d int, b float64) float64 {
 	return n
 }
 
-func (s *SearchInfo) ebf(d int, N float64) (b float64, err float64) {
+// locks excluded: s.m.
+func (s *SearchInfo) ebfInternal(d int, N float64) (b float64, err float64) {
 	const (
 		tol   = 1000.
 		small = 1e-4
@@ -123,20 +106,23 @@ func (s *SearchInfo) ebf(d int, N float64) (b float64, err float64) {
 
 // EBF experimentally computes the effective branching factor using per-ply node count.
 // This helps compute the time required to search to depth d.
-func (s *SearchInfo) EBF() (b float64, err float64) {
+// locks excluded: s.m.
+func (s *SearchInfo) ebf() (b float64, err float64) {
 	d := len(s.nodes) - 1
 	if d < 4 {
 		// Avoid EBF instability in small values.
 		return 1, 0
 	}
-	return s.ebf(d, float64(s.nodes[d]))
+	return s.ebfInternal(d, float64(s.nodes[d]))
 }
 
-func (s *SearchInfo) guessNextPlyDuration() time.Duration {
+func (s *SearchInfo) GuessPlyDuration(depth int) time.Duration {
+	s.m.Lock()
+	defer s.m.Unlock()
+
 	d := len(s.times) - 1
 	if d < 4 {
 		// These searches are basically free.
-		// We use len < 5 (instead of < 3) to avoid EBF instability in these small values.
 		return 0
 	}
 	// Compute the ratio of the amount of time spent and nodes and solve for X.
@@ -144,10 +130,10 @@ func (s *SearchInfo) guessNextPlyDuration() time.Duration {
 	// ----------  =  --------
 	// Nodes[d-1]     Nodes[d]
 
-	b, _ := s.EBF()
+	b, _ := s.ebf()
 	lastDuration := float64(time.Now().UnixNano() - s.times[d])
 	lastNodes := float64(s.nodes[d])
-	nextNodes := lastNodes + math.Pow(b, float64(1+d))
+	nextNodes := lastNodes + math.Pow(b, float64(1+depth))
 	v := lastDuration / lastNodes * nextNodes
 	if v > math.MaxInt64 {
 		return math.MaxInt64
@@ -203,9 +189,10 @@ func (e *Engine) GoInfinite() {
 
 // Stop stops the search immediately and blocks until stopped.
 func (e *Engine) Stop() {
-	if atomic.LoadInt32(&e.running) == 1 {
+	if e.running == 1 && atomic.LoadInt32(&e.stopping) == 0 {
 		e.stopping = 1
-		<-e.searchInfo.done
+		e.wg.Wait()
+		e.stopping = 0
 		atomic.SwapInt32(&e.running, 0)
 	}
 }
@@ -219,16 +206,15 @@ func (s *SearchInfo) searchRateKNps() int64 {
 	return int64(float64(n) / (float64(ns) / float64(time.Second)) / 1000)
 }
 
-func (e *Engine) printSearchInfo() {
+func (e *Engine) printSearchInfo(best searchResult) {
 	s := e.searchInfo
 	if e.ponder {
 		fmt.Printf("log ponder\n")
 	}
-	fmt.Printf("info depth %d\n", len(s.nodes))
+	fmt.Printf("info depth %d\n", best.Depth)
 	fmt.Printf("info time %d\n", s.Seconds())
 	s.m.Lock()
-	fmt.Printf("info score %d\n", s.best.Score)
-	fmt.Printf("info move %s\n", MoveString(s.best.Move))
+	fmt.Printf("info score %d\n", best.Score)
 	s.m.Unlock()
 	if pv, _, _ := e.table.PV(e.p); len(pv) > 0 {
 		fmt.Printf("info pv %s\n", MoveString(pv))
@@ -236,15 +222,6 @@ func (e *Engine) printSearchInfo() {
 	fmt.Printf("info nodes %d\n", s.nodes[len(s.nodes)-1])
 	fmt.Printf("log rate %d kN/s\n", s.searchRateKNps())
 	fmt.Printf("log transpositions %d\n", e.table.Len())
-}
-
-func (e *Engine) stopInternal() {
-	e.printSearchInfo()
-	if !e.ponder {
-		best := e.searchInfo.Best()
-		fmt.Printf("bestmove %s\n", MoveString(best.Move))
-	}
-	e.searchInfo.done <- struct{}{}
 }
 
 func initWindowDelta(x int) int {
@@ -255,10 +232,13 @@ func initWindowDelta(x int) int {
 	return 21 + v/256
 }
 
-func (e *Engine) iterativeDeepeningRoot() {
-	e.stopping = 0
-	defer func() { e.stopInternal() }()
+type searchResult struct {
+	Depth int
+	Score int
+	Move  []Step
+}
 
+func (e *Engine) iterativeDeepeningRoot() {
 	if !e.lastPonder {
 		e.table.Clear()
 	}
@@ -276,44 +256,51 @@ func (e *Engine) iterativeDeepeningRoot() {
 	if p.moveNum == 1 {
 		// TODO(ajzaff): Find best setup moves using a specialized search.
 		// For now, choose a random setup.
-		e.searchInfo.setBest(SearchResult{
-			Move: e.RandomSetup(),
-		})
-		go e.Stop()
+		best := searchResult{
+			Move:  e.RandomSetup(),
+			Depth: 1,
+		}
+		e.printSearchInfo(best)
+		if !e.ponder {
+			fmt.Printf("bestmove %s\n", MoveString(best.Move))
+		}
 		return
 	}
 
 	// First ply searched on main goroutine.
 	rootSteps := e.scoreMoves(p, e.getRootMovesLen(p, 1))
 	sortMoves(rootSteps)
-	best := e.searchRoot(p, rootSteps, -inf, +inf, 1)
-	e.printSearchInfo()
 
-	const maxPly = 256
+	var best searchResult
+	best = e.searchRoot(p, rootSteps, -inf, +inf, 1)
+	resultChan := make(chan searchResult)
 
-	// Main search loop.
-	for depth := 2; depth < maxPly; depth++ {
-		if !e.ponder && depth > e.minDepth && e.fixedDepth == 0 {
-			if next, rem := e.searchInfo.guessNextPlyDuration(), e.timeControl.FixedOptimalTimeRemaining(e.timeInfo, p.side); rem <= next {
-				go e.Stop()
-				b, err := e.searchInfo.EBF()
-				fmt.Printf("log stop deepening before ply=%d (ebf=%f(err=%f), cost=%s, budget=%s)\n", depth, b, err, next, rem)
-				break
+	// Implementation of Lazy SMP which runs parallel searches
+	// with slightly varied root node orderings. This leads to
+	// arriving at a given (deeper) position faster on average.
+	e.wg.Add(e.concurrency)
+	for i := 0; i < e.concurrency; i++ {
+		go func(rootScore int) {
+			defer e.wg.Done()
+
+			newPos := p.Clone()
+
+			// Initialize aspiration window alpha, beta.
+			delta := initWindowDelta(best.Score)
+			alpha, beta := rootScore-delta, rootScore+delta
+			if alpha < -inf {
+				alpha = -inf
 			}
-		}
-		e.searchInfo.newPly()
+			if beta > inf {
+				beta = inf
+			}
 
-		bestChan := make(chan SearchResult)
-		var wg sync.WaitGroup
-		wg.Add(e.concurrency)
-		for i := 0; i < e.concurrency; i++ {
-			// Implementation of Lazy SMP which runs parallel searches over
-			// the same nodes.
-			go func() {
-				newPos := p.Clone()
-				best := e.searchInfo.Best()
+			// Main search loop:
+			best := searchResult{Score: alpha}
+			for depth := 2; depth < maxPly; depth++ {
+				best.Depth = depth
 
-				// Copy all moves for use in this goroutine and add rootOrderNoise if configured.
+				// Generate all moves for use in this goroutine and add rootOrderNoise if configured.
 				r := rand.New(rand.NewSource(time.Now().UnixNano()))
 				n := depth
 				if n > 4 {
@@ -332,11 +319,9 @@ func (e *Engine) iterativeDeepeningRoot() {
 
 				// Aspiration window tracks the previous score for search.
 				// Whenever we fail high or low widen the window.
-
 				// Start with a small aspiration window and, in the case of a fail
 				// high/low, re-search with a bigger window until we don't fail
 				// high/low anymore.
-				delta := initWindowDelta(best.Score)
 				alpha, beta := best.Score-delta, best.Score+delta
 				if alpha < -inf {
 					alpha = -inf
@@ -345,22 +330,36 @@ func (e *Engine) iterativeDeepeningRoot() {
 					beta = inf
 				}
 
-				for e.stopping == 0 {
+				// Main aspiration loop:
+				for {
 					if res := e.searchRoot(newPos, scoredMoves, alpha, beta, depth); res.Score <= alpha {
 						beta = (alpha + beta) / 2
 						alpha = res.Score - delta
 						if alpha < -inf {
 							alpha = -inf
 						}
-						fmt.Printf("log failed_LOW %d: retry with new aspiration window: [%d, %d] (delta=%d)\n", res.Score, alpha, beta, delta)
+						pv, _, _ := e.table.PV(newPos)
+						if len(pv) > 0 {
+							fmt.Printf("log [%d] [<=%d] %s\n", res.Depth, res.Score, MoveString(pv))
+						}
 					} else if res.Score >= beta {
 						beta = res.Score + delta
 						if beta > inf {
 							beta = inf
 						}
-						fmt.Printf("log failed_HIGH %d: retry with new aspiration window: [%d, %d] (delta=%d)\n", res.Score, alpha, beta, delta)
+						pv, _, _ := e.table.PV(newPos)
+						if len(pv) > 0 {
+							fmt.Printf("log [%d] [>=%d] %s\n", res.Depth, res.Score, MoveString(pv))
+						}
 					} else {
+						// The result was within the window.
+						// Ready to search the next ply.
 						best = res
+
+						pv, _, _ := e.table.PV(newPos)
+						if len(pv) > 0 {
+							fmt.Printf("log [%d] [==%d] %s\n", res.Depth, res.Score, MoveString(pv))
+						}
 						break
 					}
 
@@ -378,48 +377,71 @@ func (e *Engine) iterativeDeepeningRoot() {
 					delta += delta/4 + 5
 
 					assert("!(alpha >= -inf && beta <= inf)", alpha >= -inf && beta <= inf)
+
+					if e.stopping == 1 {
+						break
+					}
 				}
-				bestChan <- best
-				wg.Done()
-			}()
-		}
-		go func() {
-			wg.Wait()
-			close(bestChan)
-		}()
-		for b := range bestChan {
-			if b.Score > best.Score {
+
+				if e.stopping == 1 {
+					break
+				}
+
+				// Send the best move for this ply.
+				resultChan <- best
+			}
+		}(best.Score)
+	}
+
+	// Collect search results and manage timeout.
+	for e.running == 1 {
+		next, rem := e.searchInfo.GuessPlyDuration(e.searchInfo.Depth()), e.timeControl.GameTimeRemaining(e.timeInfo, p.side)
+		select {
+		case b := <-resultChan:
+			if b.Depth > best.Depth || (b.Depth == best.Depth && b.Score > best.Score) {
 				best = b
+
+				// Log the new best PV.
+				pv, _, _ := e.table.PV(p)
+				if len(pv) > 0 {
+					fmt.Printf("log [%d] [%d] %s\n", best.Depth, best.Score, MoveString(pv))
+				}
+			}
+		default:
+			if !e.ponder && e.fixedDepth == 0 {
+				select {
+				case <-time.After(rem - next):
+					// Time will soon be up! Stop the search.
+					b, errv := e.searchInfo.ebf()
+					fmt.Printf("log stop search now (b=%f{err=%f} cost=%s, budget=%s)\n", b, errv, next, rem)
+					e.Stop()
+				default:
+				}
 			}
 		}
-		e.searchInfo.setBest(best)
-		e.table.StoreMove(p, depth, best.Score, best.Move)
 
-		if e.stopping == 1 || atomic.LoadInt32(&e.running) == 0 {
+		if e.fixedDepth > 0 && e.searchInfo.Depth() >= e.fixedDepth {
+			fmt.Printf("log stop search after fixed depth")
 			break
 		}
-
-		if isTerminal(best.Score) {
-			go e.Stop()
-			fmt.Printf("log stop search at depth=%d with terminal eval\n", depth)
-			break
-		}
-		if e.fixedDepth > 0 && depth >= e.fixedDepth {
-			go e.Stop()
-			fmt.Printf("log stop fixed_depth search at depth=%d\n", depth)
-			break
-		}
-
-		// Print search info for depth d.
-		e.printSearchInfo()
 	}
-	e.searchInfo.setBest(best)
+
+	// Store the best move and print "bestmove" if not pondering.
+	e.table.StoreMove(p, best.Depth, best.Score, best.Move)
+	e.printSearchInfo(best)
+
+	if !e.ponder {
+		fmt.Printf("bestmove %s\n", MoveString(best.Move))
+	}
 }
 
-func (e *Engine) searchRoot(p *Pos, scoredMoves []ScoredMove, alpha, beta, depth int) SearchResult {
-	best := SearchResult{Score: alpha}
+func (e *Engine) searchRoot(p *Pos, scoredMoves []ScoredMove, alpha, beta, depth int) searchResult {
+	best := searchResult{
+		Score: alpha,
+		Depth: depth,
+	}
 	for _, entry := range scoredMoves {
-		if e.stopping != 0 {
+		if e.stopping == 1 {
 			break
 		}
 		n := MoveLen(entry.move)
@@ -491,28 +513,25 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 		}
 	}
 
-	steps := p.Steps()
-
 	// Check if immobilized.
+	steps := p.Steps()
 	if len(steps) == 0 {
 		return -terminalEval
 	}
 
-	scoredSteps := e.scoreSteps(p, steps)
-	sortSteps(scoredSteps)
-
 	// Step 3: Main search.
+	selector := e.stepSelector(steps)
 	best := alpha
 	nodes := 0
-	for _, entry := range scoredSteps {
-		n := entry.step.Len()
+	for step, ok := selector.Select(); ok; step, ok = selector.Select() {
+		n := step.Len()
 		if depth+n > maxDepth {
 			continue
 		}
 		nodes++
 		initSide := p.side
 
-		if err := p.Step(entry.step); err != nil {
+		if err := p.Step(step); err != nil {
 			panic(fmt.Sprintf("search_step: %v", err))
 		}
 		var score int
@@ -532,7 +551,7 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 			if bestStep == nil {
 				bestStep = new(Step)
 			}
-			*bestStep = entry.step
+			*bestStep = step
 		}
 		if score > alpha {
 			alpha = score
@@ -540,9 +559,12 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 		if alpha >= beta {
 			break // fail-hard cutoff
 		}
+		if e.stopping == 1 {
+			break
+		}
 	}
 
-	e.searchInfo.addNodes(nodes)
+	e.searchInfo.addNodes(depth, nodes)
 
 	// Step 4: Store transposition table entry.
 	if e.useTable {
@@ -581,19 +603,15 @@ func (e *Engine) quiescence(p *Pos, alpha, beta int) int {
 		alpha = eval
 	}
 
-	steps := p.Steps()
-	scoredSteps := e.scoreSteps(p, steps)
-	sortSteps(scoredSteps)
-	nodes := 0
-	for _, entry := range scoredSteps {
-		if !entry.step.Capture() {
-			continue
-		}
+	steps := make([]Step, 0, 20)
+	selector := e.stepSelector(steps)
 
+	nodes := 0
+	for step, ok := selector.SelectCapture(); ok; step, ok = selector.SelectCapture() {
 		nodes++
 		initSide := p.side
 
-		if err := p.Step(entry.step); err != nil {
+		if err := p.Step(step); err != nil {
 			panic(fmt.Sprintf("quiescense_step: %v", err))
 		}
 		var score int
@@ -612,6 +630,5 @@ func (e *Engine) quiescence(p *Pos, alpha, beta int) int {
 			alpha = score
 		}
 	}
-	e.searchInfo.addNodes(nodes)
 	return alpha
 }

@@ -19,8 +19,12 @@ func (a *AEI) handleExt(text string) error {
 		return nil
 	case text == "movenow":
 		a.engine.GoFixed(8)
-		best := a.engine.searchInfo.Best()
-		a.engine.Pos().Move(best.Move)
+		move, _, _ := a.engine.table.Best(a.engine.Pos())
+		if len(move) > 0 {
+			a.engine.Pos().Move(move)
+		} else {
+			a.Logf("no best move found in table")
+		}
 	case strings.HasPrefix(text, "moves"):
 		parts := strings.SplitN(text, " ", 2)
 		n := 0
@@ -67,11 +71,9 @@ func (a *AEI) handleExt(text string) error {
 	case strings.HasPrefix(text, "step"):
 		parts := strings.SplitN(text, " ", 2)
 		if len(parts) < 2 {
-			steps := a.engine.Pos().Steps()
-			scoredSteps := a.engine.scoreSteps(a.engine.Pos(), steps)
-			sortSteps(scoredSteps)
-			for _, e := range scoredSteps {
-				a.Logf("[%d] %s", e.score, e.step)
+			selector := a.engine.stepSelector(a.engine.Pos().Steps())
+			for score, step, ok := selector.SelectScore(); ok; score, step, ok = selector.SelectScore() {
+				a.Logf("[%d] %s", score, step)
 			}
 			return nil
 		}

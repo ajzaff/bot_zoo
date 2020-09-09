@@ -67,15 +67,13 @@ func (p *Pos) capture(presence, srcB, destB Bitboard) Capture {
 	return Capture{}
 }
 
-// Steps generates steps including sliding moves, pushes and pulls.
-// Captures are completed internally to Step, but you may check whether
-// a step results in a capture by calling captures with the step as an
-// argument.
-func (p *Pos) Steps() []Step {
+// Steps is a low level helper for getting steps in a current position
+// without allocating a new array backed slice every time.
+// This (and scoreSteps) was caught in profiling as the biggest cost to search.
+func (p *Pos) Steps() (a []Step) {
 	if p.stepsLeft == 0 {
 		return []Step{{Pass: true}}
 	}
-	var steps []Step
 	c1, c2 := p.side, p.side.Opposite()
 	canPush := p.stepsLeft > 1
 	for t := GRabbit.MakeColor(c1); t <= GElephant.MakeColor(c1); t++ {
@@ -135,7 +133,7 @@ func (p *Pos) Steps() []Step {
 										} else if cap := p.capture(p.presence[c2], db, ab); cap.Valid() {
 											step.Cap = cap
 										}
-										steps = append(steps, step)
+										a = append(a, step)
 									})
 								}
 							}
@@ -153,7 +151,7 @@ func (p *Pos) Steps() []Step {
 				if cap := p.capture(p.presence[c1], sb, db); cap.Valid() {
 					step.Cap = cap
 				}
-				steps = append(steps, step)
+				a = append(a, step)
 
 				// Generate all pulls to this dest (if canPush):
 				for i := range pullPieces {
@@ -164,18 +162,18 @@ func (p *Pos) Steps() []Step {
 							step.Cap = cap
 						}
 					}
-					steps = append(steps, step)
+					a = append(a, step)
 				}
 			})
 		})
 	}
 	if p.stepsLeft < 4 {
-		steps = append(steps, Step{Pass: true})
+		a = append(a, Step{Pass: true})
 	}
-	return steps
+	return a
 }
 
-func (p *Pos) getRootMoves(set map[int64]bool, prefix []Step, moves *[][]Step, stepsLeft int) {
+func (p *Pos) getRootMovesLenInternal(set map[int64]bool, prefix []Step, moves *[][]Step, stepsLeft int) {
 	if stepsLeft == 0 {
 		if !prefix[len(prefix)-1].Pass {
 			prefix = append(prefix, Step{Pass: true})
@@ -203,7 +201,7 @@ func (p *Pos) getRootMoves(set map[int64]bool, prefix []Step, moves *[][]Step, s
 				*moves = append(*moves, newPrefix)
 			}
 		} else {
-			p.getRootMoves(set, newPrefix, moves, stepsLeft-step.Len())
+			p.getRootMovesLenInternal(set, newPrefix, moves, stepsLeft-step.Len())
 		}
 		if err := p.Unstep(); err != nil {
 			panic(err)
@@ -221,7 +219,7 @@ func (e *Engine) getRootMovesLen(p *Pos, depth int) [][]Step {
 	var moves [][]Step
 	set := map[int64]bool{p.zhash: true}
 	for i := 1; i <= depth; i++ {
-		p.getRootMoves(set, nil, &moves, i)
+		p.getRootMovesLenInternal(set, nil, &moves, i)
 	}
 	return moves
 }
