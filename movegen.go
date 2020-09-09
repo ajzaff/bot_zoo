@@ -23,48 +23,6 @@ func init() {
 	}
 }
 
-// func (p *Pos) getPushes(steps *[]Step) {
-// 	s1, s2 := p.side, p.side.Opposite()
-// 	s2n := p.presence[s2].Neighbors()
-// 	for p1 := GCat.MakeColor(s1); p1 <= GElephant.MakeColor(s1); p1++ {
-// 		p1b := p.bitboards[p1]
-// 		if p1b == 0 || p1b&s2n == 0 {
-// 			continue
-// 		}
-// 		p1n := p1b.Neighbors()
-// 		for p2 := GRabbit.MakeColor(s2); p2 < p1.MakeColor(s2); p2++ {
-// 			p2b := p.bitboards[p2]
-// 			if p2b == 0 {
-// 				continue
-// 			}
-// 			(p1n & p2b).Each(func(b Bitboard) {
-// 				if p.frozenB(b) {
-// 					return
-// 				}
-// 				src := b.Square()
-// 				sB := stepsB
-// 				if p2.SameType(GRabbit) {
-// 					sB = rabbitStepsB[p2.Color()]
-// 				} else {
-// 					sB = stepsB
-// 				}
-// 				sB[src].Each(func(d Bitboard) {
-// 					if p.bitboards[Empty]&d == 0 {
-// 						return
-// 					}
-// 					dest := d.Square()
-// 					assert("src == dest", src != dest)
-// 					*steps = append(*steps, Step{
-// 						Src:    src,
-// 						Dest:   dest,
-// 						Piece1: p2,
-// 					})
-// 				})
-// 			})
-// 		}
-// 	}
-// }
-
 func unguardedB(b, presence Bitboard) Bitboard {
 	return b & ^presence.Neighbors()
 }
@@ -78,14 +36,31 @@ func trappedB(b, presence Bitboard) Bitboard {
 func (p *Pos) capture(presence, srcB, destB Bitboard) Capture {
 	newPresence := presence ^ (srcB | destB)
 	if b := unguardedB(destB&Traps, newPresence); b != 0 {
+		var piece Piece
+		for t := GRabbit; t <= SElephant; t++ {
+			if p.bitboards[t]&srcB != 0 {
+				piece = t
+				break
+			}
+		}
+		// Capture of piece pushed from srcB to destB.
 		return Capture{
-			Piece: p.atB(srcB),
+			Piece: piece,
 			Src:   destB.Square(),
 		}
 	}
 	if b := trappedB(newPresence&srcB.Neighbors(), newPresence); b != 0 {
+		var piece Piece
+		for t := GRabbit; t <= SElephant; t++ {
+			if p.bitboards[t]&b != 0 {
+				piece = t
+				break
+			}
+		}
+		// Capture of piece left next to src.
+		// TODO(ajzaff): It would be more clear to have a adjacentTrap helper for this.
 		return Capture{
-			Piece: p.atB(b),
+			Piece: piece,
 			Src:   b.Square(),
 		}
 	}
@@ -115,7 +90,7 @@ func (p *Pos) Steps() []Step {
 			sB = rabbitStepsB[p.side]
 		}
 		ts.Each(func(sb Bitboard) {
-			if p.frozenB(sb) {
+			if p.frozenB(c1, sb) {
 				return
 			}
 			src := sb.Square()
@@ -143,23 +118,27 @@ func (p *Pos) Steps() []Step {
 					// Generate all pushes out of this dest (if canPush):
 					// Check that there's an empty place to push them to.
 					if canPush {
-						if r := p.atB(db); r.WeakerThan(t) {
-							dbn := db.Neighbors()
-							(dbn & p.bitboards[Empty]).Each(func(ab Bitboard) {
-								step := Step{
-									Src:    src,
-									Dest:   db.Square(),
-									Alt:    ab.Square(),
-									Piece1: t,
-									Piece2: r,
+						for r := GRabbit.MakeColor(c2); r <= GElephant.MakeColor(c2); r++ {
+							if p.bitboards[r]&db != 0 {
+								if r.WeakerThan(t) {
+									dbn := db.Neighbors()
+									(dbn & p.bitboards[Empty]).Each(func(ab Bitboard) {
+										step := Step{
+											Src:    src,
+											Dest:   db.Square(),
+											Alt:    ab.Square(),
+											Piece1: t,
+											Piece2: r,
+										}
+										if cap := p.capture(p.presence[c1], sb, db); cap.Valid() {
+											step.Cap = cap
+										} else if cap := p.capture(p.presence[c2], db, ab); cap.Valid() {
+											step.Cap = cap
+										}
+										steps = append(steps, step)
+									})
 								}
-								if cap := p.capture(p.presence[c1], sb, db); cap.Valid() {
-									step.Cap = cap
-								} else if cap := p.capture(p.presence[c2], db, ab); cap.Valid() {
-									step.Cap = cap
-								}
-								steps = append(steps, step)
-							})
+							}
 						}
 					}
 					return

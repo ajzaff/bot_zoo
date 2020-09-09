@@ -91,22 +91,9 @@ func (p *Pos) Terminal() bool {
 	return p.terminalGoalValue() != 0 || p.terminalEliminationValue() != 0 || p.terminalImmobilizedValue() != 0
 }
 
-func (p *Pos) At(i Square) Piece {
-	return p.atB(i.Bitboard())
-}
-
-func (p *Pos) atB(b Bitboard) Piece {
-	for piece := GRabbit; piece <= SElephant && int(piece) < len(p.bitboards); piece++ {
-		if p.bitboards[piece]&b != 0 {
-			return piece
-		}
-	}
-	return Empty
-}
-
 func (p *Pos) Place(piece Piece, i Square) error {
 	if piece == Empty {
-		return p.Remove(i)
+		return p.Remove(piece, i)
 	}
 	if !piece.Valid() {
 		return fmt.Errorf("invalid piece: %s", piece)
@@ -122,18 +109,15 @@ func (p *Pos) Place(piece Piece, i Square) error {
 	return nil
 }
 
-func (p *Pos) Remove(i Square) error {
+func (p *Pos) Remove(piece Piece, i Square) error {
 	b := i.Bitboard()
 	if p.bitboards[Empty]&b != 0 {
 		return fmt.Errorf("no piece present on %s", i)
 	}
-	piece := p.atB(b)
-	if !piece.Valid() {
-		return fmt.Errorf("inconsistent board state on %s: %s", i, piece)
-	}
-	p.bitboards[piece] &= ^b
+	notB := ^b
+	p.bitboards[piece] &= notB
 	p.bitboards[Empty] |= b
-	p.presence[piece.Color()] &= ^b
+	p.presence[piece.Color()] &= notB
 	p.zhash ^= ZPieceKey(piece, i)
 	return nil
 }
@@ -194,33 +178,33 @@ func (p *Pos) Step(step Step) error {
 			return fmt.Errorf("%s: %v", step, err)
 		}
 	case KindPush:
-		if err := p.Remove(step.Dest); err != nil {
+		if err := p.Remove(step.Piece2, step.Dest); err != nil {
 			return fmt.Errorf("%s: %v", step, err)
 		}
 		if err := p.Place(step.Piece2, step.Alt); err != nil {
 			return fmt.Errorf("%s: %v", step, err)
 		}
-		if err := p.Remove(step.Src); err != nil {
+		if err := p.Remove(step.Piece1, step.Src); err != nil {
 			return fmt.Errorf("%s: %v", step, err)
 		}
 		if err := p.Place(step.Piece1, step.Dest); err != nil {
 			return fmt.Errorf("%s: %v", step, err)
 		}
 	case KindPull:
-		if err := p.Remove(step.Src); err != nil {
+		if err := p.Remove(step.Piece1, step.Src); err != nil {
 			return fmt.Errorf("%s: %v", step, err)
 		}
 		if err := p.Place(step.Piece1, step.Dest); err != nil {
 			return fmt.Errorf("%s: %v", step, err)
 		}
-		if err := p.Remove(step.Alt); err != nil {
+		if err := p.Remove(step.Piece2, step.Alt); err != nil {
 			return fmt.Errorf("%s: %v", step, err)
 		}
 		if err := p.Place(step.Piece2, step.Src); err != nil {
 			return fmt.Errorf("%s: %v", step, err)
 		}
 	case KindDefault:
-		if err := p.Remove(step.Src); err != nil {
+		if err := p.Remove(step.Piece1, step.Src); err != nil {
 			return fmt.Errorf("%s: %v", step, err)
 		}
 		if err := p.Place(step.Piece1, step.Dest); err != nil {
@@ -233,7 +217,7 @@ func (p *Pos) Step(step Step) error {
 	p.stepsLeft -= n
 	p.steps = append(p.steps, step)
 	if step.Capture() {
-		if err := p.Remove(step.Cap.Src); err != nil {
+		if err := p.Remove(step.Cap.Piece, step.Cap.Src); err != nil {
 			return fmt.Errorf("%s: %v", step, err)
 		}
 	}
@@ -266,35 +250,35 @@ func (p *Pos) Unstep() error {
 		if p.moveNum > 1 {
 			return fmt.Errorf("setup move after first turn")
 		}
-		return p.Remove(step.Alt)
+		return p.Remove(step.Piece1, step.Alt)
 	case KindPush:
-		if err := p.Remove(step.Dest); err != nil {
+		if err := p.Remove(step.Piece1, step.Dest); err != nil {
 			return fmt.Errorf("%s: %v", step, err)
 		}
 		if err := p.Place(step.Piece1, step.Src); err != nil {
 			return fmt.Errorf("%s: %v", step, err)
 		}
-		if err := p.Remove(step.Alt); err != nil {
+		if err := p.Remove(step.Piece2, step.Alt); err != nil {
 			return fmt.Errorf("%s: %v", step, err)
 		}
 		if err := p.Place(step.Piece2, step.Dest); err != nil {
 			return fmt.Errorf("%s: %v", step, err)
 		}
 	case KindPull:
-		if err := p.Remove(step.Src); err != nil {
+		if err := p.Remove(step.Piece2, step.Src); err != nil {
 			return fmt.Errorf("%s: %v", step, err)
 		}
 		if err := p.Place(step.Piece2, step.Alt); err != nil {
 			return fmt.Errorf("%s: %v", step, err)
 		}
-		if err := p.Remove(step.Dest); err != nil {
+		if err := p.Remove(step.Piece1, step.Dest); err != nil {
 			return fmt.Errorf("%s: %v", step, err)
 		}
 		if err := p.Place(step.Piece1, step.Src); err != nil {
 			return fmt.Errorf("%s: %v", step, err)
 		}
 	case KindDefault:
-		if err := p.Remove(step.Dest); err != nil {
+		if err := p.Remove(step.Piece1, step.Dest); err != nil {
 			return fmt.Errorf("%s: %v", step, err)
 		}
 		if err := p.Place(step.Piece1, step.Src); err != nil {

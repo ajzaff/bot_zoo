@@ -328,6 +328,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 				if e.rootOrderNoise > 0 {
 					e.perturbMoves(r, e.rootOrderNoise, scoredMoves)
 				}
+				sortMoves(scoredMoves)
 
 				// Aspiration window tracks the previous score for search.
 				// Whenever we fail high or low widen the window.
@@ -345,11 +346,6 @@ func (e *Engine) iterativeDeepeningRoot() {
 				}
 
 				for e.stopping == 0 {
-
-					// Rescore the PV move and sort stably.
-					e.rescorePVMoves(newPos, scoredMoves)
-					sortMoves(scoredMoves)
-
 					if res := e.searchRoot(newPos, scoredMoves, alpha, beta, depth); res.Score <= alpha {
 						beta = (alpha + beta) / 2
 						alpha = res.Score - delta
@@ -367,6 +363,16 @@ func (e *Engine) iterativeDeepeningRoot() {
 						best = res
 						break
 					}
+
+					// Rescore the PV move and sort stably.
+					for i := range scoredMoves {
+						if MoveEqual(scoredMoves[i].move, best.Move) {
+							scoredMoves[i].score = +inf
+						} else {
+							scoredMoves[i].score = -inf
+						}
+					}
+					sortMoves(scoredMoves)
 
 					// Update aspiration window delta
 					delta += delta/4 + 5
@@ -481,7 +487,7 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 		score := -e.search(p, -beta, -alpha, depth+e.nullMoveR+1, maxDepth)
 		p.Unpass()
 		if score >= beta {
-			return beta // null move pruning
+			return score // null move pruning
 		}
 	}
 

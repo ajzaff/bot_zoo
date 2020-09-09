@@ -56,8 +56,12 @@ func (p *Pos) ShortString() string {
 	fmt.Fprintf(&sb, "%s [", p.side.String())
 	for i := 7; i >= 0; i-- {
 		for j := 0; j < 8; j++ {
-			at := Square(8*i + j)
-			sb.WriteByte(p.At(at).Byte())
+			atB := Bitboard(1) << (8*i + j)
+			for t := Empty; t < GElephant; t++ {
+				if p.bitboards[t]&atB != 0 {
+					sb.WriteByte(t.Byte())
+				}
+			}
 		}
 	}
 	sb.WriteByte(']')
@@ -77,9 +81,14 @@ func (p *Pos) String() string {
 	for i := 7; i >= 0; i-- {
 		fmt.Fprintf(&sb, "%d| ", i+1)
 		for j := 0; j < 8; j++ {
-			at := Square(8*i + j)
-			atB := at.Bitboard()
-			piece := p.At(at)
+			atB := Bitboard(1) << (8*i + j)
+			var piece Piece
+			for t := Empty; t < GElephant; t++ {
+				if p.bitboards[t]&atB != 0 {
+					piece = t
+					break
+				}
+			}
 			if piece == Empty {
 				if atB&Traps != 0 {
 					sb.WriteByte('x')
