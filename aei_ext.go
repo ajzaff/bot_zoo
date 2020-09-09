@@ -71,7 +71,9 @@ func (a *AEI) handleExt(text string) error {
 	case strings.HasPrefix(text, "step"):
 		parts := strings.SplitN(text, " ", 2)
 		if len(parts) < 2 {
-			selector := a.engine.stepSelector(a.engine.Pos().Steps())
+			var steps []Step
+			a.engine.Pos().Steps(&steps)
+			selector := a.engine.stepSelector(steps)
 			for score, step, ok := selector.SelectScore(); ok; score, step, ok = selector.SelectScore() {
 				a.Logf("[%d] %s", score, step)
 			}

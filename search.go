@@ -441,7 +441,8 @@ func (e *Engine) searchRoot(p *Pos, scoredMoves []ScoredMove, alpha, beta, depth
 		if err := p.Move(entry.move); err != nil {
 			panic(fmt.Sprintf("search_move_root: %s: %v", entry.move, err))
 		}
-		score := -e.search(p, -beta, -alpha, n, depth)
+		var stepList StepList
+		score := -e.search(p, &stepList, -beta, -alpha, n, depth)
 		if err := p.Unmove(); err != nil {
 			panic(fmt.Sprintf("search_unmove_root: %s: %v", entry.move, err))
 		}
@@ -457,7 +458,7 @@ func (e *Engine) searchRoot(p *Pos, scoredMoves []ScoredMove, alpha, beta, depth
 	return best
 }
 
-func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
+func (e *Engine) search(p *Pos, stepList *StepList, alpha, beta, depth, maxDepth int) int {
 	alphaOrig := alpha
 	var bestStep *Step
 
@@ -496,21 +497,25 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 	// Step 2c. Try null move pruning.
 	if e.nullMoveR > 0 && depth+e.nullMoveR < maxDepth {
 		p.Pass()
-		score := -e.search(p, -beta, -alpha, depth+e.nullMoveR+1, maxDepth)
+		score := -e.search(p, stepList, -beta, -alpha, depth+e.nullMoveR+1, maxDepth)
 		p.Unpass()
 		if score >= beta {
 			return score // null move pruning
 		}
 	}
 
+	// Generate steps at this ply and add them to the list.
+	// We will start search from move l and later truncate the list to this initial length.
+	l := stepList.Len()
+	stepList.Generate(p)
+
 	// Check if immobilized.
-	steps := p.Steps()
-	if len(steps) == 0 {
+	if l == stepList.Len() {
 		return -terminalEval
 	}
 
 	// Step 3: Main search.
-	selector := e.stepSelector(steps)
+	selector := e.stepSelector(stepList.steps[l:])
 	best := alpha
 	nodes := 0
 	for step, ok := selector.Select(); ok; step, ok = selector.Select() {
@@ -526,9 +531,9 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 		}
 		var score int
 		if p.side == initSide {
-			score = e.search(p, alpha, beta, depth+n, maxDepth)
+			score = e.search(p, stepList, alpha, beta, depth+n, maxDepth)
 		} else {
-			score = -e.search(p, -beta, -alpha, depth+n, maxDepth)
+			score = -e.search(p, stepList, -beta, -alpha, depth+n, maxDepth)
 		}
 		if err := p.Unstep(); err != nil {
 			panic(fmt.Sprintf("search_unstep: %v", err))
@@ -553,6 +558,9 @@ func (e *Engine) search(p *Pos, alpha, beta, depth, maxDepth int) int {
 			break
 		}
 	}
+
+	// Truncate steps generated at this ply.
+	stepList.Truncate(l)
 
 	e.searchInfo.addNodes(depth, nodes)
 

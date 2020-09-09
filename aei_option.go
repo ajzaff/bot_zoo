@@ -96,7 +96,15 @@ func (a *AEI) handleOption(text string) error {
 		a.engine.fixedDepth = v
 
 		// Custom Zoo engine options:
-
+	case "goroutines":
+		v, err := strconv.Atoi(value)
+		if err != nil {
+			return err
+		}
+		if v < 0 {
+			return fmt.Errorf("goroutines <= 0")
+		}
+		a.engine.concurrency = v
 	case "mindepth":
 		v, err := strconv.Atoi(value)
 		if err != nil {

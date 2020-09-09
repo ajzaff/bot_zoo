@@ -31,7 +31,7 @@ func ParseShortPosition(s string) (*Pos, error) {
 		return nil, fmt.Errorf("input does not match /%s/", shortPosPattern)
 	}
 	side := ParseColor(matches[1])
-	pos := newPos(nil, nil, side, 34, 2, nil, nil, 4, 0)
+	pos := newPos(nil, nil, nil, nil, side, 34, 2, nil, nil, 4, 0)
 	for i, b := range []byte(matches[2]) {
 		square := Square(8*(7-i/8) + i%8)
 		piece, err := ParsePiece(b)
@@ -56,12 +56,8 @@ func (p *Pos) ShortString() string {
 	fmt.Fprintf(&sb, "%s [", p.side.String())
 	for i := 7; i >= 0; i-- {
 		for j := 0; j < 8; j++ {
-			atB := Bitboard(1) << (8*i + j)
-			for t := Empty; t < GElephant; t++ {
-				if p.bitboards[t]&atB != 0 {
-					sb.WriteByte(t.Byte())
-				}
-			}
+			at := Square(8*i + j)
+			sb.WriteByte(p.board[at].Byte())
 		}
 	}
 	sb.WriteByte(']')
@@ -81,16 +77,9 @@ func (p *Pos) String() string {
 	for i := 7; i >= 0; i-- {
 		fmt.Fprintf(&sb, "%d| ", i+1)
 		for j := 0; j < 8; j++ {
-			atB := Bitboard(1) << (8*i + j)
-			var piece Piece
-			for t := Empty; t <= SElephant; t++ {
-				if p.bitboards[t]&atB != 0 {
-					piece = t
-					break
-				}
-			}
-			if piece == Empty {
-				if atB&Traps != 0 {
+			at := Square(8*i + j)
+			if piece := p.board[at]; piece == Empty {
+				if at.Bitboard()&Traps != 0 {
 					sb.WriteByte('x')
 				} else {
 					sb.WriteByte('.')

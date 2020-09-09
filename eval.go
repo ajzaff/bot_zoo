@@ -115,7 +115,7 @@ func (p *Pos) mobilityScore(side Color) (score int) {
 	b := p.presence[side]
 	for b > 0 {
 		atB := b & -b
-		if !p.frozenB(side, atB) {
+		if !p.frozen(side, atB.Square()) {
 			count++
 		}
 		b &= ^atB
@@ -188,45 +188,25 @@ func (p *Pos) terminalEliminationValue() int {
 	return 0
 }
 
-// frozenB returns a frozen piece of color c at b.
-// b should be a single square.
-func (p *Pos) frozenB(c Color, b Bitboard) bool {
-	if p.presence[c]&b == 0 {
+// frozen returns a frozen piece of color c at i.
+func (p *Pos) frozen(c Color, i Square) bool {
+	t := p.board[i]
+	if t == Empty || t.SameType(GElephant) {
+		// Piece is empty or unfreezable elephant.
 		return false
 	}
-	if p.bitboards[GElephant]&b != 0 {
-		// Elephants can't be frozen.
-		return false
-	}
+	b := i.Bitboard()
 	neighbors := b.Neighbors()
-	if neighbors&p.presence[c] != 0 ||
-		neighbors&p.presence[c.Opposite()] != 0 {
-		// We have friendly neighbors or no enemy pieces nearby.
-		return false
-	}
-	// Get the piece that is frozen.
-	var piece Piece
-	for t := GRabbit.MakeColor(c); t < GElephant.MakeColor(c); t++ {
-		if p.bitboards[t]&b != 0 {
-			piece = t
-			break
-		}
-	}
-	// Get the offending stronger freezer.
-	for t := piece.MakeColor(c.Opposite()) + 1; t <= GElephant.MakeColor(c.Opposite()); t++ {
-		if p.bitboards[t]&neighbors != 0 {
-			return true
-		}
-	}
-	// No stronger piece freezing us.
-	return false
+	return neighbors&p.presence[c] == 0 && // We have no friendly neighbors
+		neighbors&p.presence[c.Opposite()] != 0 && // The enemy has presence next to us
+		neighbors&p.stronger[c.Opposite()] != 0 // The enemy has a stronger piece next to us
 }
 
 func (p *Pos) immobilized(c Color) bool {
 	b := p.presence[c]
 	for b > 0 {
 		atB := b & -b
-		if !p.frozenB(c, atB) {
+		if !p.frozen(c, atB.Square()) {
 			return false
 		}
 		b &= ^atB

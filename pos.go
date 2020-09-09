@@ -6,8 +6,10 @@ import (
 )
 
 type Pos struct {
+	board     []Piece    // board information
 	bitboards []Bitboard // bitboard data
 	presence  []Bitboard // board presence for each side
+	stronger  []Bitboard // stronger pieces bitboards
 	side      Color      // side to play
 	depth     int        // number of steps to arrive at the position
 	moveNum   int        // number of moves left for this turn
@@ -18,8 +20,10 @@ type Pos struct {
 }
 
 func newPos(
+	board []Piece,
 	bitboards []Bitboard,
 	presence []Bitboard,
+	stronger []Bitboard,
 	side Color,
 	depth int,
 	moveNum int,
@@ -28,6 +32,9 @@ func newPos(
 	stepsLeft int,
 	zhash int64,
 ) *Pos {
+	if board == nil {
+		board = make([]Piece, 64)
+	}
 	if bitboards == nil {
 		bitboards = make([]Bitboard, 15)
 		bitboards[Empty] = AllBits
@@ -46,12 +53,17 @@ func newPos(
 			presence[Silver] |= bitboards[p.MakeColor(Silver)]
 		}
 	}
+	if stronger == nil {
+		stronger = make([]Bitboard, 15)
+	}
 	if zhash == 0 {
 		zhash = ZHash(bitboards, side, len(steps))
 	}
 	return &Pos{
+		board:     board,
 		bitboards: bitboards,
 		presence:  presence,
+		stronger:  stronger,
 		side:      side,
 		stepsLeft: stepsLeft,
 		depth:     depth,
@@ -62,19 +74,23 @@ func newPos(
 }
 
 func (p *Pos) Clone() *Pos {
+	board := make([]Piece, 64)
 	bs := make([]Bitboard, 15)
 	ps := make([]Bitboard, 2)
+	sb := make([]Bitboard, 15)
 	steps := make([]Step, len(p.steps))
 	moves := make([][]Step, len(p.moves))
+	copy(board, p.board)
 	copy(bs, p.bitboards)
 	copy(ps, p.presence)
+	copy(sb, p.stronger)
 	copy(steps, p.steps)
 	for i := range moves {
 		moves[i] = make([]Step, len(p.moves[i]))
 		copy(moves[i], p.moves[i])
 	}
 	return newPos(
-		bs, ps, p.side, p.depth, p.moveNum,
+		board, bs, ps, sb, p.side, p.depth, p.moveNum,
 		moves, steps, p.stepsLeft, p.zhash,
 	)
 }
@@ -102,9 +118,13 @@ func (p *Pos) Place(piece Piece, i Square) error {
 	if p.bitboards[Empty]&b == 0 {
 		return fmt.Errorf("piece already present on %s", i)
 	}
+	p.board[i] = piece
 	p.bitboards[piece] |= b
 	p.bitboards[Empty] &= ^b
 	p.presence[piece.Color()] |= b
+	for r := GRabbit.MakeColor(piece.Color()); r < piece; r++ {
+		p.stronger[r] |= b
+	}
 	p.zhash ^= ZPieceKey(piece, i)
 	return nil
 }
@@ -115,9 +135,13 @@ func (p *Pos) Remove(piece Piece, i Square) error {
 		return fmt.Errorf("no piece present on %s", i)
 	}
 	notB := ^b
+	p.board[i] = Empty
 	p.bitboards[piece] &= notB
 	p.bitboards[Empty] |= b
 	p.presence[piece.Color()] &= notB
+	for r := GRabbit.MakeColor(piece.Color()); r < piece; r++ {
+		p.stronger[r] &= notB
+	}
 	p.zhash ^= ZPieceKey(piece, i)
 	return nil
 }
