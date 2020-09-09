@@ -34,6 +34,7 @@ func (a *AEI) handleExt(text string) error {
 		moves := a.engine.getRootMovesLen(a.engine.Pos(), 4)
 		scoredMoves := a.engine.scoreMoves(a.engine.Pos(), moves)
 		sortMoves(scoredMoves)
+		a.engine.rescorePVMoves(a.engine.Pos(), scoredMoves)
 		if n == 0 {
 			n = len(scoredMoves)
 		}

@@ -136,6 +136,8 @@ func (s *stepSelector) score() {
 	for i, step := range s.steps {
 		if step == pv {
 			s.scores[i] = inf
+			s.Swap(0, i) // Swap PV to front
+			continue
 		}
 		s.scores[i] = -inf
 	}
@@ -155,19 +157,17 @@ func (s *stepSelector) SelectScore() (score int, step Step, ok bool) {
 
 // Select selects the next best move.
 func (s *stepSelector) Select() (Step, bool) {
-	if len(s.steps) == 0 {
-		return invalidStep, false
-	}
-	step := s.steps[0]
-	s.steps = s.steps[1:]
-	return step, true
+	_, step, ok := s.SelectScore()
+	return step, ok
 }
 
 // SelectCapture selects the next best capture move.
 func (s *stepSelector) SelectCapture() (Step, bool) {
-	for len(s.steps) > 0 {
-		step := s.steps[0]
-		s.steps = s.steps[1:]
+	for {
+		step, ok := s.Select()
+		if !ok {
+			break
+		}
 		if step.Cap.Valid() {
 			return step, true
 		}

@@ -195,11 +195,9 @@ func (p *Pos) frozen(c Color, i Square) bool {
 		// Piece is empty or unfreezable elephant.
 		return false
 	}
-	b := i.Bitboard()
-	neighbors := b.Neighbors()
+	neighbors := i.Bitboard().Neighbors()
 	return neighbors&p.presence[c] == 0 && // We have no friendly neighbors
-		neighbors&p.presence[c.Opposite()] != 0 && // The enemy has presence next to us
-		neighbors&p.stronger[c.Opposite()] != 0 // The enemy has a stronger piece next to us
+		neighbors&p.stronger[t.MakeColor(c.Opposite())] != 0 // The enemy has a stronger piece next to us
 }
 
 func (p *Pos) immobilized(c Color) bool {

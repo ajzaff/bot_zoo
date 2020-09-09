@@ -385,7 +385,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 
 	// Collect search results and manage timeout.
 	for e.running == 1 {
-		next, rem := e.searchInfo.GuessPlyDuration(e.searchInfo.Depth()), e.timeControl.GameTimeRemaining(e.timeInfo, p.side)
+		next, rem := e.searchInfo.GuessPlyDuration(1+e.searchInfo.Depth()), e.timeControl.FixedOptimalTimeRemaining(e.timeInfo, p.side)
 		select {
 		case b := <-resultChan:
 			if b.Depth > best.Depth || (b.Depth == best.Depth && b.Score > best.Score) {
@@ -398,14 +398,21 @@ func (e *Engine) iterativeDeepeningRoot() {
 				}
 			}
 		case <-time.After(time.Second):
-			if !e.ponder && e.fixedDepth == 0 {
-				select {
-				case <-time.After(rem - next):
-					// Time will soon be up! Stop the search.
-					b, errv := e.searchInfo.ebf()
-					fmt.Printf("log stop search now (b=%f{err=%f} cost=%s, budget=%s)\n", b, errv, next, rem)
-					e.Stop()
-				default:
+			if !e.ponder {
+				if e.fixedDepth > 0 {
+					if rem < 3*time.Second {
+						fmt.Println("log stop search now tro avoid timeout")
+						e.Stop()
+						break
+					}
+					select {
+					case <-time.After(rem - next):
+						// Time will soon be up! Stop the search.
+						b, errv := e.searchInfo.ebf()
+						fmt.Printf("log stop search now (b=%f{err=%f} cost=%s, budget=%s)\n", b, errv, next, rem)
+						e.Stop()
+					default:
+					}
 				}
 			}
 		}
