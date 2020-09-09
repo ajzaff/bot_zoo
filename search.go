@@ -405,6 +405,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 					b, errv := e.searchInfo.ebf()
 					fmt.Printf("log stop search now (b=%f{err=%f} cost=%s, budget=%s)\n", b, errv, next, rem)
 					e.Stop()
+				default:
 				}
 			}
 		}

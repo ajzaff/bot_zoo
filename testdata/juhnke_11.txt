@@ -1,2 +1,2 @@
-setposition g [rr        c M       r rr  r  E      rHe  D  HrR R   CmRrRR  RRdR]
+setposition g [rr        c M       r rr  r  E      cHe  D  HrR R   CmRrRR  RRdR]
 go ponder
