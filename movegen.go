@@ -213,7 +213,7 @@ func (e *Engine) getRootMovesLen(p *Pos, depth int) [][]Step {
 	if depth <= 0 || depth > 4 {
 		panic("depth <= 0 || depth > 4")
 	}
-	if e.p.stepsLeft-depth < 0 {
+	if p.stepsLeft-depth < 0 {
 		panic("stepsLeft < depth")
 	}
 	var moves [][]Step

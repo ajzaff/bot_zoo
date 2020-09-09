@@ -244,12 +244,10 @@ func (e *Engine) iterativeDeepeningRoot() {
 	}
 	e.lastPonder = e.ponder
 	e.searchInfo = newSearchInfo()
-	if !e.ponder {
-		if e.timeInfo == nil {
-			e.timeInfo = e.timeControl.newTimeInfo()
-		} else {
-			e.timeControl.resetTurn(e.timeInfo, e.p.side)
-		}
+	if e.timeInfo == nil {
+		e.timeInfo = e.timeControl.newTimeInfo()
+	} else {
+		e.timeControl.resetTurn(e.timeInfo, e.p.side)
 	}
 
 	p := e.Pos()
@@ -273,6 +271,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 
 	var best searchResult
 	best = e.searchRoot(p, rootSteps, -inf, +inf, 1)
+	e.printSearchInfo(best)
 	resultChan := make(chan searchResult)
 
 	// Implementation of Lazy SMP which runs parallel searches
@@ -285,18 +284,8 @@ func (e *Engine) iterativeDeepeningRoot() {
 
 			newPos := p.Clone()
 
-			// Initialize aspiration window alpha, beta.
-			delta := initWindowDelta(best.Score)
-			alpha, beta := rootScore-delta, rootScore+delta
-			if alpha < -inf {
-				alpha = -inf
-			}
-			if beta > inf {
-				beta = inf
-			}
-
 			// Main search loop:
-			best := searchResult{Score: alpha}
+			best := searchResult{Score: rootScore}
 			for depth := 2; depth < maxPly; depth++ {
 				best.Depth = depth
 
@@ -322,6 +311,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 				// Start with a small aspiration window and, in the case of a fail
 				// high/low, re-search with a bigger window until we don't fail
 				// high/low anymore.
+				delta := initWindowDelta(best.Score)
 				alpha, beta := best.Score-delta, best.Score+delta
 				if alpha < -inf {
 					alpha = -inf
@@ -407,7 +397,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 					fmt.Printf("log [%d] [%d] %s\n", best.Depth, best.Score, MoveString(pv))
 				}
 			}
-		default:
+		case <-time.After(time.Second):
 			if !e.ponder && e.fixedDepth == 0 {
 				select {
 				case <-time.After(rem - next):
@@ -415,7 +405,6 @@ func (e *Engine) iterativeDeepeningRoot() {
 					b, errv := e.searchInfo.ebf()
 					fmt.Printf("log stop search now (b=%f{err=%f} cost=%s, budget=%s)\n", b, errv, next, rem)
 					e.Stop()
-				default:
 				}
 			}
 		}
