@@ -449,10 +449,8 @@ func (e *Engine) iterativeDeepeningRoot() {
 		}
 	}
 
-	// Store the best move and print "bestmove" if not pondering.
-	e.table.StoreMove(p, best.Depth, best.Score, best.Move)
+	// Print search info and "bestmove" if not pondering.
 	e.printSearchInfo(best)
-
 	if !e.ponder {
 		fmt.Printf("bestmove %s\n", MoveString(best.Move))
 	}
