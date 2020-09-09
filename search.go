@@ -431,14 +431,12 @@ func (e *Engine) iterativeDeepeningRoot() {
 				}
 				break
 			}
-			if !e.ponder {
-				if e.fixedDepth == 0 && rem < next {
-					// Time will soon be up! Stop the search.
-					b, errv := e.searchInfo.ebf()
-					fmt.Printf("log stop search now (b=%f{err=%f} cost=%s, budget=%s)\n", b, errv, next, rem)
-					if sr, ok := e.Stop(); ok {
-						best = sr
-					}
+			if !e.ponder && e.fixedDepth == 0 && rem < next {
+				// Time will soon be up! Stop the search.
+				b, errv := e.searchInfo.ebf()
+				fmt.Printf("log stop search now (b=%f{err=%f} cost=%s, budget=%s)\n", b, errv, next, rem)
+				if sr, ok := e.Stop(); ok {
+					best = sr
 				}
 			}
 		}
