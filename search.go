@@ -343,23 +343,23 @@ func (e *Engine) iterativeDeepeningRoot() {
 				// Main aspiration loop:
 				for {
 					if res := e.searchRoot(newPos, scoredMoves, alpha, beta, depth); res.Score <= alpha {
+						pv, _, _ := e.table.PV(newPos)
+						if len(pv) > 0 {
+							e.Logf("[%d] [<=%d] %s", res.Depth, alpha, MoveString(pv))
+						}
 						beta = (alpha + beta) / 2
 						alpha = res.Score - delta
 						if alpha < -inf {
 							alpha = -inf
 						}
+					} else if res.Score >= beta {
 						pv, _, _ := e.table.PV(newPos)
 						if len(pv) > 0 {
-							e.Logf("[%d] [<=%d] %s", res.Depth, res.Score, MoveString(pv))
+							e.Logf("[%d] [>=%d] %s", res.Depth, beta, MoveString(pv))
 						}
-					} else if res.Score >= beta {
 						beta = res.Score + delta
 						if beta > inf {
 							beta = inf
-						}
-						pv, _, _ := e.table.PV(newPos)
-						if len(pv) > 0 {
-							e.Logf("[%d] [>=%d] %s", res.Depth, res.Score, MoveString(pv))
 						}
 					} else {
 						// The result was within the window.
