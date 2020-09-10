@@ -530,7 +530,7 @@ func (e *Engine) search(p *Pos, stepList *StepList, pv bool, alpha, beta, depth,
 		}
 	}
 
-	if pv && maxDepth-depth > 6 {
+	if pv && maxDepth-depth >= 6 {
 		// If position is not in table, and is PV line, decrease maxDepth by 2.
 		// FIXME(ajzaff): I copied this 'optimization' blindly from Stockfish
 		// but I haven't validated if it works yet.
