@@ -78,7 +78,7 @@ func (p *Pos) Steps(a *[]Step) {
 			src := sb.Square()
 
 			// TODO(ajzaff): Move this to the Each.
-			if p.frozen[c1]&sb != 0 {
+			if p.frozenB(t, sb) {
 				return
 			}
 

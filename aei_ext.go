@@ -145,23 +145,28 @@ func (a *AEI) handleExt(text string) error {
 			b = a.engine.Pos().touching[Gold]
 		case "ts":
 			b = a.engine.Pos().touching[Silver]
+		case "dg":
+			b = a.engine.Pos().dominating[Gold]
+		case "ds":
+			b = a.engine.Pos().dominating[Silver]
 		case "fg":
 			b = a.engine.Pos().frozen[Gold]
 		case "fs":
 			b = a.engine.Pos().frozen[Silver]
 		case "g":
-			b = a.engine.Pos().presence[Silver]
+			b = a.engine.Pos().presence[Gold]
 		case "s":
 			b = a.engine.Pos().presence[Silver]
 		case "short":
 			a.Logf(a.engine.Pos().ShortString())
 			return nil
 		default:
-			p, _ := ParsePiece(parts[1][0])
-			bs := a.engine.Pos().bitboards
-			if bs != nil {
-				b = bs[p]
+			p, err := ParsePiece(parts[1][0])
+			if err != nil {
+				a.Logf("printing piece bitboard: %v", err)
+				return nil
 			}
+			b = a.engine.Pos().bitboards[p]
 		}
 		a.Logf(b.String())
 		return nil

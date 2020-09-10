@@ -112,13 +112,10 @@ func isTerminal(score int) bool {
 
 func (p *Pos) mobilityScore(side Color) (score int) {
 	var count int
-	b := p.presence[side]
-	for b > 0 {
-		atB := b & -b
-		if p.frozen[side]&atB == 0 {
+	for b := p.presence[side]; b > 0; b &= (b - 1) {
+		if !p.Frozen(b.Square()) {
 			count++
 		}
-		b &= ^atB
 	}
 	if count >= 16 {
 		count = 15
@@ -188,19 +185,13 @@ func (p *Pos) terminalEliminationValue() int {
 	return 0
 }
 
-// frozen returns a frozen piece of color c at i.
-func (p *Pos) frozenB(c Color, i Square) bool {
-	t := p.board[i]
-	if t == Empty || t.SameType(GElephant) {
-		// Piece is empty or unfreezable elephant.
-		return false
-	}
-	b := i.Bitboard()
-	return p.stronger[t.MakeColor(c.Opposite())].Neighbors()&p.frozen[c]&b == 0
-}
-
 func (p *Pos) immobilized(c Color) bool {
-	return p.presence[c] & ^p.frozen[c] == 0
+	for b := p.presence[c]; b > 0; b &= (b - 1) {
+		if !p.Frozen(b.Square()) {
+			return false
+		}
+	}
+	return true
 }
 
 func (p *Pos) terminalImmobilizedValue() int {

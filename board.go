@@ -40,6 +40,7 @@ var bsfIndex64 = [64]Square{
 	25, 14, 19, 9, 13, 8, 7, 6,
 }
 
+// Square returns the LSB Square in the bitboard.
 func (b Bitboard) Square() Square {
 	if b == 0 {
 		return invalidSquare

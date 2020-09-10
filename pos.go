@@ -6,20 +6,21 @@ import (
 )
 
 type Pos struct {
-	board     []Piece    // board information
-	bitboards []Bitboard // bitboard data
-	presence  []Bitboard // board presence for each side
-	stronger  []Bitboard // stronger pieces by piece&decolorMask
-	weaker    []Bitboard // weaker pieces by piece&decolorMask
-	touching  []Bitboard // squares touched for each side
-	frozen    []Bitboard // frozen squares for each side
-	side      Color      // side to play
-	depth     int        // number of steps to arrive at the position
-	moveNum   int        // number of moves left for this turn
-	moves     [][]Step   // moves to arrive at this position after appending steps
-	steps     []Step     // steps of the current move
-	stepsLeft int        // steps remaining in the current move
-	zhash     int64      // zhash of the current position
+	board      []Piece    // board information
+	bitboards  []Bitboard // bitboard data
+	presence   []Bitboard // board presence for each side
+	stronger   []Bitboard // stronger pieces by piece&decolorMask
+	weaker     []Bitboard // weaker pieces by piece&decolorMask
+	touching   []Bitboard // squares touched for each side
+	dominating []Bitboard // squares dominated by each side (touched by a nonrabbit)
+	frozen     []Bitboard // frozen squares for each (dominating) side
+	side       Color      // side to play
+	depth      int        // number of steps to arrive at the position
+	moveNum    int        // number of moves left for this turn
+	moves      [][]Step   // moves to arrive at this position after appending steps
+	steps      []Step     // steps of the current move
+	stepsLeft  int        // steps remaining in the current move
+	zhash      int64      // zhash of the current position
 }
 
 func newPos(
@@ -29,6 +30,7 @@ func newPos(
 	stronger []Bitboard,
 	weaker []Bitboard,
 	touching []Bitboard,
+	dominating []Bitboard,
 	frozen []Bitboard,
 	side Color,
 	depth int,
@@ -68,6 +70,9 @@ func newPos(
 	if touching == nil {
 		touching = make([]Bitboard, 2)
 	}
+	if dominating == nil {
+		dominating = make([]Bitboard, 2)
+	}
 	if frozen == nil {
 		frozen = make([]Bitboard, 2)
 	}
@@ -75,19 +80,20 @@ func newPos(
 		zhash = ZHash(bitboards, side, len(steps))
 	}
 	return &Pos{
-		board:     board,
-		bitboards: bitboards,
-		presence:  presence,
-		stronger:  stronger,
-		weaker:    weaker,
-		touching:  touching,
-		frozen:    frozen,
-		side:      side,
-		stepsLeft: stepsLeft,
-		depth:     depth,
-		moveNum:   moveNum,
-		steps:     steps,
-		zhash:     zhash,
+		board:      board,
+		bitboards:  bitboards,
+		presence:   presence,
+		stronger:   stronger,
+		weaker:     weaker,
+		touching:   touching,
+		dominating: dominating,
+		frozen:     frozen,
+		side:       side,
+		stepsLeft:  stepsLeft,
+		depth:      depth,
+		moveNum:    moveNum,
+		steps:      steps,
+		zhash:      zhash,
 	}
 }
 
@@ -98,6 +104,7 @@ func (p *Pos) Clone() *Pos {
 	sb := make([]Bitboard, 8)
 	wb := make([]Bitboard, 8)
 	tb := make([]Bitboard, 2)
+	db := make([]Bitboard, 2)
 	fb := make([]Bitboard, 2)
 	steps := make([]Step, len(p.steps))
 	moves := make([][]Step, len(p.moves))
@@ -107,6 +114,7 @@ func (p *Pos) Clone() *Pos {
 	copy(sb, p.stronger)
 	copy(wb, p.weaker)
 	copy(tb, p.touching)
+	copy(db, p.dominating)
 	copy(fb, p.frozen)
 	copy(steps, p.steps)
 	for i := range moves {
@@ -114,7 +122,7 @@ func (p *Pos) Clone() *Pos {
 		copy(moves[i], p.moves[i])
 	}
 	return newPos(
-		board, bs, ps, sb, wb, tb, fb, p.side, p.depth,
+		board, bs, ps, sb, wb, tb, db, fb, p.side, p.depth,
 		p.moveNum, moves, steps, p.stepsLeft, p.zhash,
 	)
 }
@@ -129,6 +137,19 @@ func (p *Pos) Side() Color {
 
 func (p *Pos) Terminal() bool {
 	return p.terminalGoalValue() != 0 || p.terminalEliminationValue() != 0 || p.terminalImmobilizedValue() != 0
+}
+
+func (p *Pos) updateFrozen() {
+	p.frozen[Gold] = p.dominating[Silver] & ^p.touching[Gold]
+	p.frozen[Silver] = p.dominating[Gold] & ^p.touching[Silver]
+}
+
+func (p *Pos) frozenB(t Piece, b Bitboard) bool {
+	return !t.SameType(GElephant) && p.frozen[t.Color()]&p.stronger[t.MakeColor(Gold)].Neighbors()&b != 0
+}
+
+func (p *Pos) Frozen(i Square) bool {
+	return p.frozenB(p.board[i], i.Bitboard())
 }
 
 func (p *Pos) Place(piece Piece, i Square) error {
@@ -148,9 +169,8 @@ func (p *Pos) Place(piece Piece, i Square) error {
 	p.bitboards[Empty] &= ^b
 	p.presence[c] |= b
 	p.touching[c] = p.presence[c].Neighbors()
-	c2 := c.Opposite()
-	p.frozen[c] = p.touching[c2] & ^p.bitboards[GRabbit.MakeColor(c2)].Neighbors() & ^p.touching[c]
-	p.frozen[c2] = p.touching[c] & ^p.bitboards[GRabbit.MakeColor(c)].Neighbors() & ^p.touching[c2]
+	p.dominating[c] = (p.presence[c] & ^p.bitboards[GRabbit.MakeColor(c)]).Neighbors()
+	p.updateFrozen()
 	for r := GRabbit; r < piece&decolorMask; r++ {
 		p.stronger[r] |= b
 	}
@@ -173,9 +193,8 @@ func (p *Pos) Remove(piece Piece, i Square) error {
 	p.bitboards[Empty] |= b
 	p.presence[c] &= notB
 	p.touching[c] = p.presence[c].Neighbors()
-	c2 := c.Opposite()
-	p.frozen[c] = p.touching[c2] & ^p.bitboards[GRabbit.MakeColor(c2)].Neighbors() & ^p.touching[c]
-	p.frozen[c2] = p.touching[c] & ^p.bitboards[GRabbit.MakeColor(c)].Neighbors() & ^p.touching[c2]
+	p.dominating[c] = (p.presence[c] & ^p.bitboards[GRabbit.MakeColor(c)]).Neighbors()
+	p.updateFrozen()
 	for r := GRabbit; r < piece&decolorMask; r++ {
 		p.stronger[r] &= notB
 	}
