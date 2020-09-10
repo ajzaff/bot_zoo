@@ -1,10 +1,14 @@
 package zoo
 
+import "os"
+
 const transposeTableSize = 2000000
 
 type Engine struct {
 	timeControl TimeControl
 	timeInfo    *TimeInfo
+
+	*AEI
 
 	searchInfo *SearchInfo
 
@@ -47,7 +51,7 @@ type Engine struct {
 }
 
 func NewEngine(seed int64) *Engine {
-	return &Engine{
+	e := &Engine{
 		timeControl:    makeTimeControl(),
 		p:              NewEmptyPosition(),
 		minDepth:       4,
@@ -58,6 +62,8 @@ func NewEngine(seed int64) *Engine {
 		table:          NewTable(transposeTableSize),
 		useTable:       true,
 	}
+	e.AEI = NewAEI(e, nil, os.Stdout)
+	return e
 }
 
 func (e *Engine) NewGame() {

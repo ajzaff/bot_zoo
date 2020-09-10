@@ -230,19 +230,19 @@ func (s *SearchInfo) searchRateKNps() int64 {
 func (e *Engine) printSearchInfo(best searchResult) {
 	s := e.searchInfo
 	if e.ponder {
-		fmt.Printf("log ponder\n")
+		e.Logf("ponder")
 	}
-	fmt.Printf("info depth %d\n", s.Depth())
-	fmt.Printf("info time %d\n", s.Seconds())
+	e.writef("info depth %d\n", s.Depth())
+	e.writef("info time %d\n", s.Seconds())
 	s.m.Lock()
-	fmt.Printf("info score %d\n", best.Score)
+	e.writef("info score %d\n", best.Score)
 	s.m.Unlock()
 	if pv, _, _ := e.table.PV(e.p); len(pv) > 0 {
-		fmt.Printf("info pv %s\n", MoveString(pv))
+		e.writef("info pv %s\n", MoveString(pv))
 	}
-	fmt.Printf("info nodes %d\n", s.nodes[len(s.nodes)-1])
-	fmt.Printf("log rate %d kN/s\n", s.searchRateKNps())
-	fmt.Printf("log transpositions %d\n", e.table.Len())
+	e.writef("info nodes %d\n", s.nodes[len(s.nodes)-1])
+	e.Logf("log rate %d kN/s", s.searchRateKNps())
+	e.Logf("log transpositions %d", e.table.Len())
 }
 
 func initWindowDelta(x int) int {
@@ -281,14 +281,17 @@ func (e *Engine) iterativeDeepeningRoot() {
 		}
 		e.printSearchInfo(best)
 		if !e.ponder {
-			fmt.Printf("bestmove %s\n", MoveString(best.Move))
+			e.writef("bestmove %s\n", MoveString(best.Move))
 		}
 		return
 	}
 
 	// First ply searched on main goroutine.
-	rootSteps := e.scoreMoves(p, e.getRootMovesLen(p, 1))
-	sortMoves(rootSteps)
+	moves := e.getRootMovesLen(p, 1)
+	rootSteps := make([]ScoredMove, len(moves))
+	for i, move := range moves {
+		rootSteps[i] = ScoredMove{score: -inf, move: move}
+	}
 
 	var best searchResult
 	best = e.searchRoot(p, rootSteps, -inf, +inf, 1)
@@ -309,6 +312,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 			}()
 
 			newPos := p.Clone()
+			r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 			// Main search loop:
 			best := searchResult{Score: rootScore}
@@ -316,7 +320,6 @@ func (e *Engine) iterativeDeepeningRoot() {
 				best.Depth = depth
 
 				// Generate all moves for use in this goroutine and add rootOrderNoise if configured.
-				r := rand.New(rand.NewSource(time.Now().UnixNano()))
 				n := depth
 				if n > 4 {
 					n = 4
@@ -326,11 +329,13 @@ func (e *Engine) iterativeDeepeningRoot() {
 				r.Shuffle(len(moves), func(i, j int) {
 					moves[i], moves[j] = moves[j], moves[i]
 				})
-				scoredMoves := e.scoreMoves(newPos, moves)
-				if e.rootOrderNoise > 0 {
-					e.perturbMoves(r, e.rootOrderNoise, scoredMoves)
+
+				scoredMoves := make([]ScoredMove, len(moves))
+				for i, move := range moves {
+					if e.rootOrderNoise != 0 {
+						scoredMoves[i] = ScoredMove{score: int(float64(e.rootOrderNoise) * r.Float64()), move: move}
+					}
 				}
-				sortMoves(scoredMoves)
 
 				// Aspiration window tracks the previous score for search.
 				// Whenever we fail high or low widen the window.
@@ -356,7 +361,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 						}
 						pv, _, _ := e.table.PV(newPos)
 						if len(pv) > 0 {
-							fmt.Printf("log [%d] [<=%d] %s\n", res.Depth, res.Score, MoveString(pv))
+							e.Logf("[%d] [<=%d] %s", res.Depth, res.Score, MoveString(pv))
 						}
 					} else if res.Score >= beta {
 						beta = res.Score + delta
@@ -365,7 +370,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 						}
 						pv, _, _ := e.table.PV(newPos)
 						if len(pv) > 0 {
-							fmt.Printf("log [%d] [>=%d] %s\n", res.Depth, res.Score, MoveString(pv))
+							e.Logf("[%d] [>=%d] %s", res.Depth, res.Score, MoveString(pv))
 						}
 					} else {
 						// The result was within the window.
@@ -374,7 +379,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 
 						pv, _, _ := e.table.PV(newPos)
 						if len(pv) > 0 {
-							fmt.Printf("log [%d] [==%d] %s\n", res.Depth, res.Score, MoveString(pv))
+							e.Logf("[%d] [==%d] %s", res.Depth, res.Score, MoveString(pv))
 						}
 						break
 					}
@@ -420,7 +425,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 				// Log the new best PV.
 				pv, _, _ := e.table.PV(p)
 				if len(pv) > 0 {
-					fmt.Printf("log [%d] [%d] %s\n", best.Depth, best.Score, MoveString(pv))
+					e.Logf("[%d] [%d] %s", best.Depth, best.Score, MoveString(pv))
 				}
 			}
 		case <-time.After(time.Second):
@@ -435,7 +440,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 				if rem < next {
 					// Time will soon be up! Stop the search.
 					b, errv := e.searchInfo.ebf()
-					fmt.Printf("log stop search now (b=%f{err=%f} cost=%s, budget=%s)\n", b, errv, next, rem)
+					e.Logf("log stop search now (b=%f{err=%f} cost=%s, budget=%s)", b, errv, next, rem)
 					if sr, ok := e.Stop(); ok {
 						best = sr
 					}
@@ -444,7 +449,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 		}
 
 		if e.fixedDepth > 0 && e.searchInfo.Depth() >= e.fixedDepth {
-			fmt.Printf("log stop search after fixed depth\n")
+			e.Logf("log stop search after fixed depth")
 			if sr, ok := e.Stop(); ok {
 				best = sr
 			}
@@ -455,7 +460,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 	// Print search info and "bestmove" if not pondering.
 	e.printSearchInfo(best)
 	if !e.ponder {
-		fmt.Printf("bestmove %s\n", MoveString(best.Move))
+		e.writef("bestmove %s\n", MoveString(best.Move))
 	}
 }
 

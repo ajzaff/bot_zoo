@@ -1,7 +1,6 @@
 package zoo
 
 import (
-	"fmt"
 	"math/rand"
 	"sort"
 )
@@ -34,38 +33,6 @@ func (e *Engine) perturbMoves(r *rand.Rand, f float64, scoredMoves []ScoredMove)
 func sortMoves(a []ScoredMove) {
 	sort.Stable(byLen(a))
 	sort.Stable(byScore(a))
-}
-
-// sortMoves computes move scores based on naive eval.
-// call rescorePVMoves to update the score after finding a PV.
-func (e *Engine) scoreMoves(p *Pos, moves [][]Step) []ScoredMove {
-	a := make([]ScoredMove, 0, len(moves))
-
-	// 2: Range over all moves.
-	for _, move := range moves {
-
-		// 2a. Try the move.
-		// In the unlikely case it's illegal give a score of -inf.
-		// We want to prune this move from the results.
-		if err := p.Move(move); err != nil {
-			if err != errRecurringPosition {
-				panic(fmt.Sprintf("moveorder_move: %v", err))
-			}
-		} else {
-			// Step 2b: Get the evaluation and set the score.
-			// Negate the score since sides have changed.
-			a = append(a, ScoredMove{
-				score: -p.Score(),
-				move:  move,
-			})
-		}
-
-		// Step 2c. Undo the move.
-		if err := p.Unmove(); err != nil {
-			panic(fmt.Sprintf("moveorder_unmove: %v", err))
-		}
-	}
-	return a
 }
 
 // rescorePVMoves updates the scored moves for the PV

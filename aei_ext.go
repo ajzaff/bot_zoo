@@ -32,8 +32,10 @@ func (a *AEI) handleExt(text string) error {
 			n, _ = strconv.Atoi(parts[1])
 		}
 		moves := a.engine.getRootMovesLen(a.engine.Pos(), 4)
-		scoredMoves := a.engine.scoreMoves(a.engine.Pos(), moves)
-		sortMoves(scoredMoves)
+		scoredMoves := make([]ScoredMove, len(moves))
+		for i, move := range moves {
+			scoredMoves[i] = ScoredMove{score: -inf, move: move}
+		}
 		a.engine.rescorePVMoves(a.engine.Pos(), scoredMoves)
 		if n == 0 {
 			n = len(scoredMoves)

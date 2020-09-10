@@ -166,7 +166,9 @@ func (p *Pos) getRootMovesLenInternal(set map[int64]bool, prefix []Step, moves *
 		}
 		if !set[p.zhash] {
 			set[p.zhash] = true
-			*moves = append(*moves, move)
+			if !Recurring(move) {
+				*moves = append(*moves, move)
+			}
 		}
 		return
 	}
@@ -188,7 +190,9 @@ func (p *Pos) getRootMovesLenInternal(set map[int64]bool, prefix []Step, moves *
 				set[p.zhash] = true
 				move := make([]Step, len(prefix))
 				copy(move, prefix)
-				*moves = append(*moves, move)
+				if !Recurring(move) {
+					*moves = append(*moves, move)
+				}
 			}
 		} else {
 			p.getRootMovesLenInternal(set, prefix, moves, stepsLeft-step.Len())
@@ -214,4 +218,37 @@ func (e *Engine) getRootMovesLen(p *Pos, depth int) [][]Step {
 		p.getRootMovesLenInternal(set, prefix, &moves, i)
 	}
 	return moves
+}
+
+func recurring2(ka, kb StepKind, a, b Step) bool {
+	// Three cases:
+	// 	a and b are default steps that cancel eachother out
+	//	a and b are push & pull
+	//	a and b are pull & push
+	return (ka == KindDefault && kb == KindDefault ||
+		ka == KindPush && kb == KindPull ||
+		ka == KindPull && kb == KindPush) &&
+		a.Src == b.Dest && a.Dest == b.Src
+}
+
+func recurring4(a, b, c, d Step) bool {
+	ka, kb, kc, kd := a.Kind(), b.Kind(), c.Kind(), d.Kind()
+	return recurring2(ka, kb, a, b) && recurring2(kb, kc, b, c) ||
+		recurring2(ka, kc, a, c) && recurring2(kb, kd, b, d) ||
+		recurring2(ka, kd, a, d) && recurring2(kb, kc, b, c)
+}
+
+// Recurring evaluates statically whether the move leads to a recurring position.
+// The provided move should be terminated with a (pass) move.
+func Recurring(move []Step) bool {
+	switch len(move) {
+	case 1:
+		return true
+	case 3:
+		return recurring2(move[0].Kind(), move[1].Kind(), move[0], move[1])
+	case 5:
+		return recurring4(move[0], move[1], move[2], move[3])
+	default: // 1, 3, other lengths
+		return false
+	}
 }

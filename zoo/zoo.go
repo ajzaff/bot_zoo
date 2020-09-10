@@ -20,15 +20,14 @@ func main() {
 		*seed = time.Now().UnixNano()
 	}
 	engine := zoo.NewEngine(*seed)
-	aei := zoo.NewAEI(engine)
-	aei.SetVerbose(*verbose)
+	engine.SetVerbose(*verbose)
 	log.SetOutput(os.Stderr)
 	log.SetFlags(0)
 	log.SetPrefix("")
-	log.Println("zoo v0 by Alan Zaffetti")
+	log.Println("bot_zoo v0 by Alan Zaffetti")
 	log.Println("For operation instructions: <http://arimaa.janzert.com/aei/aei-protocol.html>")
 	log.Println(`To quit: type "quit"`)
-	if err := aei.Run(os.Stdout, os.Stdin); err != nil {
+	if err := engine.RunAEI(os.Stdin); err != nil {
 		log.Fatal(err)
 	}
 	log.Println("Goodbye!")

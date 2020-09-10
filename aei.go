@@ -15,13 +15,16 @@ type AEI struct {
 	engine       *Engine
 	id           []string
 	protoVersion string
+	log          io.Writer
 	w            io.Writer
 	verbose      bool
 }
 
-func NewAEI(engine *Engine) *AEI {
+func NewAEI(engine *Engine, log, w io.Writer) *AEI {
 	return &AEI{
 		engine: engine,
+		log:    log,
+		w:      w,
 		id: []string{
 			"name zoo",
 			"author Alan Zaffetti",
@@ -29,6 +32,14 @@ func NewAEI(engine *Engine) *AEI {
 		},
 		protoVersion: "1",
 	}
+}
+
+func (a *AEI) SetLog(w io.Writer) {
+	a.log = w
+}
+
+func (a *AEI) SetOutput(w io.Writer) {
+	a.w = w
 }
 
 func (a *AEI) SetVerbose(verbose bool) {
@@ -136,13 +147,16 @@ func (a *AEI) Logf(format string, as ...interface{}) {
 	s := fmt.Sprintf(format, as...)
 	sc := bufio.NewScanner(strings.NewReader(s))
 	for sc.Scan() {
+		if a.log != nil {
+			s := fmt.Sprintf(format, as...)
+			a.log.Write([]byte(s))
+		}
 		a.writef("log %s\n", sc.Text())
 	}
 }
 
-func (a *AEI) Run(w io.Writer, r io.Reader) error {
+func (a *AEI) RunAEI(r io.Reader) error {
 	sc := bufio.NewScanner(r)
-	a.w = w
 	for sc.Scan() {
 		text := strings.TrimSpace(sc.Text())
 		a.verboseLog(false, text)
