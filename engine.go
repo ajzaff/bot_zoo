@@ -12,6 +12,8 @@ type Engine struct {
 
 	searchInfo *SearchInfo
 
+	best searchResult
+
 	p *Pos
 
 	// depth != 0 implies fixed depth.

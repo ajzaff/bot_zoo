@@ -198,24 +198,23 @@ func (e *Engine) GoInfinite() {
 
 // Stop stops the search immediately and collects the final search results
 // and blocks until all goroutines have stoped.
-func (e *Engine) Stop() (best searchResult, ok bool) {
+func (e *Engine) Stop() {
 	if e.running == 1 && atomic.LoadInt32(&e.stopping) == 0 {
-		best.Depth = 1
-		ok = true
 		e.stopping = 1
 		for i := 0; i < e.concurrency; i++ {
 			b := <-e.done
-			if b.Depth > best.Depth {
+			if b.Depth > e.best.Depth {
+				fmt.Printf("best score overwritten by partial search: [%d] [%d] %s -> [%d] [%d] [%s]\n",
+					e.best.Depth, e.best.Score, MoveString(e.best.Move), b.Depth, b.Score, MoveString(b.Move))
 				// Select the deepest result.
 				// TODO(ajzaff): This is not actually verifying the node depth.
 				// Ideally we should move searchInfo to the goroutines to get these counts.
-				best = b
+				e.best = b
 			}
 		}
 		e.stopping = 0
 		atomic.SwapInt32(&e.running, 0)
 	}
-	return best, ok
 }
 
 func (s *SearchInfo) searchRateKNps() int64 {
@@ -293,9 +292,8 @@ func (e *Engine) iterativeDeepeningRoot() {
 		rootSteps[i] = ScoredMove{score: -inf, move: move}
 	}
 
-	var best searchResult
-	best = e.searchRoot(p, rootSteps, -inf, +inf, 1)
-	e.printSearchInfo(best)
+	e.best = e.searchRoot(p, rootSteps, -inf, +inf, 1)
+	e.printSearchInfo(e.best)
 	resultChan := make(chan searchResult)
 
 	// Implementation of Lazy SMP which runs parallel searches
@@ -303,6 +301,8 @@ func (e *Engine) iterativeDeepeningRoot() {
 	// arriving at a given (deeper) position faster on average.
 	for i := 0; i < e.concurrency; i++ {
 		go func(rootScore int) {
+			best := searchResult{Score: rootScore}
+
 			defer func() {
 				// Send the best move from the last (possibly partially cancelled) search.
 				// TODO(ajzaff): In principle these searches may not be totally finished.
@@ -314,28 +314,22 @@ func (e *Engine) iterativeDeepeningRoot() {
 			newPos := p.Clone()
 			r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
+			// Generate all moves for use in this goroutine and add rootOrderNoise if configured.
+			moves := e.getRootMovesLen(newPos, 4)
+			// Shuffling moves increases variance in concurrent search.
+			r.Shuffle(len(moves), func(i, j int) {
+				moves[i], moves[j] = moves[j], moves[i]
+			})
+			scoredMoves := make([]ScoredMove, len(moves))
+			for i, move := range moves {
+				if e.rootOrderNoise != 0 {
+					scoredMoves[i] = ScoredMove{score: int(float64(e.rootOrderNoise) * r.Float64()), move: move}
+				}
+			}
+
 			// Main search loop:
-			best := searchResult{Score: rootScore}
 			for depth := 2; depth < maxPly; depth++ {
 				best.Depth = depth
-
-				// Generate all moves for use in this goroutine and add rootOrderNoise if configured.
-				n := depth
-				if n > 4 {
-					n = 4
-				}
-				moves := e.getRootMovesLen(newPos, n)
-				// Shuffling moves increases variance in concurrent search.
-				r.Shuffle(len(moves), func(i, j int) {
-					moves[i], moves[j] = moves[j], moves[i]
-				})
-
-				scoredMoves := make([]ScoredMove, len(moves))
-				for i, move := range moves {
-					if e.rootOrderNoise != 0 {
-						scoredMoves[i] = ScoredMove{score: int(float64(e.rootOrderNoise) * r.Float64()), move: move}
-					}
-				}
 
 				// Aspiration window tracks the previous score for search.
 				// Whenever we fail high or low widen the window.
@@ -411,7 +405,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 				// Send best move from (possibly cancelled) last ply to the done chan.
 				resultChan <- best
 			}
-		}(best.Score)
+		}(e.best.Score)
 	}
 
 	// Collect search results and manage timeout.
@@ -419,48 +413,42 @@ func (e *Engine) iterativeDeepeningRoot() {
 		next, rem := e.searchInfo.GuessPlyDuration(), e.timeControl.FixedOptimalTimeRemaining(e.timeInfo, p.side)
 		select {
 		case b := <-resultChan:
-			if b.Depth > best.Depth || (b.Depth == best.Depth && b.Score > best.Score) {
-				best = b
+			if b.Depth > e.best.Depth || (b.Depth == e.best.Depth && b.Score > e.best.Score) {
+				e.best = b
 
 				// Log the new best PV.
 				pv, _, _ := e.table.PV(p)
 				if len(pv) > 0 {
-					e.Logf("[%d] [%d] %s", best.Depth, best.Score, MoveString(pv))
+					e.Logf("[%d] [%d] %s", e.best.Depth, e.best.Score, MoveString(pv))
 				}
 			}
 		case <-time.After(time.Second):
 			if e.fixedDepth == 0 && !e.ponder {
 				if rem < 3*time.Second {
 					fmt.Println("log stop search now to avoid timeout")
-					if sr, ok := e.Stop(); ok {
-						best = sr
-					}
+					e.Stop()
 					break
 				}
 				if rem < next {
 					// Time will soon be up! Stop the search.
 					b, errv := e.searchInfo.ebf()
 					e.Logf("log stop search now (b=%f{err=%f} cost=%s, budget=%s)", b, errv, next, rem)
-					if sr, ok := e.Stop(); ok {
-						best = sr
-					}
+					e.Stop()
 				}
 			}
 		}
 
 		if e.fixedDepth > 0 && e.searchInfo.Depth() >= e.fixedDepth {
 			e.Logf("log stop search after fixed depth")
-			if sr, ok := e.Stop(); ok {
-				best = sr
-			}
+			e.Stop()
 			break
 		}
 	}
 
 	// Print search info and "bestmove" if not pondering.
-	e.printSearchInfo(best)
+	e.printSearchInfo(e.best)
 	if !e.ponder {
-		e.writef("bestmove %s\n", MoveString(best.Move))
+		e.writef("bestmove %s\n", MoveString(e.best.Move))
 	}
 }
 
