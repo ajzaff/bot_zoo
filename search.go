@@ -202,15 +202,10 @@ func (e *Engine) Stop() {
 	if e.running == 1 && atomic.LoadInt32(&e.stopping) == 0 {
 		e.stopping = 1
 		for i := 0; i < e.concurrency; i++ {
-			b := <-e.done
-			if b.Depth > e.best.Depth {
-				fmt.Printf("best score overwritten by partial search: [%d] [%d] %s -> [%d] [%d] [%s]\n",
-					e.best.Depth, e.best.Score, MoveString(e.best.Move), b.Depth, b.Score, MoveString(b.Move))
-				// Select the deepest result.
-				// TODO(ajzaff): This is not actually verifying the node depth.
-				// Ideally we should move searchInfo to the goroutines to get these counts.
-				e.best = b
-			}
+			<-e.done
+			// FIXME(ajzaff):
+			// We would like to use this final result, but it's very unstable due
+			// to cancelled search. Should we fix the instability we can use this.
 		}
 		e.stopping = 0
 		atomic.SwapInt32(&e.running, 0)
@@ -490,8 +485,10 @@ func (e *Engine) search(p *Pos, stepList *StepList, alpha, beta, depth, maxDepth
 	var bestStep *Step
 
 	// Step 1: Check the transposition table.
+	var pv bool
 	if e.useTable {
-		if entry, ok := e.table.ProbeDepth(p.zhash, maxDepth-depth); ok {
+		var entry *TableEntry
+		if entry, pv = e.table.ProbeDepth(p.zhash, maxDepth-depth); pv {
 			bestStep = entry.Step
 			switch entry.Bound {
 			case ExactBound:
@@ -529,6 +526,13 @@ func (e *Engine) search(p *Pos, stepList *StepList, alpha, beta, depth, maxDepth
 		if score >= beta {
 			return score // null move pruning
 		}
+	}
+
+	if !pv && maxDepth-depth > 6 {
+		// If position is not in table, decrease maxDepth by 2.
+		// FIXME(ajzaff): I copied this 'optimization' blindly from Stockfish
+		// but I haven't validated if it works yet.
+		maxDepth -= 2
 	}
 
 	// Generate steps at this ply and add them to the list.
