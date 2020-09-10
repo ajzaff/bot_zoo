@@ -77,7 +77,8 @@ func (p *Pos) Steps(a *[]Step) {
 		ts.Each(func(sb Bitboard) {
 			src := sb.Square()
 
-			if p.frozen(c1, src) {
+			// TODO(ajzaff): Move this to the Each.
+			if p.frozen[c1]&sb != 0 {
 				return
 			}
 

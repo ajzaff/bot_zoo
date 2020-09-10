@@ -9,7 +9,10 @@ type Pos struct {
 	board     []Piece    // board information
 	bitboards []Bitboard // bitboard data
 	presence  []Bitboard // board presence for each side
-	stronger  []Bitboard // stronger pieces bitboards
+	stronger  []Bitboard // stronger pieces by piece&decolorMask
+	weaker    []Bitboard // weaker pieces by piece&decolorMask
+	touching  []Bitboard // squares touched for each side
+	frozen    []Bitboard // frozen squares for each side
 	side      Color      // side to play
 	depth     int        // number of steps to arrive at the position
 	moveNum   int        // number of moves left for this turn
@@ -24,6 +27,9 @@ func newPos(
 	bitboards []Bitboard,
 	presence []Bitboard,
 	stronger []Bitboard,
+	weaker []Bitboard,
+	touching []Bitboard,
+	frozen []Bitboard,
 	side Color,
 	depth int,
 	moveNum int,
@@ -54,7 +60,16 @@ func newPos(
 		}
 	}
 	if stronger == nil {
-		stronger = make([]Bitboard, 15)
+		stronger = make([]Bitboard, 8)
+	}
+	if weaker == nil {
+		weaker = make([]Bitboard, 8)
+	}
+	if touching == nil {
+		touching = make([]Bitboard, 2)
+	}
+	if frozen == nil {
+		frozen = make([]Bitboard, 2)
 	}
 	if zhash == 0 {
 		zhash = ZHash(bitboards, side, len(steps))
@@ -64,6 +79,9 @@ func newPos(
 		bitboards: bitboards,
 		presence:  presence,
 		stronger:  stronger,
+		weaker:    weaker,
+		touching:  touching,
+		frozen:    frozen,
 		side:      side,
 		stepsLeft: stepsLeft,
 		depth:     depth,
@@ -77,21 +95,27 @@ func (p *Pos) Clone() *Pos {
 	board := make([]Piece, 64)
 	bs := make([]Bitboard, 15)
 	ps := make([]Bitboard, 2)
-	sb := make([]Bitboard, 15)
+	sb := make([]Bitboard, 8)
+	wb := make([]Bitboard, 8)
+	tb := make([]Bitboard, 2)
+	fb := make([]Bitboard, 2)
 	steps := make([]Step, len(p.steps))
 	moves := make([][]Step, len(p.moves))
 	copy(board, p.board)
 	copy(bs, p.bitboards)
 	copy(ps, p.presence)
 	copy(sb, p.stronger)
+	copy(wb, p.weaker)
+	copy(tb, p.touching)
+	copy(fb, p.frozen)
 	copy(steps, p.steps)
 	for i := range moves {
 		moves[i] = make([]Step, len(p.moves[i]))
 		copy(moves[i], p.moves[i])
 	}
 	return newPos(
-		board, bs, ps, sb, p.side, p.depth, p.moveNum,
-		moves, steps, p.stepsLeft, p.zhash,
+		board, bs, ps, sb, wb, tb, fb, p.side, p.depth,
+		p.moveNum, moves, steps, p.stepsLeft, p.zhash,
 	)
 }
 
@@ -118,12 +142,20 @@ func (p *Pos) Place(piece Piece, i Square) error {
 	if p.bitboards[Empty]&b == 0 {
 		return fmt.Errorf("piece already present on %s", i)
 	}
+	c := piece.Color()
 	p.board[i] = piece
 	p.bitboards[piece] |= b
 	p.bitboards[Empty] &= ^b
-	p.presence[piece.Color()] |= b
-	for r := GRabbit.MakeColor(piece.Color()); r < piece; r++ {
+	p.presence[c] |= b
+	p.touching[c] = p.presence[c].Neighbors()
+	c2 := c.Opposite()
+	p.frozen[c] = p.touching[c2] & ^p.bitboards[GRabbit.MakeColor(c2)].Neighbors() & ^p.touching[c]
+	p.frozen[c2] = p.touching[c] & ^p.bitboards[GRabbit.MakeColor(c)].Neighbors() & ^p.touching[c2]
+	for r := GRabbit; r < piece&decolorMask; r++ {
 		p.stronger[r] |= b
+	}
+	for r := piece&decolorMask + 1; r <= GElephant; r++ {
+		p.weaker[r] |= b
 	}
 	p.zhash ^= ZPieceKey(piece, i)
 	return nil
@@ -134,13 +166,21 @@ func (p *Pos) Remove(piece Piece, i Square) error {
 	if p.bitboards[Empty]&b != 0 {
 		return fmt.Errorf("no piece present on %s", i)
 	}
+	c := piece.Color()
 	notB := ^b
 	p.board[i] = Empty
 	p.bitboards[piece] &= notB
 	p.bitboards[Empty] |= b
-	p.presence[piece.Color()] &= notB
-	for r := GRabbit.MakeColor(piece.Color()); r < piece; r++ {
+	p.presence[c] &= notB
+	p.touching[c] = p.presence[c].Neighbors()
+	c2 := c.Opposite()
+	p.frozen[c] = p.touching[c2] & ^p.bitboards[GRabbit.MakeColor(c2)].Neighbors() & ^p.touching[c]
+	p.frozen[c2] = p.touching[c] & ^p.bitboards[GRabbit.MakeColor(c)].Neighbors() & ^p.touching[c2]
+	for r := GRabbit; r < piece&decolorMask; r++ {
 		p.stronger[r] &= notB
+	}
+	for r := piece&decolorMask + 1; r <= GElephant; r++ {
+		p.weaker[r] &= notB
 	}
 	p.zhash ^= ZPieceKey(piece, i)
 	return nil

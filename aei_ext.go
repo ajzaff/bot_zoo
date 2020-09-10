@@ -126,9 +126,32 @@ func (a *AEI) handleExt(text string) error {
 		}
 		var b Bitboard
 		switch parts[1] {
-		case "w", "g":
-			b = a.engine.Pos().presence[Gold]
-		case "b", "s":
+		case "weaker":
+			b = a.engine.Pos().touching[Gold]
+			for t := GRabbit; t <= GElephant; t++ {
+				b = a.engine.Pos().weaker[t]
+				a.Logf(t.String())
+				a.Logf(b.String())
+			}
+			return nil
+		case "stronger":
+			for t := GRabbit; t <= GElephant; t++ {
+				b = a.engine.Pos().stronger[t]
+				a.Logf(t.String())
+				a.Logf(b.String())
+			}
+			return nil
+		case "tg":
+			b = a.engine.Pos().touching[Gold]
+		case "ts":
+			b = a.engine.Pos().touching[Silver]
+		case "fg":
+			b = a.engine.Pos().frozen[Gold]
+		case "fs":
+			b = a.engine.Pos().frozen[Silver]
+		case "g":
+			b = a.engine.Pos().presence[Silver]
+		case "s":
 			b = a.engine.Pos().presence[Silver]
 		case "short":
 			a.Logf(a.engine.Pos().ShortString())

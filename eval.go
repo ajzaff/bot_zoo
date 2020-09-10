@@ -115,7 +115,7 @@ func (p *Pos) mobilityScore(side Color) (score int) {
 	b := p.presence[side]
 	for b > 0 {
 		atB := b & -b
-		if !p.frozen(side, atB.Square()) {
+		if p.frozen[side]&atB == 0 {
 			count++
 		}
 		b &= ^atB
@@ -189,27 +189,18 @@ func (p *Pos) terminalEliminationValue() int {
 }
 
 // frozen returns a frozen piece of color c at i.
-func (p *Pos) frozen(c Color, i Square) bool {
+func (p *Pos) frozenB(c Color, i Square) bool {
 	t := p.board[i]
 	if t == Empty || t.SameType(GElephant) {
 		// Piece is empty or unfreezable elephant.
 		return false
 	}
-	neighbors := i.Bitboard().Neighbors()
-	return neighbors&p.presence[c] == 0 && // We have no friendly neighbors
-		neighbors&p.stronger[t.MakeColor(c.Opposite())] != 0 // The enemy has a stronger piece next to us
+	b := i.Bitboard()
+	return p.stronger[t.MakeColor(c.Opposite())].Neighbors()&p.frozen[c]&b == 0
 }
 
 func (p *Pos) immobilized(c Color) bool {
-	b := p.presence[c]
-	for b > 0 {
-		atB := b & -b
-		if !p.frozen(c, atB.Square()) {
-			return false
-		}
-		b &= ^atB
-	}
-	return true
+	return p.presence[c] & ^p.frozen[c] == 0
 }
 
 func (p *Pos) terminalImmobilizedValue() int {
