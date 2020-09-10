@@ -140,6 +140,10 @@ func (s *SearchInfo) GuessPlyDuration() time.Duration {
 	// Nodes[d-1]     Nodes[d]
 
 	b, _ := s.ebf()
+	if b == 1 {
+		// EFB is not set, we should be ok to proceed.
+		return 0
+	}
 	lastDuration := float64(time.Now().UnixNano() - s.times[d])
 	lastNodes := float64(s.nodes[d])
 	nextNodes := lastNodes + math.Pow(b, float64(1+d))
@@ -419,7 +423,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 			}
 		case <-time.After(time.Second):
 			if e.fixedDepth == 0 && !e.ponder {
-				if rem < 3*time.Second {
+				if e.timeControl.GameTimeRemaining(e.timeInfo, p.side) < 3*time.Second {
 					fmt.Println("log stop search now to avoid timeout")
 					e.Stop()
 					break
