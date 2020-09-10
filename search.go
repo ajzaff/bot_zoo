@@ -452,7 +452,7 @@ func (e *Engine) searchRoot(p *Pos, scoredMoves []ScoredMove, alpha, beta, depth
 		Score: alpha,
 		Depth: depth,
 	}
-	for _, entry := range scoredMoves {
+	for i, entry := range scoredMoves {
 		if e.stopping == 1 {
 			break
 		}
@@ -464,7 +464,7 @@ func (e *Engine) searchRoot(p *Pos, scoredMoves []ScoredMove, alpha, beta, depth
 			panic(fmt.Sprintf("search_move_root: %s: %v", entry.move, err))
 		}
 		var stepList StepList
-		score := -e.search(p, &stepList, -beta, -alpha, n, depth)
+		score := -e.search(p, &stepList, i == 0, -beta, -alpha, n, depth)
 		if err := p.Unmove(); err != nil {
 			panic(fmt.Sprintf("search_unmove_root: %s: %v", entry.move, err))
 		}
@@ -480,15 +480,16 @@ func (e *Engine) searchRoot(p *Pos, scoredMoves []ScoredMove, alpha, beta, depth
 	return best
 }
 
-func (e *Engine) search(p *Pos, stepList *StepList, alpha, beta, depth, maxDepth int) int {
+func (e *Engine) search(p *Pos, stepList *StepList, pv bool, alpha, beta, depth, maxDepth int) int {
 	alphaOrig := alpha
 	var bestStep *Step
 
 	// Step 1: Check the transposition table.
-	var pv bool
+	var tableMove bool
 	if e.useTable {
 		var entry *TableEntry
 		if entry, pv = e.table.ProbeDepth(p.zhash, maxDepth-depth); pv {
+			tableMove = true
 			bestStep = entry.Step
 			switch entry.Bound {
 			case ExactBound:
@@ -504,6 +505,7 @@ func (e *Engine) search(p *Pos, stepList *StepList, alpha, beta, depth, maxDepth
 			}
 		}
 	}
+	pv = pv && tableMove
 
 	if alpha >= beta {
 		return alpha // fail-hard cutoff
@@ -521,15 +523,15 @@ func (e *Engine) search(p *Pos, stepList *StepList, alpha, beta, depth, maxDepth
 	// Step 2c. Try null move pruning.
 	if e.nullMoveR > 0 && depth+e.nullMoveR < maxDepth {
 		p.Pass()
-		score := -e.search(p, stepList, -beta, -alpha, depth+e.nullMoveR+1, maxDepth)
+		score := -e.search(p, stepList, pv, -beta, -alpha, depth+e.nullMoveR+1, maxDepth)
 		p.Unpass()
 		if score >= beta {
 			return score // null move pruning
 		}
 	}
 
-	if !pv && maxDepth-depth > 6 {
-		// If position is not in table, decrease maxDepth by 2.
+	if pv && maxDepth-depth > 6 {
+		// If position is not in table, and is PV line, decrease maxDepth by 2.
 		// FIXME(ajzaff): I copied this 'optimization' blindly from Stockfish
 		// but I haven't validated if it works yet.
 		maxDepth -= 2
@@ -549,6 +551,7 @@ func (e *Engine) search(p *Pos, stepList *StepList, alpha, beta, depth, maxDepth
 	selector := e.stepSelector(stepList.steps[l:])
 	best := alpha
 	nodes := 0
+	first := true
 	for step, ok := selector.Select(); ok; step, ok = selector.Select() {
 		n := step.Len()
 		if depth+n > maxDepth {
@@ -562,10 +565,11 @@ func (e *Engine) search(p *Pos, stepList *StepList, alpha, beta, depth, maxDepth
 		}
 		var score int
 		if p.side == initSide {
-			score = e.search(p, stepList, alpha, beta, depth+n, maxDepth)
+			score = e.search(p, stepList, pv && first, alpha, beta, depth+n, maxDepth)
 		} else {
-			score = -e.search(p, stepList, -beta, -alpha, depth+n, maxDepth)
+			score = -e.search(p, stepList, pv && first, -beta, -alpha, depth+n, maxDepth)
 		}
+		first = false
 		if err := p.Unstep(); err != nil {
 			panic(fmt.Sprintf("search_unstep: %v", err))
 		}
