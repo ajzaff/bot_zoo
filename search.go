@@ -528,7 +528,6 @@ func (e *Engine) search(p *Pos, stepList *StepList, pv bool, alpha, beta, depth,
 			}
 		}
 	}
-	pv = pv && tableMove
 
 	if alpha >= beta {
 		return alpha // fail-hard cutoff
@@ -544,7 +543,7 @@ func (e *Engine) search(p *Pos, stepList *StepList, pv bool, alpha, beta, depth,
 	assert("!(0 < depth && depth < maxDepth)", 0 < depth && depth < maxDepth)
 
 	// Step 2c. Try null move pruning.
-	if e.nullMoveR > 0 && depth+e.nullMoveR < maxDepth {
+	if eval := p.Score(); !pv && eval >= beta && e.nullMoveR > 0 && depth+e.nullMoveR < maxDepth {
 		p.Pass()
 		score := -e.search(p, stepList, pv, -beta, -alpha, depth+e.nullMoveR+1, maxDepth)
 		p.Unpass()
@@ -553,7 +552,7 @@ func (e *Engine) search(p *Pos, stepList *StepList, pv bool, alpha, beta, depth,
 		}
 	}
 
-	if pv && maxDepth-depth >= 8 {
+	if pv && !tableMove && maxDepth-depth >= 8 {
 		// If position is not in table, and is PV line, decrease maxDepth by 2.
 		maxDepth -= 2
 	}
