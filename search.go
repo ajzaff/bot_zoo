@@ -13,7 +13,7 @@ const maxPly = 1024
 
 const inf = 1000000
 
-type SearchInfo struct {
+type searchInfo struct {
 	// cumulative nodes at the given ply
 	// which can be used to compute the EBF.
 	nodes []int // guarded by m
@@ -30,24 +30,24 @@ type SearchInfo struct {
 	m sync.Mutex
 }
 
-func newSearchInfo() *SearchInfo {
-	s := &SearchInfo{}
+func newSearchInfo() *searchInfo {
+	s := &searchInfo{}
 	s.addNodes(1, 0)
 	return s
 }
 
 // locks excluded: s.m
-func (s *SearchInfo) depth() int {
+func (s *searchInfo) depth() int {
 	return len(s.nodes)
 }
 
-func (s *SearchInfo) Depth() int {
+func (s *searchInfo) Depth() int {
 	s.m.Lock()
 	defer s.m.Unlock()
 	return s.depth()
 }
 
-func (s *SearchInfo) addNodes(depth, v int) {
+func (s *searchInfo) addNodes(depth, v int) {
 	s.m.Lock()
 	defer s.m.Unlock()
 	if depth > 0 {
@@ -65,12 +65,12 @@ func (s *SearchInfo) addNodes(depth, v int) {
 }
 
 // Nodes returns the number of nodes searched in all ply.
-func (s *SearchInfo) Nodes() int {
+func (s *searchInfo) Nodes() int {
 	return s.nodes[len(s.nodes)-1]
 }
 
 // Seconds returns the number of seconds searched in all ply.
-func (s *SearchInfo) Seconds() int64 {
+func (s *searchInfo) Seconds() int64 {
 	s.m.Lock()
 	end := s.bestTime
 	s.m.Unlock()
@@ -89,7 +89,7 @@ func computebfNd(d int, b float64) float64 {
 }
 
 // locks excluded: s.m.
-func (s *SearchInfo) ebfInternal(d int, N float64) (b float64, err float64) {
+func (s *searchInfo) ebfInternal(d int, N float64) (b float64, err float64) {
 	const (
 		tol   = 1000.
 		small = 1e-4
@@ -115,7 +115,7 @@ func (s *SearchInfo) ebfInternal(d int, N float64) (b float64, err float64) {
 // EBF experimentally computes the effective branching factor using per-ply node count.
 // This helps compute the time required to search to depth d.
 // locks excluded: s.m.
-func (s *SearchInfo) ebf() (b float64, err float64) {
+func (s *searchInfo) ebf() (b float64, err float64) {
 	d := s.depth() - 1
 	if d < 4 {
 		// Avoid EBF instability in small values.
@@ -125,7 +125,7 @@ func (s *SearchInfo) ebf() (b float64, err float64) {
 }
 
 // GuessPlyDuration guesses the duration of the next ply of search.
-func (s *SearchInfo) GuessPlyDuration() time.Duration {
+func (s *searchInfo) GuessPlyDuration() time.Duration {
 	s.m.Lock()
 	defer s.m.Unlock()
 
@@ -157,7 +157,7 @@ func (s *SearchInfo) GuessPlyDuration() time.Duration {
 func (e *Engine) startNow() {
 	defer func() {
 		if r := recover(); r != nil {
-			panic(fmt.Sprintf("log SEARCH_ERROR recovered: %v\n", r))
+			panic(fmt.Sprintf("SEARCH_ERROR recovered: %v\n", r))
 		}
 	}()
 	go e.iterativeDeepeningRoot()
@@ -179,7 +179,7 @@ func (e *Engine) GoFixed(fixedDepth int) {
 		e.fixedDepth = fixedDepth
 		defer func() {
 			if r := recover(); r != nil {
-				panic(fmt.Sprintf("log SEARCH_ERROR_FIXED recovered: %v\n", r))
+				panic(fmt.Sprintf("SEARCH_ERROR_FIXED recovered: %v\n", r))
 			}
 		}()
 		e.iterativeDeepeningRoot()
@@ -202,12 +202,22 @@ func (e *Engine) GoInfinite() {
 
 // Stop signals the search to stop immediately.
 func (e *Engine) Stop() {
-	if e.running == 1 && atomic.LoadInt32(&e.stopping) == 0 {
-		e.stopping = 1
+	if atomic.CompareAndSwapInt32(&e.stopping, 0, 1) {
+	loop:
+		for {
+			select {
+			case <-e.resultChan:
+			default:
+				break loop
+			}
+		}
+		e.wg.Wait()
+		e.running = 0
+		e.stopping = 0
 	}
 }
 
-func (s *SearchInfo) searchRateKNps() int64 {
+func (s *searchInfo) searchRateKNps() int64 {
 	ns := s.times[len(s.times)-1] - s.times[0]
 	if ns == 0 {
 		return 0
@@ -230,8 +240,8 @@ func (e *Engine) printSearchInfo(best searchResult) {
 		e.writef("info pv %s\n", MoveString(pv))
 	}
 	e.writef("info nodes %d\n", s.nodes[len(s.nodes)-1])
-	e.Logf("log rate %d kN/s", s.searchRateKNps())
-	e.Logf("log transpositions %d", e.table.Len())
+	e.Logf("rate %d kN/s", s.searchRateKNps())
+	e.Logf("transpositions %d", e.table.Len())
 }
 
 func initWindowDelta(x int) int {
@@ -284,7 +294,8 @@ func (e *Engine) iterativeDeepeningRoot() {
 
 	e.best = e.searchRoot(p, rootSteps, -inf, +inf, 1)
 	e.printSearchInfo(e.best)
-	resultChan := make(chan searchResult)
+	e.resultChan = make(chan searchResult)
+	e.wg.Add(e.concurrency)
 
 	// Implementation of Lazy SMP which runs parallel searches
 	// with slightly varied root node orderings. This leads to
@@ -294,11 +305,11 @@ func (e *Engine) iterativeDeepeningRoot() {
 			best := searchResult{Score: rootScore}
 
 			defer func() {
-				// Send the best move from the last (possibly partially cancelled) search.
-				// TODO(ajzaff): In principle these searches may not be totally finished.
-				// In practice, these move are often better than the last finished ply.
-				// Find out if there's a better solution.
-				e.done <- best
+				// FIXME(ajzaff):
+				// We would like to use this final result, but it's very unstable due
+				// to cancelled search. Should we fix the instability we can use this.
+				// Reduce the tracking count of running goroutines by 1.
+				e.wg.Done()
 			}()
 
 			newPos := p.Clone()
@@ -340,8 +351,10 @@ func (e *Engine) iterativeDeepeningRoot() {
 					res := e.searchRoot(newPos, scoredMoves, alpha, beta, depth)
 					if Terminal(res.Score) {
 						// Stop the search goroutine if a terminal value is achieved.
-						resultChan <- res
-						return
+						// FIXME(ajzaff): The main thread doesn't handle the workers stopping well.
+						// It not cancel early.
+						best = res
+						break
 					}
 					if res.Score <= alpha {
 						pv, _, _ := e.table.PV(newPos)
@@ -399,23 +412,17 @@ func (e *Engine) iterativeDeepeningRoot() {
 				}
 
 				// Send best move from (possibly cancelled) last ply to the done chan.
-				resultChan <- best
+				e.resultChan <- best
 			}
 		}(e.best.Score)
 	}
 
 	// Track the number of running goroutines.
 	// Collect search results and manage timeout.
-	for goroutines := e.concurrency; e.running == 1 && goroutines > 0; {
+	for e.running == 1 {
 		next, rem := e.searchInfo.GuessPlyDuration(), e.timeControl.FixedOptimalTimeRemaining(e.timeInfo, p.side)
 		select {
-		case <-e.done:
-			// FIXME(ajzaff):
-			// We would like to use this final result, but it's very unstable due
-			// to cancelled search. Should we fix the instability we can use this.
-			// Reduce the tracking count of running goroutines by 1.
-			goroutines--
-		case b := <-resultChan:
+		case b := <-e.resultChan:
 			if b.Depth > e.best.Depth || (b.Depth == e.best.Depth && b.Score > e.best.Score) {
 				e.best = b
 
@@ -424,31 +431,34 @@ func (e *Engine) iterativeDeepeningRoot() {
 				if len(pv) > 0 {
 					e.Logf("[%d] [%d] %s", e.best.Depth, e.best.Score, MoveString(pv))
 				}
+
+				if Winning(e.best.Score) {
+					// Stop after finding a winning move.
+					// We keep searching losing moves until MaxPly.
+					// The only winning move is not to play.
+					e.Stop()
+				}
 			}
 		case <-time.After(time.Second):
 			if e.fixedDepth == 0 && !e.ponder {
 				if e.timeControl.GameTimeRemaining(e.timeInfo, p.side) < 3*time.Second {
-					fmt.Println("log stop search now to avoid timeout")
+					e.Logf("stop search now to avoid timeout")
 					e.Stop()
 					break
 				}
 				if e.searchInfo.Depth() >= e.minDepth && rem < next {
 					// Time will soon be up! Stop the search.
-					e.Logf("log stop search now (cost=%s, budget=%s)", next, rem)
+					e.Logf("stop search now (cost=%s, budget=%s)", next, rem)
 					e.Stop()
 				}
 			}
 		}
 
 		if e.fixedDepth > 0 && e.searchInfo.Depth() >= e.fixedDepth {
-			e.Logf("log stop search after fixed depth")
+			e.Logf("stop search after fixed depth")
 			e.Stop()
-			break
 		}
 	}
-
-	e.stopping = 0
-	atomic.SwapInt32(&e.running, 0)
 
 	// Print search info and "bestmove" if not pondering.
 	e.printSearchInfo(e.best)
