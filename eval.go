@@ -49,11 +49,11 @@ var mobilityScore = []int{
 var positionValue = [][]int{{}, { // Rabbit
 	999, 999, 999, 999, 999, 999, 999, 999,
 	10, 10, 5, 10, 10, 5, 10, 10,
-	1, -2, -10, -5, -5, -10, -2, 1,
-	1, 0, -5, 5, -5, -5, 0, 1,
-	1, 0, 0, -5, -5, 0, 0, 1,
-	1, -1, -5, -5, -5, -5, 0, 1,
-	1, 0, 0, -5, -5, 0, 0, 1,
+	5, -2, -10, -5, -5, -10, -2, 5,
+	2, 0, -3, -3, -3, -3, 0, 2,
+	2, 1, 0, -3, -3, 0, 1, 2,
+	1, 2, -3, -3, -3, -3, 2, 1,
+	1, 2, 0, -5, -5, 0, 2, 1,
 	1, 1, 1, 1, 1, 1, 1, 1,
 }, { // Cat
 	0, 0, 0, 0, 0, 0, 0, 0,
@@ -106,7 +106,7 @@ func isInfinite(score int) bool {
 	return score >= inf || score <= -inf
 }
 
-func isTerminal(score int) bool {
+func Terminal(score int) bool {
 	return score >= terminalEval || score <= -terminalEval
 }
 

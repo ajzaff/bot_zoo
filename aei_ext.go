@@ -163,8 +163,7 @@ func (a *AEI) handleExt(text string) error {
 		default:
 			p, err := ParsePiece(parts[1][0])
 			if err != nil {
-				a.Logf("printing piece bitboard: %v", err)
-				return nil
+				return fmt.Errorf("printing piece bitboard: %v", err)
 			}
 			b = a.engine.Pos().bitboards[p]
 		}

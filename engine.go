@@ -56,7 +56,7 @@ func NewEngine(seed int64) *Engine {
 	e := &Engine{
 		timeControl:    makeTimeControl(),
 		p:              NewEmptyPosition(),
-		minDepth:       4,
+		minDepth:       8,
 		concurrency:    4,
 		done:           make(chan searchResult),
 		rootOrderNoise: 200,

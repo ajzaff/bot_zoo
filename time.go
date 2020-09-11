@@ -143,13 +143,17 @@ func (tc TimeControl) FixedOptimalTimeRemaining(t *TimeInfo, c Color) time.Durat
 	if turn < 0 {
 		return turn
 	}
-	game := tc.gameTimeRemaining(t, c, now)
-	if game < 30*time.Second {
-		return game
+	resv := tc.gameTimeRemaining(t, c, now)
+	if resv < 30*time.Second {
+		return resv
 	}
-	game /= 3
-	if game > 120*time.Second {
-		return 120 * time.Second
+	resv /= 3
+	if resv > 2*time.Minute {
+		return 2 * time.Minute
 	}
-	return game
+	v := turn + resv
+	if v > 3*time.Minute {
+		return 3 * time.Minute
+	}
+	return v
 }

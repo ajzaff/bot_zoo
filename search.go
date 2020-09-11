@@ -346,7 +346,13 @@ func (e *Engine) iterativeDeepeningRoot() {
 
 				// Main aspiration loop:
 				for {
-					if res := e.searchRoot(newPos, scoredMoves, alpha, beta, depth); res.Score <= alpha {
+					res := e.searchRoot(newPos, scoredMoves, alpha, beta, depth)
+					if Terminal(res.Score) {
+						// Stop the search goroutine if a terminal value is achieved.
+						resultChan <- res
+						return
+					}
+					if res.Score <= alpha {
 						pv, _, _ := e.table.PV(newPos)
 						if len(pv) > 0 {
 							e.Logf("[%d] [<=%d] %s", res.Depth, alpha, MoveString(pv))
@@ -428,10 +434,9 @@ func (e *Engine) iterativeDeepeningRoot() {
 					e.Stop()
 					break
 				}
-				if rem < next {
+				if e.searchInfo.Depth() >= e.minDepth && rem < next {
 					// Time will soon be up! Stop the search.
-					b, errv := e.searchInfo.ebf()
-					e.Logf("log stop search now (b=%f{err=%f} cost=%s, budget=%s)", b, errv, next, rem)
+					e.Logf("log stop search now (cost=%s, budget=%s)", next, rem)
 					e.Stop()
 				}
 			}

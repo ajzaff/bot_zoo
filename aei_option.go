@@ -72,8 +72,12 @@ func (a *AEI) handleOption(text string) error {
 			return err
 		}
 		a.engine.timeInfo.Reserve[Silver] = time.Duration(v) * time.Second
-	// We currently don't have any reason to support these:
 	// case "gused":
+	// 	v, err := strconv.Atoi(value)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	a.engine.timeInfo. = time.Duration(v) * time.Second
 	// case "sused":
 	// case "moveused":
 	// case "lastmoveused":
