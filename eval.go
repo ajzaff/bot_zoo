@@ -114,6 +114,10 @@ func Winning(score int) bool {
 	return score >= terminalEval
 }
 
+func Losing(score int) bool {
+	return score <= -terminalEval
+}
+
 func (p *Pos) mobilityScore(side Color) (score int) {
 	var count int
 	for b := p.presence[side]; b > 0; b &= (b - 1) {
