@@ -1,2 +1,2 @@
-setposition s [                          Eh                                    ]
+setposition s [        r                 Eh                     R              ]
 steps
