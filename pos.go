@@ -152,7 +152,7 @@ func (p *Pos) updateFrozen() {
 }
 
 func (p *Pos) frozenB(t Piece, b Bitboard) bool {
-	return !t.SameType(GElephant) && p.frozen[t.Color()]&p.stronger[t.MakeColor(Gold)].Neighbors()&b != 0
+	return !t.SameType(GElephant) && p.frozen[t.Color()]&p.stronger[t.MakeColor(t.Color().Opposite())].Neighbors()&b != 0
 }
 
 func (p *Pos) Frozen(i Square) bool {
