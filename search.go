@@ -510,8 +510,7 @@ func (e *Engine) search(p *Pos, stepList *StepList, pv bool, alpha, beta, depth,
 	// Step 1: Check the transposition table.
 	var tableMove bool
 	if e.useTable {
-		var entry *TableEntry
-		if entry, pv = e.table.ProbeDepth(p.zhash, maxDepth-depth); pv {
+		if entry, ok := e.table.ProbeDepth(p.zhash, maxDepth-depth); ok {
 			tableMove = true
 			bestStep = entry.Step
 			switch entry.Bound {
