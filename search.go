@@ -200,19 +200,10 @@ func (e *Engine) GoInfinite() {
 	e.GoPonder()
 }
 
-// Stop stops the search immediately and collects the final search results
-// and blocks until all goroutines have stoped.
+// Stop signals the search to stop immediately.
 func (e *Engine) Stop() {
 	if e.running == 1 && atomic.LoadInt32(&e.stopping) == 0 {
 		e.stopping = 1
-		for i := 0; i < e.concurrency; i++ {
-			<-e.done
-			// FIXME(ajzaff):
-			// We would like to use this final result, but it's very unstable due
-			// to cancelled search. Should we fix the instability we can use this.
-		}
-		e.stopping = 0
-		atomic.SwapInt32(&e.running, 0)
 	}
 }
 
@@ -413,10 +404,17 @@ func (e *Engine) iterativeDeepeningRoot() {
 		}(e.best.Score)
 	}
 
+	// Track the number of running goroutines.
 	// Collect search results and manage timeout.
-	for e.running == 1 {
+	for goroutines := e.concurrency; e.running == 1 && goroutines > 0; {
 		next, rem := e.searchInfo.GuessPlyDuration(), e.timeControl.FixedOptimalTimeRemaining(e.timeInfo, p.side)
 		select {
+		case <-e.done:
+			// FIXME(ajzaff):
+			// We would like to use this final result, but it's very unstable due
+			// to cancelled search. Should we fix the instability we can use this.
+			// Reduce the tracking count of running goroutines by 1.
+			goroutines--
 		case b := <-resultChan:
 			if b.Depth > e.best.Depth || (b.Depth == e.best.Depth && b.Score > e.best.Score) {
 				e.best = b
@@ -448,6 +446,9 @@ func (e *Engine) iterativeDeepeningRoot() {
 			break
 		}
 	}
+
+	e.stopping = 0
+	atomic.SwapInt32(&e.running, 0)
 
 	// Print search info and "bestmove" if not pondering.
 	e.printSearchInfo(e.best)
