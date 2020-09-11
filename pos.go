@@ -13,6 +13,7 @@ type Pos struct {
 	weaker     []Bitboard // weaker pieces by piece&decolorMask
 	touching   []Bitboard // squares touched for each side
 	dominating []Bitboard // squares dominated by each side (touched by a nonrabbit)
+	threefold  *Threefold // threefold repetition store
 	frozen     []Bitboard // frozen squares for each (dominating) side
 	side       Color      // side to play
 	depth      int        // number of steps to arrive at the position
@@ -32,6 +33,7 @@ func newPos(
 	touching []Bitboard,
 	dominating []Bitboard,
 	frozen []Bitboard,
+	threefold *Threefold,
 	side Color,
 	depth int,
 	moveNum int,
@@ -76,6 +78,9 @@ func newPos(
 	if frozen == nil {
 		frozen = make([]Bitboard, 2)
 	}
+	if threefold == nil {
+		threefold = NewThreefold()
+	}
 	if zhash == 0 {
 		zhash = ZHash(bitboards, side, len(steps))
 	}
@@ -88,6 +93,7 @@ func newPos(
 		touching:   touching,
 		dominating: dominating,
 		frozen:     frozen,
+		threefold:  threefold,
 		side:       side,
 		stepsLeft:  stepsLeft,
 		depth:      depth,
@@ -106,6 +112,7 @@ func (p *Pos) Clone() *Pos {
 	tb := make([]Bitboard, 2)
 	db := make([]Bitboard, 2)
 	fb := make([]Bitboard, 2)
+	threefold := p.threefold.Clone()
 	steps := make([]Step, len(p.steps))
 	moves := make([][]Step, len(p.moves))
 	copy(board, p.board)
@@ -122,8 +129,8 @@ func (p *Pos) Clone() *Pos {
 		copy(moves[i], p.moves[i])
 	}
 	return newPos(
-		board, bs, ps, sb, wb, tb, db, fb, p.side, p.depth,
-		p.moveNum, moves, steps, p.stepsLeft, p.zhash,
+		board, bs, ps, sb, wb, tb, db, fb, threefold,
+		p.side, p.depth, p.moveNum, moves, steps, p.stepsLeft, p.zhash,
 	)
 }
 
@@ -397,10 +404,16 @@ func (p *Pos) Move(steps []Step) error {
 	if initZHash == p.zhash^ZSilverKey() {
 		return errRecurringPosition
 	}
+	// Check threefold repetition.
+	if p.threefold.Lookup(p.zhash) >= 3 {
+		return errRecurringPosition
+	}
+	p.threefold.Increment(p.zhash)
 	return nil
 }
 
 func (p *Pos) Unmove() error {
+	p.threefold.Decrement(p.zhash)
 	if err := p.Unpass(); err != nil {
 		return err
 	}

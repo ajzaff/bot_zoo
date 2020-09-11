@@ -469,7 +469,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 
 func (e *Engine) searchRoot(p *Pos, scoredMoves []ScoredMove, alpha, beta, depth int) searchResult {
 	best := searchResult{
-		Score: alpha,
+		Score: -terminalEval,
 		Depth: depth,
 	}
 	for i, entry := range scoredMoves {
@@ -480,20 +480,24 @@ func (e *Engine) searchRoot(p *Pos, scoredMoves []ScoredMove, alpha, beta, depth
 		if n > depth {
 			continue
 		}
-		if err := p.Move(entry.move); err != nil {
-			panic(fmt.Sprintf("search_move_root: %s: %v", entry.move, err))
+		err := p.Move(entry.move)
+		if err != nil {
+			if err != errRecurringPosition {
+				panic(fmt.Sprintf("search_move_root: %s: %v", entry.move, err))
+			}
+		} else {
+			var stepList StepList
+			score := -e.search(p, &stepList, i == 0, -beta, -alpha, n, depth)
+			if score > alpha {
+				alpha = score
+			}
+			if score > best.Score {
+				best.Score = score
+				best.Move = entry.move
+			}
 		}
-		var stepList StepList
-		score := -e.search(p, &stepList, i == 0, -beta, -alpha, n, depth)
 		if err := p.Unmove(); err != nil {
 			panic(fmt.Sprintf("search_unmove_root: %s: %v", entry.move, err))
-		}
-		if score > alpha {
-			alpha = score
-		}
-		if score > best.Score {
-			best.Score = score
-			best.Move = entry.move
 		}
 	}
 	e.table.StoreMove(p, depth, best.Score, best.Move)
