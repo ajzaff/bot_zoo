@@ -26,10 +26,10 @@ var rabbitMaterialValue = []int{
 
 var hostageScore = []int{
 	0,
-	5,   // Rabbit
-	8,   // Dog
-	75,  // Horse
-	150, // Camel
+	5,  // Rabbit
+	8,  // Dog
+	20, // Horse
+	50, // Camel
 	0,
 }
 
