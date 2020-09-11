@@ -9,6 +9,86 @@ import (
 
 const randomSetupAttempts = 100
 
+var setupValue = [][]int{{}, { // Rabbit
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, -50, -50, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+}, { // Cat
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 5, 5, 0, 0, 0,
+}, { // Dog
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	-20, 0, 0, 0, 0, 0, 0, -20,
+}, { // Horse
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	-50, 0, 0, 0, 0, 0, 0, -50,
+}, { // Camel
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, -50, 10, 10, -50, 0, 0,
+	-50, -50, -50, -50, -50, -50, -50, -50,
+}, { // Elephant
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, -50, 10, 10, -50, 0, 0,
+	-50, -50, -50, -50, -50, -50, -50, -50,
+}}
+
+func (p *Pos) setupScore(side Color) (score int) {
+	c := 7
+	m := -1
+	if side != Gold {
+		c = 0
+		m = 1
+	}
+	for _, t := range []Piece{
+		GRabbit.MakeColor(side),
+		GCat.MakeColor(side),
+		GDog.MakeColor(side),
+		GHorse.MakeColor(side),
+		GCamel.MakeColor(side),
+		GElephant.MakeColor(side),
+	} {
+		ps := setupValue[t&decolorMask]
+		for b := p.bitboards[t]; b > 0; b &= b - 1 {
+			at := b.Square()
+			score += ps[8*(c+m*int(at)/8)+c+m*(int(at)%8)]
+		}
+	}
+	return score
+}
+
 // RandomSetup creates setup moves by trying positions randomly and evaluating results.
 // It repeats this a few times and returns the best setup. This keeps setups generally
 // kosher while allowing for the rare "fun" setup.
