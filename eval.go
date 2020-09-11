@@ -24,22 +24,12 @@ var rabbitMaterialValue = []int{
 	15000,
 }
 
-var mobilityScore = []int{
-	-800,
-	-600,
-	-400,
-	-200,
-	-180,
-	-160,
-	-140,
-	-120,
-	-100,
-	-80,
-	-60,
-	-40,
-	-30,
-	-20,
-	-10,
+var hostageScore = []int{
+	0,
+	5,   // Rabbit
+	8,   // Dog
+	75,  // Horse
+	150, // Camel
 	0,
 }
 
@@ -118,17 +108,13 @@ func Losing(score int) bool {
 	return score <= -terminalEval
 }
 
-func (p *Pos) mobilityScore(side Color) (score int) {
-	var count int
-	for b := p.presence[side]; b > 0; b &= (b - 1) {
-		if !p.Frozen(b.Square()) {
-			count++
+func (p *Pos) hostageScore(side Color) (value int) {
+	(p.frozen[side] & p.presence[side.Opposite()]).Each(func(b Bitboard) {
+		if t := p.board[b.Square()]; p.frozenB(t, b) {
+			value += hostageScore[t&decolorMask]
 		}
-	}
-	if count >= 16 {
-		count = 15
-	}
-	return mobilityScore[count]
+	})
+	return value
 }
 
 func (p *Pos) positionScore(side Color) (score int) {
@@ -164,7 +150,7 @@ func (p *Pos) score(side Color) (score int) {
 	for s := GCat; s <= GElephant; s++ {
 		score += pieceValue[s] * p.bitboards[s.MakeColor(side)].Count()
 	}
-	score += p.mobilityScore(side)
+	score += p.hostageScore(side)
 	score += p.positionScore(side)
 	return score
 }
