@@ -302,7 +302,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 	// arriving at a given (deeper) position faster on average.
 	for i := 0; i < e.concurrency; i++ {
 		go func(rootScore int) {
-			best := searchResult{Score: rootScore}
+			var best searchResult
 
 			defer func() {
 				// FIXME(ajzaff):
@@ -345,7 +345,6 @@ func (e *Engine) iterativeDeepeningRoot() {
 				if beta > inf {
 					beta = inf
 				}
-
 				// Main aspiration loop:
 				for {
 					res := e.searchRoot(newPos, scoredMoves, alpha, beta, depth)
@@ -491,7 +490,7 @@ func (e *Engine) searchRoot(p *Pos, scoredMoves []ScoredMove, alpha, beta, depth
 			if score > alpha {
 				alpha = score
 			}
-			if score > best.Score {
+			if score > best.Score || best.Move == nil {
 				best.Score = score
 				best.Move = entry.move
 			}
@@ -564,14 +563,8 @@ func (e *Engine) search(p *Pos, stepList *StepList, pv bool, alpha, beta, depth,
 	l := stepList.Len()
 	stepList.Generate(p)
 
-	// Check if immobilized.
-	if l == stepList.Len() {
-		return -terminalEval
-	}
-
 	// Step 3: Main search.
 	selector := e.stepSelector(stepList.steps[l:])
-	best := alpha
 	nodes := 0
 	first := true
 	for step, ok := selector.Select(); ok; step, ok = selector.Select() {
@@ -585,28 +578,25 @@ func (e *Engine) search(p *Pos, stepList *StepList, pv bool, alpha, beta, depth,
 		if err := p.Step(step); err != nil {
 			panic(fmt.Sprintf("search_step: %v", err))
 		}
-		var score int
+		var value int
 		if p.side == initSide {
-			score = e.search(p, stepList, pv && first, alpha, beta, depth+n, maxDepth)
+			value = e.search(p, stepList, pv && first, alpha, beta, depth+n, maxDepth)
 		} else {
-			score = -e.search(p, stepList, pv && first, -beta, -alpha, depth+n, maxDepth)
+			value = -e.search(p, stepList, pv && first, -beta, -alpha, depth+n, maxDepth)
 		}
 		first = false
 		if err := p.Unstep(); err != nil {
 			panic(fmt.Sprintf("search_unstep: %v", err))
 		}
 
-		assert("!(score > -inf && score < inf)", score > -inf && score < inf)
+		assert("!(value > -inf && value < inf)", value > -inf && value < inf)
 
-		if score > best {
-			best = score
+		if value > alpha {
+			alpha = value
 			if bestStep == nil {
 				bestStep = new(Step)
 			}
 			*bestStep = step
-		}
-		if score > alpha {
-			alpha = score
 		}
 		if alpha >= beta {
 			break // fail-hard cutoff
@@ -626,13 +616,13 @@ func (e *Engine) search(p *Pos, stepList *StepList, pv bool, alpha, beta, depth,
 		entry := &TableEntry{
 			ZHash: p.zhash,
 			Depth: maxDepth - depth,
-			Value: best,
+			Value: alpha,
 			Step:  bestStep,
 		}
 		switch {
-		case best <= alphaOrig:
+		case alpha <= alphaOrig:
 			entry.Bound = UpperBound
-		case best >= beta:
+		case alpha >= beta:
 			entry.Bound = LowerBound
 		default:
 			entry.Bound = ExactBound
@@ -641,7 +631,7 @@ func (e *Engine) search(p *Pos, stepList *StepList, pv bool, alpha, beta, depth,
 	}
 
 	// Return best score.
-	return best
+	return alpha
 }
 
 // TODO(ajzaff): Measure the effect of counting quienscence nodes on the EBF.
@@ -661,9 +651,7 @@ func (e *Engine) quiescence(p *Pos, alpha, beta int) int {
 	steps := make([]Step, 0, 20)
 	selector := e.stepSelector(steps)
 
-	nodes := 0
 	for step, ok := selector.SelectCapture(); ok; step, ok = selector.SelectCapture() {
-		nodes++
 		initSide := p.side
 
 		if err := p.Step(step); err != nil {
