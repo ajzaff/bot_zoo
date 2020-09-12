@@ -30,32 +30,33 @@ type TableEntry struct {
 
 type Table struct {
 	cap   int
-	list  *list.List // guarded by m
-	table sync.Map   // zhash => *list.Element
-	m     sync.RWMutex
+	list  *list.List              // guarded by m
+	table map[int64]*list.Element // zhash => *list.Element
+	m     sync.Mutex
 }
 
 func NewTable(cap int) *Table {
 	return &Table{
-		cap:  cap,
-		list: list.New(),
+		cap:   cap,
+		list:  list.New(),
+		table: make(map[int64]*list.Element),
 	}
 }
 
 func (t *Table) Clear() {
-	t.table = sync.Map{}
+	t.table = make(map[int64]*list.Element)
 	t.list.Init()
 }
 
 func (t *Table) ProbeDepth(key int64, depth int) (e *TableEntry, ok bool) {
-	elem, ok := t.table.Load(key)
+	t.m.Lock()
+	defer t.m.Unlock()
+	elem, ok := t.table[key]
 	if !ok {
 		return nil, false
 	}
-	t.m.Lock()
-	defer t.m.Unlock()
-	t.list.MoveToBack(elem.(*list.Element))
-	if e := elem.(*list.Element).Value.(*TableEntry); depth <= e.Depth {
+	t.list.MoveToBack(elem)
+	if e := elem.Value.(*TableEntry); depth <= e.Depth {
 		return e, true
 	}
 	return nil, false
@@ -75,7 +76,7 @@ func (t *Table) SetCap(cap int) {
 
 // locks excluded: t.m
 func (t *Table) remove(e *list.Element) {
-	t.table.Delete(t.list.Remove(e).(*TableEntry).ZHash)
+	delete(t.table, t.list.Remove(e).(*TableEntry).ZHash)
 }
 
 // locks excluded: t.m
@@ -84,13 +85,12 @@ func (t *Table) pop() {
 }
 
 func (t *Table) Store(e *TableEntry) {
+	t.m.Lock()
+	defer t.m.Unlock()
 	if t.Cap() == 0 {
 		return
 	}
-	if v, ok := t.table.Load(e.ZHash); ok {
-		elem := v.(*list.Element)
-		t.m.Lock()
-		defer t.m.Unlock()
+	if elem, ok := t.table[e.ZHash]; ok {
 		t.list.MoveToBack(elem)
 		// TODO(ajzaff): I just experimented with using an always rewrite strategy
 		// which seemed to reduce the EBF somewhat. More testing is needed to determine
@@ -102,12 +102,10 @@ func (t *Table) Store(e *TableEntry) {
 		elem.Value = e
 		return
 	}
-	t.m.Lock()
-	defer t.m.Unlock()
 	for t.Len() >= t.Cap() {
 		t.pop()
 	}
-	t.table.Store(e.ZHash, t.list.PushBack(e))
+	t.table[e.ZHash] = t.list.PushBack(e)
 }
 
 func (t *Table) StoreMove(p *Pos, depth, score int, move []Step) {
@@ -155,30 +153,4 @@ func (t *Table) Best(p *Pos) (move []Step, score int, err error) {
 		}()
 	}
 	return move, score, nil
-}
-
-// PV returns the principal variation by probing the table.
-// This might not be complete given entries are churned frequently.
-// The PV has a maximum length of 50 steps.
-func (t *Table) PV(p *Pos) (pv []Step, score int, err error) {
-	for i := 0; i < 50; i++ {
-		e, ok := t.ProbeDepth(p.zhash, 0)
-		if !ok || e.Step == nil {
-			break
-		}
-		if i == 0 {
-			score = e.Value
-		}
-		if err := p.Step(*e.Step); err != nil {
-			// Ignore this error since we might not have stored a full step.
-			return pv, score, nil
-		}
-		pv = append(pv, *e.Step)
-		defer func() {
-			if err := p.Unstep(); err != nil {
-				panic(fmt.Errorf("PV_unstep: %v", err))
-			}
-		}()
-	}
-	return pv, score, nil
 }

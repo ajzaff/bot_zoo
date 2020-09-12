@@ -63,12 +63,8 @@ func (a *AEI) handleExt(text string) error {
 		a.Logf("%d", a.engine.Pos().Depth())
 		return nil
 	case text == "pv":
-		pv, score, err := a.engine.table.PV(a.engine.Pos())
-		if err != nil {
-			a.Logf("PV error: %v", err)
-		}
-		if len(pv) > 0 {
-			a.Logf("[%d] %s", score, MoveString(pv))
+		if len(a.engine.best.PV) > 0 {
+			a.Logf("[%d] %s", a.engine.best.Value, MoveString(a.engine.best.PV))
 		}
 		return nil
 	case strings.HasPrefix(text, "step"):
