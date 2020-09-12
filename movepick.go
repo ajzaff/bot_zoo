@@ -67,14 +67,14 @@ func (e *Engine) rescorePVMoves(p *Pos, scoredMoves []ScoredMove) {
 // stepSelector handles scoring and sorting steps and provides
 // Select for getting the next best step that meets the conditions.
 type stepSelector struct {
-	e      *Engine
+	side   Color
 	steps  []Step
 	scores []Value
 }
 
-func (e *Engine) stepSelector(steps []Step) *stepSelector {
+func newStepSelector(c Color, steps []Step) *stepSelector {
 	s := &stepSelector{
-		e:      e,
+		side:   c,
 		steps:  steps,
 		scores: make([]Value, len(steps)),
 	}
@@ -90,6 +90,18 @@ func (a stepSelector) Swap(i, j int) {
 }
 
 func (s *stepSelector) score() {
+	for i, step := range s.steps {
+		switch {
+		case step.Capture():
+			t := step.Cap.Piece
+			if t.Color() == s.side {
+				s.scores[i] = -pieceValue[t&decolorMask]
+			} else {
+				s.scores[i] = pieceValue[t&decolorMask]
+			}
+		}
+	}
+	sort.Stable(s)
 }
 
 // Select selects the next best move.

@@ -72,7 +72,7 @@ func (a *AEI) handleExt(text string) error {
 		if len(parts) < 2 {
 			var steps []Step
 			a.engine.Pos().Steps(&steps)
-			selector := a.engine.stepSelector(steps)
+			selector := newStepSelector(a.engine.p.side, steps)
 			for score, step, ok := selector.SelectScore(); ok; score, step, ok = selector.SelectScore() {
 				a.Logf("[%d] %s", score, step)
 			}

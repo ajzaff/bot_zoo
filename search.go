@@ -317,7 +317,7 @@ func (e *Engine) search(nt nodeType, p *Pos, stack *[]Stack, stepList *StepList,
 	// Step 2: Is this a terminal node or depth==0?
 	// Start quiescense search.
 	if depth >= maxDepth || p.Terminal() {
-		return e.quiescence(nt, p, alpha, beta)
+		return e.quiescence(nt, p, stepList, alpha, beta)
 	}
 
 	// Step 2a: Assertions.
@@ -344,7 +344,7 @@ func (e *Engine) search(nt nodeType, p *Pos, stack *[]Stack, stepList *StepList,
 	stepList.Generate(p)
 
 	// Step 3: Main search.
-	selector := e.stepSelector(stepList.steps[l:])
+	selector := newStepSelector(p.side, stepList.steps[l:])
 
 	for step, ok := selector.Select(); ok; step, ok = selector.Select() {
 		n := step.Len()
@@ -436,7 +436,7 @@ func (e *Engine) search(nt nodeType, p *Pos, stack *[]Stack, stepList *StepList,
 
 // TODO(ajzaff): Measure the effect of counting quienscence nodes on the EBF.
 // This has direct consequences on move timings.
-func (e *Engine) quiescence(nt nodeType, p *Pos, alpha, beta Value) Value {
+func (e *Engine) quiescence(nt nodeType, p *Pos, stepList *StepList, alpha, beta Value) Value {
 	assert("!(alpha >= -inf && alpha < beta && beta <= inf)",
 		alpha >= -Inf && alpha < beta && beta <= Inf)
 
@@ -448,30 +448,39 @@ func (e *Engine) quiescence(nt nodeType, p *Pos, alpha, beta Value) Value {
 		alpha = eval
 	}
 
-	steps := make([]Step, 0, 20)
-	selector := e.stepSelector(steps)
+	// // Generate steps and add them to the list.
+	// // We will start search from move l and later truncate the list to this initial length.
+	// l := stepList.Len()
+	// stepList.Generate(p)
 
-	for step, ok := selector.SelectCapture(); ok; step, ok = selector.SelectCapture() {
-		initSide := p.side
+	// selector := newStepSelector(p.side, stepList.steps[l:])
 
-		if err := p.Step(step); err != nil {
-			panic(fmt.Sprintf("quiescense_step: %v", err))
-		}
-		var value Value
-		if p.side == initSide {
-			value = e.quiescence(nt, p, alpha, beta)
-		} else {
-			value = -e.quiescence(nt, p, -beta, -alpha)
-		}
-		if err := p.Unstep(); err != nil {
-			panic(fmt.Sprintf("quiescense_unstep: %v", err))
-		}
-		if value >= beta {
-			return beta
-		}
-		if value > alpha {
-			alpha = value
-		}
-	}
+	// for step, ok := selector.SelectCapture(); ok; step, ok = selector.SelectCapture() {
+	// 	initSide := p.side
+
+	// 	if err := p.Step(step); err != nil {
+	// 		panic(fmt.Sprintf("quiescense_step: %v", err))
+	// 	}
+	// 	var value Value
+	// 	if p.side == initSide {
+	// 		value = e.quiescence(nt, p, stepList, alpha, beta)
+	// 	} else {
+	// 		value = -e.quiescence(nt, p, stepList, -beta, -alpha)
+	// 	}
+	// 	if err := p.Unstep(); err != nil {
+	// 		panic(fmt.Sprintf("quiescense_unstep: %v", err))
+	// 	}
+	// 	if value >= beta {
+	// 		return beta
+	// 	}
+	// 	if value > alpha {
+	// 		alpha = value
+	// 	}
+	// }
+
+	// // Truncate steps generated at this ply.
+	// stepList.Truncate(l)
+
+	// return alpha
 	return alpha
 }
