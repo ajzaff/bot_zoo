@@ -153,3 +153,59 @@ func (tc TimeControl) FixedOptimalTimeRemaining(t *TimeInfo, c Color) time.Durat
 	}
 	return turn + resv
 }
+
+func computebfNd(d int, b float64) float64 {
+	n := b
+	for i := 2; i <= d; i++ {
+		n += math.Pow(b, float64(i))
+	}
+	return n
+}
+
+// GuessPlyDuration guesses the duration of the next ply of search.
+func GuessPlyDuration(start time.Time, nodes, depth int) time.Duration {
+	if depth < 4 {
+		// These searches are basically free.
+		return 0
+	}
+	// Compute the ratio of the amount of time spent and nodes and solve for X.
+	//  Time[d-1]        X
+	// ----------  =  --------
+	// Nodes[d-1]     Nodes[d]
+
+	b, _ := ebf(depth, float64(nodes))
+	lastDuration := float64(time.Now().Sub(start))
+	lastNodes := float64(nodes)
+	nextNodes := lastNodes + math.Pow(b, float64(1+depth))
+	v := lastDuration / lastNodes * nextNodes
+	if v > math.MaxInt64 {
+		return math.MaxInt64
+	}
+	return time.Duration(v)
+}
+
+// EBF experimentally computes the effective branching factor using per-ply node count.
+// This helps compute the time required to search to depth d.
+// locks excluded: s.m.
+func ebf(d int, N float64) (b float64, err float64) {
+	const (
+		tol   = 1000.
+		small = 1e-4
+	)
+	var n = 0.
+	for lo, hi := 1., 20.; hi-lo > small; {
+		mid := (hi-lo)/2 + lo
+		b = mid
+		n = computebfNd(d, b)
+		e := n - N
+		if math.Abs(e) < tol {
+			break
+		}
+		if e < 0 {
+			lo = mid
+		} else {
+			hi = mid
+		}
+	}
+	return b, n - N
+}

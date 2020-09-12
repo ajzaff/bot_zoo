@@ -90,24 +90,6 @@ func (a stepSelector) Swap(i, j int) {
 }
 
 func (s *stepSelector) score() {
-	// Check the table to get the PV step if any.
-	var pv Step
-	if s.e.useTable {
-		entry, ok := s.e.table.ProbeDepth(s.e.Pos().zhash, 0)
-		if ok && entry.Bound == ExactBound && entry.Step != nil {
-			pv = *entry.Step
-		}
-	}
-	// TODO(ajzaff): Estimate value of captures.
-	// Make this usable in
-	for i, step := range s.steps {
-		if step == pv {
-			s.scores[i] = inf
-			s.Swap(0, i) // Swap PV to front
-			continue
-		}
-		s.scores[i] = -inf
-	}
 }
 
 // Select selects the next best move.

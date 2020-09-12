@@ -8,6 +8,7 @@ type Stack struct {
 	Depth int
 	Step  Step
 	Eval  int
+	Nodes int
 }
 
 // StepList implements an efficient data structure for storing steps from search lines.
