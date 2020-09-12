@@ -17,6 +17,6 @@ func BenchmarkJunke11(b *testing.B) {
 	}
 	e.SetPos(p)
 	for n := 0; n < b.N; n++ {
-		e.GoFixed(10)
+		e.GoFixed(9)
 	}
 }

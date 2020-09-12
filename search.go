@@ -219,11 +219,15 @@ func (e *Engine) iterativeDeepeningRoot() {
 			}
 		case <-time.After(time.Second):
 			if e.fixedDepth == 0 && !e.ponder {
-				rem := deadline.Sub(time.Now())
-				if rem < 3*time.Second {
-					e.Logf("stop search now to avoid timeout (budget=%s, remaining=%s)", budget, rem)
+				if rem := e.timeControl.GameTimeRemaining(e.timeInfo, e.Pos().Side()); rem < 3*time.Second {
+					e.Logf("stop search now to avoid timeout (remaining=%s)", rem)
 					e.Stop()
 					break
+				}
+				rem := deadline.Sub(time.Now())
+				if e.best.Depth >= e.minDepth && rem < 1*time.Second {
+					e.Logf("stop search now (budget=%s, remaining=%s)", budget, rem)
+					e.Stop()
 				}
 			}
 		}
