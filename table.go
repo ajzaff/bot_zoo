@@ -23,8 +23,8 @@ const EntrySize = 40
 type TableEntry struct {
 	Bound
 	ZHash int64
-	Depth int
-	Value int
+	Depth int16
+	Value Value
 	Step  *Step
 }
 
@@ -48,7 +48,7 @@ func (t *Table) Clear() {
 	t.list.Init()
 }
 
-func (t *Table) ProbeDepth(key int64, depth int) (e *TableEntry, ok bool) {
+func (t *Table) ProbeDepth(key int64, depth int16) (e *TableEntry, ok bool) {
 	t.m.Lock()
 	defer t.m.Unlock()
 	elem, ok := t.table[key]
@@ -108,13 +108,13 @@ func (t *Table) Store(e *TableEntry) {
 	t.table[e.ZHash] = t.list.PushBack(e)
 }
 
-func (t *Table) StoreMove(p *Pos, depth, score int, move []Step) {
+func (t *Table) StoreMove(p *Pos, depth int16, value Value, move []Step) {
 	for _, step := range move {
 		entry := &TableEntry{
 			Bound: ExactBound,
 			ZHash: p.zhash,
 			Depth: depth,
-			Value: score,
+			Value: value,
 			Step:  new(Step),
 		}
 		*entry.Step = step
@@ -132,7 +132,7 @@ func (t *Table) StoreMove(p *Pos, depth, score int, move []Step) {
 
 // Best returns the best move by probing the table.
 // This is similar to PV but only returns steps for the current side.
-func (t *Table) Best(p *Pos) (move []Step, score int, err error) {
+func (t *Table) Best(p *Pos) (move []Step, score Value, err error) {
 	initSide := p.Side()
 	for i := 0; initSide == p.Side(); i++ {
 		e, ok := t.ProbeDepth(p.zhash, 0)

@@ -24,10 +24,10 @@ type Engine struct {
 
 	// depth != 0 implies fixed depth.
 	// Search won't stop unless a terminal score is achieved.
-	fixedDepth int
+	fixedDepth int16
 
 	// minDepth for time based iterative deepening.
-	minDepth int
+	minDepth int16
 
 	// ponder implies we will search until we're asked explicitly to stop.
 	// We don't set the best move after a ponder.
@@ -43,7 +43,7 @@ type Engine struct {
 
 	// Null move depth reduction factor R.
 	// TODO(ajzaff): Use an adaptive value of R.
-	nullMoveR int
+	nullMoveR int16
 
 	// concurrency setting of Lazy-SMP search in number of goroutines.
 	concurrency int
@@ -105,7 +105,7 @@ func (e *Engine) Go() {
 }
 
 // GoFixed starts a fixed-depth search routine and blocks until it finishes.
-func (e *Engine) GoFixed(fixedDepth int) {
+func (e *Engine) GoFixed(fixedDepth int16) {
 	if atomic.CompareAndSwapInt32(&e.running, 0, 1) {
 		e.ponder = false
 		prevDepth := e.fixedDepth
@@ -154,7 +154,7 @@ func searchRateKNps(nodes int, start time.Time) int64 {
 	return int64(float64(nodes) / (float64(time.Now().Sub(start)) / float64(time.Second)) / 1000)
 }
 
-func (e *Engine) printSearchInfo(nodes, depth int, start time.Time, best searchResult) {
+func (e *Engine) printSearchInfo(nodes int, depth int16, start time.Time, best searchResult) {
 	if e.ponder {
 		e.Logf("ponder")
 	}

@@ -97,7 +97,7 @@ func (a *AEI) handleOption(text string) error {
 		if v < 0 {
 			return fmt.Errorf("depth < 0")
 		}
-		a.engine.fixedDepth = v
+		a.engine.fixedDepth = int16(v)
 
 		// Custom Zoo engine options:
 	case "goroutines":
@@ -117,7 +117,7 @@ func (a *AEI) handleOption(text string) error {
 		if v < 0 {
 			return fmt.Errorf("depth < 0")
 		}
-		a.engine.minDepth = v
+		a.engine.minDepth = int16(v)
 
 	default:
 		return fmt.Errorf("unsupported option: %q", option)

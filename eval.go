@@ -1,8 +1,29 @@
 package zoo
 
-const terminalEval = 100000
+const (
+	Inf Value = 20000
+	Win Value = 10000
+)
 
-var pieceValue = []int{
+type Value int16
+
+func (v Value) Infinite() bool {
+	return v >= Inf || v <= -Inf
+}
+
+func (v Value) Terminal() bool {
+	return v >= Win || v <= -Win
+}
+
+func (v Value) Winning() bool {
+	return v >= Win
+}
+
+func (v Value) Losing() bool {
+	return v <= -Win
+}
+
+var pieceValue = []Value{
 	0,
 	0,
 	200,  // Cat
@@ -12,7 +33,7 @@ var pieceValue = []int{
 	1300, // Elephant
 }
 
-var rabbitMaterialValue = []int{
+var rabbitMaterialValue = []Value{
 	0,
 	12200,
 	12900,
@@ -24,7 +45,7 @@ var rabbitMaterialValue = []int{
 	15000,
 }
 
-var hostageScore = []int{
+var hostageValue = []Value{
 	0,
 	5,  // Rabbit
 	8,  // Dog
@@ -33,32 +54,16 @@ var hostageScore = []int{
 	0,
 }
 
-func isInfinite(score int) bool {
-	return score >= inf || score <= -inf
-}
-
-func Terminal(score int) bool {
-	return score >= terminalEval || score <= -terminalEval
-}
-
-func Winning(score int) bool {
-	return score >= terminalEval
-}
-
-func Losing(score int) bool {
-	return score <= -terminalEval
-}
-
-func (p *Pos) hostageScore(side Color) (value int) {
+func (p *Pos) hostageScore(side Color) (value Value) {
 	(p.frozen[side] & p.presence[side.Opposite()]).Each(func(b Bitboard) {
 		if t := p.board[b.Square()]; p.frozenB(t, b) {
-			value += hostageScore[t&decolorMask]
+			value += hostageValue[t&decolorMask]
 		}
 	})
 	return value
 }
 
-func (p *Pos) positionScore(side Color) (score int) {
+func (p *Pos) positionScore(side Color) (value Value) {
 	ps := positionValue[side]
 	for _, t := range []Piece{
 		GRabbit,
@@ -70,46 +75,46 @@ func (p *Pos) positionScore(side Color) (score int) {
 	} {
 		ps := ps[t]
 		for b := p.bitboards[t]; b > 0; b &= b - 1 {
-			score += ps[b.Square()]
+			value += ps[b.Square()]
 		}
 	}
-	return score
+	return value
 }
 
-func (p *Pos) score(side Color) (score int) {
+func (p *Pos) valueOf(side Color) (value Value) {
 	if v := p.bitboards[GRabbit.MakeColor(side)].Count(); v <= 8 {
-		score += rabbitMaterialValue[v]
+		value += rabbitMaterialValue[v]
 	} else {
-		score += rabbitMaterialValue[8] + v - 8
+		value += rabbitMaterialValue[8] + Value(v) - 8
 	}
 	for s := GCat; s <= GElephant; s++ {
-		score += pieceValue[s] * p.bitboards[s.MakeColor(side)].Count()
+		value += pieceValue[s] * Value(p.bitboards[s.MakeColor(side)].Count())
 	}
-	score += p.hostageScore(side)
-	score += p.positionScore(side)
-	return score
+	value += p.hostageScore(side)
+	value += p.positionScore(side)
+	return value
 }
 
-func (p *Pos) terminalGoalValue() int {
+func (p *Pos) terminalGoalValue() Value {
 	myGoal, theirGoal := ^NotRank8, ^NotRank1
 	if p.side != Gold {
 		myGoal, theirGoal = theirGoal, myGoal
 	}
 	if p.bitboards[GRabbit.MakeColor(p.side)]&myGoal != 0 {
-		return terminalEval
+		return Win
 	}
 	if p.bitboards[GRabbit.MakeColor(p.side.Opposite())]&theirGoal != 0 {
-		return -terminalEval
+		return -Win
 	}
 	return 0
 }
 
-func (p *Pos) terminalEliminationValue() int {
+func (p *Pos) terminalEliminationValue() Value {
 	if p.bitboards[GRabbit.MakeColor(p.side.Opposite())] == 0 {
-		return terminalEval
+		return Win
 	}
 	if p.bitboards[GRabbit.MakeColor(p.side)] == 0 {
-		return -terminalEval
+		return -Win
 	}
 	return 0
 }
@@ -123,17 +128,17 @@ func (p *Pos) immobilized(c Color) bool {
 	return true
 }
 
-func (p *Pos) terminalImmobilizedValue() int {
+func (p *Pos) terminalImmobilizedValue() Value {
 	if p.immobilized(p.side.Opposite()) {
-		return terminalEval
+		return Win
 	}
 	if p.immobilized(p.side) {
-		return -terminalEval
+		return -Win
 	}
 	return 0
 }
 
-func (p *Pos) terminalValue() int {
+func (p *Pos) terminalValue() Value {
 	if v := p.terminalGoalValue(); v != 0 {
 		return v
 	}
@@ -146,9 +151,9 @@ func (p *Pos) terminalValue() int {
 	return 0
 }
 
-func (p *Pos) Score() int {
+func (p *Pos) Value() Value {
 	if v := p.terminalValue(); v != 0 {
 		return v
 	}
-	return p.score(p.side) - p.score(p.side.Opposite())
+	return p.valueOf(p.side) - p.valueOf(p.side.Opposite())
 }

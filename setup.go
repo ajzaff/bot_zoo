@@ -9,7 +9,7 @@ import (
 
 const randomSetupAttempts = 100
 
-var setupValue = [][]int{{}, { // Rabbit
+var setupValue = [][]Value{{}, { // Rabbit
 	0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0,
@@ -52,7 +52,7 @@ var setupValue = [][]int{{}, { // Rabbit
 	0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, -50, 10, 10, -50, 0, 0,
+	0, 0, -50, 50, 50, -50, 0, 0,
 	-50, -50, -50, -50, -50, -50, -50, -50,
 }, { // Elephant
 	0, 0, 0, 0, 0, 0, 0, 0,
@@ -61,11 +61,11 @@ var setupValue = [][]int{{}, { // Rabbit
 	0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, -50, 10, 10, -50, 0, 0,
+	0, 0, -50, 50, 50, -50, 0, 0,
 	-50, -50, -50, -50, -50, -50, -50, -50,
 }}
 
-func (p *Pos) setupScore(side Color) (score int) {
+func (p *Pos) setupValue(side Color) (value Value) {
 	c := 7
 	m := -1
 	if side != Gold {
@@ -73,20 +73,20 @@ func (p *Pos) setupScore(side Color) (score int) {
 		m = 1
 	}
 	for _, t := range []Piece{
-		GRabbit.MakeColor(side),
-		GCat.MakeColor(side),
-		GDog.MakeColor(side),
-		GHorse.MakeColor(side),
-		GCamel.MakeColor(side),
-		GElephant.MakeColor(side),
+		GRabbit,
+		GCat,
+		GDog,
+		GHorse,
+		GCamel,
+		GElephant,
 	} {
-		ps := setupValue[t&decolorMask]
+		ps := setupValue[t]
 		for b := p.bitboards[t]; b > 0; b &= b - 1 {
 			at := b.Square()
-			score += ps[8*(c+m*int(at)/8)+c+m*(int(at)%8)]
+			value += ps[8*(c+m*int(at)/8)+c+m*(int(at)%8)]
 		}
 	}
-	return score
+	return value
 }
 
 // RandomSetup creates setup moves by trying positions randomly and evaluating results.
@@ -99,7 +99,7 @@ func (e *Engine) RandomSetup() []Step {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	var best []Step
-	bestScore := -inf
+	bestScore := -Inf
 	for i := 0; i < randomSetupAttempts; i++ {
 		move := e.randomSetup(r)
 		if err := p.Move(move); err != nil {

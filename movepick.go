@@ -6,7 +6,7 @@ import (
 )
 
 type ScoredMove struct {
-	score int
+	score Value
 	move  []Step
 }
 
@@ -26,7 +26,7 @@ func (a byScore) Less(i, j int) bool { return a[i].score > a[j].score }
 // Intended to be used for parallel Lazy-SMP search.
 func (e *Engine) perturbMoves(r *rand.Rand, f float64, scoredMoves []ScoredMove) {
 	for i := range scoredMoves {
-		scoredMoves[i].score += int(f * r.NormFloat64())
+		scoredMoves[i].score += Value(f * r.NormFloat64())
 	}
 }
 
@@ -56,11 +56,11 @@ func (e *Engine) rescorePVMoves(p *Pos, scoredMoves []ScoredMove) {
 
 		// 2a: Update the best move from the table to +inf.
 		if MoveEqual(scoredMove.move, best) {
-			scoredMoves[i].score = +inf
+			scoredMoves[i].score = +Inf
 			continue
 		}
 
-		scoredMoves[i].score = -inf
+		scoredMoves[i].score = -Inf
 	}
 }
 
@@ -69,14 +69,14 @@ func (e *Engine) rescorePVMoves(p *Pos, scoredMoves []ScoredMove) {
 type stepSelector struct {
 	e      *Engine
 	steps  []Step
-	scores []int
+	scores []Value
 }
 
 func (e *Engine) stepSelector(steps []Step) *stepSelector {
 	s := &stepSelector{
 		e:      e,
 		steps:  steps,
-		scores: make([]int, len(steps)),
+		scores: make([]Value, len(steps)),
 	}
 	s.score()
 	return s
@@ -93,9 +93,9 @@ func (s *stepSelector) score() {
 }
 
 // Select selects the next best move.
-func (s *stepSelector) SelectScore() (score int, step Step, ok bool) {
+func (s *stepSelector) SelectScore() (score Value, step Step, ok bool) {
 	if len(s.steps) == 0 {
-		return -inf, invalidStep, false
+		return -Inf, invalidStep, false
 	}
 	step = s.steps[0]
 	score = s.scores[0]

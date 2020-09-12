@@ -34,7 +34,7 @@ func (a *AEI) handleExt(text string) error {
 		moves := a.engine.getRootMovesLen(a.engine.Pos(), 4)
 		scoredMoves := make([]ScoredMove, len(moves))
 		for i, move := range moves {
-			scoredMoves[i] = ScoredMove{score: -inf, move: move}
+			scoredMoves[i] = ScoredMove{score: -Inf, move: move}
 		}
 		a.engine.rescorePVMoves(a.engine.Pos(), scoredMoves)
 		if n == 0 {
@@ -172,7 +172,7 @@ func (a *AEI) handleExt(text string) error {
 }
 
 func (a *AEI) logEval() {
-	a.Logf("eval: %d", a.engine.Pos().Score())
+	a.Logf("eval: %d", a.engine.Pos().Value())
 }
 
 func (a *AEI) verbosePos() {

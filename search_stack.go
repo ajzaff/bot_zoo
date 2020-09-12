@@ -5,9 +5,9 @@ package zoo
 // The stack is used for reconstructing the searched PV.
 type Stack struct {
 	PV    []Step
-	Depth int
+	Depth int16
 	Step  Step
-	Eval  int
+	Eval  Value
 	Nodes int
 }
 

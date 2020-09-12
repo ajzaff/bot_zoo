@@ -2,7 +2,7 @@ package zoo
 
 // position values for Color > Piece > Square.
 // Squares are in order from A1, A2, ... to H8.
-var positionValue = [][][]int{{{}, { // GRabbit
+var positionValue = [][][]Value{{{}, { // GRabbit
 	1, 1, 1, 1, 1, 1, 1, 1,
 	1, 1, 0, -5, -5, 0, 1, 1,
 	1, 2, -3, -3, -3, -3, 2, 1,
