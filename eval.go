@@ -33,65 +33,6 @@ var hostageScore = []int{
 	0,
 }
 
-// Position values are symmetrical and represented as gold side.
-// When evaluating Silver, the board must be reflected on Rank-axis.
-// They are presented with A1 in the bottom left corner for clarity.
-var positionValue = [][]int{{}, { // Rabbit
-	999, 999, 999, 999, 999, 999, 999, 999,
-	10, 10, 5, 10, 10, 5, 10, 10,
-	5, -2, -10, -5, -5, -10, -2, 5,
-	2, 0, -3, -3, -3, -3, 0, 2,
-	2, 1, 0, -3, -3, 0, 1, 2,
-	1, 2, -3, -3, -3, -3, 2, 1,
-	1, 1, 0, -5, -5, 0, 1, 1,
-	1, 1, 1, 1, 1, 1, 1, 1,
-}, { // Cat
-	0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, -8, 0, 0, -8, 0, 0,
-	0, -8, -10, -8, -8, -10, -8, 0,
-	0, 0, -8, 0, 0, -8, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, -2, 0, 0, -2, 0, 0,
-	5, 8, 10, 5, 5, 10, 8, 10,
-	5, 10, 10, 5, 5, 10, 10, 5,
-}, { // Dog
-	0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, -8, 0, 0, -8, 0, 0,
-	0, -8, -10, -8, -8, -10, -8, 0,
-	0, 0, -8, 0, 0, -8, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 0, 10, 10, 0, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0,
-}, { // Horse
-	-13, -8, -8, -8, -8, -8, -8, -13,
-	-8, 0, 0, 0, 0, 0, 0, -8,
-	-8, 5, -8, 10, 10, -8, 5, -8,
-	-8, 5, 10, 2, 2, 10, 5, -8,
-	-8, 5, 5, 2, 2, 5, 5, -8,
-	-8, 5, 0, 0, 5, 0, 5, -8,
-	-8, 0, 0, 0, 0, 0, 0, -8,
-	-13, -8, -8, -8, -8, -8, -8, -13,
-}, { // Camel
-	-13, -8, -8, -8, -8, -8, -8, -13,
-	-8, 0, 0, 0, 0, 0, 0, -8,
-	-8, 5, -8, 10, 10, -8, 5, -8,
-	-8, 5, 10, 2, 2, 10, 5, -8,
-	-8, 5, 5, 2, 2, 5, 5, -8,
-	-8, 5, 0, 5, 5, 0, 5, -8,
-	-8, 0, 0, 0, 0, 0, 0, -8,
-	-13, -8, -8, -8, -8, -8, -8, -13,
-}, { // Elephant
-	-22, -13, -13, -13, -13, -13, -13, -22,
-	-13, 0, 0, 0, 0, 0, 0, -13,
-	-13, 5, -8, 10, 10, -8, 5, -13,
-	-13, 5, 10, 10, 10, 10, 5, -13,
-	-13, 5, 5, 10, 10, 5, 5, -13,
-	-13, 5, 0, 5, 5, 0, 5, -13,
-	-13, 0, -1, 0, 0, -1, 0, -13,
-	-22, -13, -13, -13, -13, -13, -13, -22,
-}}
-
 func isInfinite(score int) bool {
 	return score >= inf || score <= -inf
 }
@@ -118,24 +59,18 @@ func (p *Pos) hostageScore(side Color) (value int) {
 }
 
 func (p *Pos) positionScore(side Color) (score int) {
-	c := 7
-	m := -1
-	if side != Gold {
-		c = 0
-		m = 1
-	}
+	ps := positionValue[side]
 	for _, t := range []Piece{
-		GRabbit.MakeColor(side),
-		GCat.MakeColor(side),
-		GDog.MakeColor(side),
-		GHorse.MakeColor(side),
-		GCamel.MakeColor(side),
-		GElephant.MakeColor(side),
+		GRabbit,
+		GCat,
+		GDog,
+		GHorse,
+		GCamel,
+		GElephant,
 	} {
-		ps := positionValue[t&decolorMask]
+		ps := ps[t]
 		for b := p.bitboards[t]; b > 0; b &= b - 1 {
-			at := b.Square()
-			score += ps[8*(c+m*int(at)/8)+c+m*(int(at)%8)]
+			score += ps[b.Square()]
 		}
 	}
 	return score
