@@ -152,8 +152,8 @@ func (tc TimeControl) FixedOptimalTimeRemaining(t *TimeInfo, c Color) time.Durat
 		return 2 * time.Minute
 	}
 	v := turn + resv
-	if v > 3*time.Minute {
-		return 3 * time.Minute
+	if v > 20*time.Minute {
+		return 20 * time.Minute
 	}
 	return v
 }

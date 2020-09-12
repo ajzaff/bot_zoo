@@ -158,7 +158,7 @@ func (t *Table) Best(p *Pos) (move []Step, score int, err error) {
 }
 
 // PV returns the principal variation by probing the table.
-// Despite the name it can return scores that are outside the window.
+// This might not be complete given entries are churned frequently.
 // The PV has a maximum length of 50 steps.
 func (t *Table) PV(p *Pos) (pv []Step, score int, err error) {
 	for i := 0; i < 50; i++ {

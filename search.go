@@ -226,7 +226,7 @@ func (s *searchInfo) searchRateKNps() int64 {
 	return int64(float64(n) / (float64(ns) / float64(time.Second)) / 1000)
 }
 
-func (e *Engine) printSearchInfo(best searchResult) {
+func (e *Engine) printSearchInfo(pv []Step, best searchResult) {
 	s := e.searchInfo
 	if e.ponder {
 		e.Logf("ponder")
@@ -234,11 +234,9 @@ func (e *Engine) printSearchInfo(best searchResult) {
 	e.writef("info depth %d\n", s.Depth())
 	e.writef("info time %d\n", s.Seconds())
 	s.m.Lock()
-	e.writef("info score %d\n", best.Score)
+	e.writef("info score %d\n", best.Value)
 	s.m.Unlock()
-	if pv, _, _ := e.table.PV(e.p); len(pv) > 0 {
-		e.writef("info pv %s\n", MoveString(pv))
-	}
+	e.writef("info pv %s\n", MoveString(pv))
 	e.writef("info nodes %d\n", s.nodes[len(s.nodes)-1])
 	e.Logf("rate %d kN/s", s.searchRateKNps())
 	e.Logf("transpositions %d", e.table.Len())
@@ -254,9 +252,17 @@ func initWindowDelta(x int) int {
 
 type searchResult struct {
 	Depth int
-	Score int
+	Value int
 	Move  []Step
+	PV    []Step
 }
+
+type NodeType int
+
+const (
+	PV NodeType = iota
+	NonPV
+)
 
 func (e *Engine) iterativeDeepeningRoot() {
 	if !e.lastPonder {
@@ -278,22 +284,14 @@ func (e *Engine) iterativeDeepeningRoot() {
 			Move:  e.RandomSetup(),
 			Depth: 1,
 		}
-		e.printSearchInfo(best)
+		e.printSearchInfo(nil, best)
 		if !e.ponder {
 			e.writef("bestmove %s\n", MoveString(best.Move))
 		}
 		return
 	}
 
-	// First ply searched on main goroutine.
-	moves := e.getRootMovesLen(p, 1)
-	rootSteps := make([]ScoredMove, len(moves))
-	for i, move := range moves {
-		rootSteps[i] = ScoredMove{score: -inf, move: move}
-	}
-
-	e.best = e.searchRoot(p, rootSteps, -inf, +inf, 1)
-	e.printSearchInfo(e.best)
+	e.best = searchResult{Value: -inf}
 	e.resultChan = make(chan searchResult)
 	e.wg.Add(e.concurrency)
 
@@ -302,8 +300,6 @@ func (e *Engine) iterativeDeepeningRoot() {
 	// arriving at a given (deeper) position faster on average.
 	for i := 0; i < e.concurrency; i++ {
 		go func(rootScore int) {
-			var best searchResult
-
 			defer func() {
 				// FIXME(ajzaff):
 				// We would like to use this final result, but it's very unstable due
@@ -311,13 +307,12 @@ func (e *Engine) iterativeDeepeningRoot() {
 				// Reduce the tracking count of running goroutines by 1.
 				e.wg.Done()
 			}()
-
-			newPos := p.Clone()
-			r := rand.New(rand.NewSource(time.Now().UnixNano()))
+			p := p.Clone() // shadowed
 
 			// Generate all moves for use in this goroutine and add rootOrderNoise if configured.
-			moves := e.getRootMovesLen(newPos, 4)
 			// Shuffling moves increases variance in concurrent search.
+			r := rand.New(rand.NewSource(time.Now().UnixNano()))
+			moves := e.getRootMovesLen(p, 4)
 			r.Shuffle(len(moves), func(i, j int) {
 				moves[i], moves[j] = moves[j], moves[i]
 			})
@@ -328,61 +323,71 @@ func (e *Engine) iterativeDeepeningRoot() {
 				}
 			}
 
-			// Main search loop:
-			for depth := 2; depth < maxPly; depth++ {
-				best.Depth = depth
+			alpha, beta := -inf, +inf
+			stack := make([]Stack, 1, maxPly)
+			best := searchResult{Value: -inf}
 
+			// Main search loop:
+		mainLoop:
+			for depth := 1; depth < maxPly; depth++ {
 				// Aspiration window tracks the previous score for search.
 				// Whenever we fail high or low widen the window.
 				// Start with a small aspiration window and, in the case of a fail
 				// high/low, re-search with a bigger window until we don't fail
 				// high/low anymore.
-				delta := initWindowDelta(best.Score)
-				alpha, beta := best.Score-delta, best.Score+delta
-				if alpha < -inf {
-					alpha = -inf
+				var delta int
+				if depth >= 4 {
+					delta = initWindowDelta(best.Value)
+					alpha, beta = best.Value-delta, best.Value+delta
+					if alpha < -inf {
+						alpha = -inf
+					}
+					if beta > inf {
+						beta = inf
+					}
 				}
-				if beta > inf {
-					beta = inf
-				}
-				// Main aspiration loop:
-				for {
-					res := e.searchRoot(newPos, scoredMoves, alpha, beta, depth)
-					if Terminal(res.Score) {
+
+				stack = append(stack, Stack{})
+
+				// Search all root moves using aspiration and call search on each.
+				for failHighCount := 0; ; {
+					adjustedDepth := depth - failHighCount
+					if adjustedDepth < 1 {
+						adjustedDepth = 1
+					}
+					result := e.searchRoot(p, &stack, scoredMoves, alpha, beta, adjustedDepth)
+
+					if Terminal(result.Value) {
 						// Stop the search goroutine if a terminal value is achieved.
-						// FIXME(ajzaff): The main thread doesn't handle the workers stopping well.
-						// It not cancel early.
-						best = res
+						best.Value = result.Value
+						best.Move = result.Move
+						best.PV = result.PV
 						break
 					}
-					if res.Score <= alpha {
-						pv, _, _ := e.table.PV(newPos)
-						if len(pv) > 0 {
-							e.Logf("[%d] [<=%d] %s", res.Depth, alpha, MoveString(pv))
-						}
+
+					if result.Value <= alpha {
+						e.Logf("[%d] [<=%d] %s", depth, alpha, MoveString(result.PV))
 						beta = (alpha + beta) / 2
-						alpha = res.Score - delta
+						alpha = result.Value - delta
 						if alpha < -inf {
 							alpha = -inf
 						}
-					} else if res.Score >= beta {
-						pv, _, _ := e.table.PV(newPos)
-						if len(pv) > 0 {
-							e.Logf("[%d] [>=%d] %s", res.Depth, beta, MoveString(pv))
-						}
-						beta = res.Score + delta
+						failHighCount = 0
+					} else if result.Value >= beta {
+						e.Logf("[%d] [>=%d] %s", depth, beta, MoveString(result.PV))
+						beta = result.Value + delta
 						if beta > inf {
 							beta = inf
 						}
+						failHighCount++
 					} else {
 						// The result was within the window.
 						// Ready to search the next ply.
-						best = res
+						best.Value = result.Value
+						best.Move = result.Move
+						best.Depth = depth
 
-						pv, _, _ := e.table.PV(newPos)
-						if len(pv) > 0 {
-							e.Logf("[%d] [==%d] %s", res.Depth, res.Score, MoveString(pv))
-						}
+						e.Logf("[%d] [==%d] %s", depth, best.Value, MoveString(result.PV))
 						break
 					}
 
@@ -402,18 +407,18 @@ func (e *Engine) iterativeDeepeningRoot() {
 					assert("!(alpha >= -inf && beta <= inf)", alpha >= -inf && beta <= inf)
 
 					if e.stopping == 1 {
-						break
+						break mainLoop
 					}
 				}
 
 				if e.stopping == 1 {
-					break
+					break mainLoop
 				}
 
 				// Send best move from (possibly cancelled) last ply to the done chan.
 				e.resultChan <- best
 			}
-		}(e.best.Score)
+		}(e.best.Value)
 	}
 
 	// Track the number of running goroutines.
@@ -422,16 +427,12 @@ func (e *Engine) iterativeDeepeningRoot() {
 		next, rem := e.searchInfo.GuessPlyDuration(), e.timeControl.FixedOptimalTimeRemaining(e.timeInfo, p.side)
 		select {
 		case b := <-e.resultChan:
-			if b.Depth > e.best.Depth || (b.Depth == e.best.Depth && b.Score > e.best.Score) {
+			if b.Depth > e.best.Depth || (b.Depth == e.best.Depth && b.Value > e.best.Value) {
 				e.best = b
 
-				// Log the new best PV.
-				pv, _, _ := e.table.PV(p)
-				if len(pv) > 0 {
-					e.Logf("[%d] [%d] %s", e.best.Depth, e.best.Score, MoveString(pv))
-				}
+				e.Logf("[%d] [%d] %s", e.best.Depth, e.best.Value, MoveString(e.best.PV))
 
-				if Winning(e.best.Score) {
+				if Winning(e.best.Value) {
 					// Stop after finding a winning move.
 					// We keep searching losing moves until MaxPly.
 					// The only winning move is not to play.
@@ -460,18 +461,18 @@ func (e *Engine) iterativeDeepeningRoot() {
 	}
 
 	// Print search info and "bestmove" if not pondering.
-	e.printSearchInfo(e.best)
+	e.printSearchInfo(e.best.PV, e.best)
 	if !e.ponder {
 		e.writef("bestmove %s\n", MoveString(e.best.Move))
 	}
 }
 
-func (e *Engine) searchRoot(p *Pos, scoredMoves []ScoredMove, alpha, beta, depth int) searchResult {
+func (e *Engine) searchRoot(p *Pos, stack *[]Stack, scoredMoves []ScoredMove, alpha, beta, depth int) searchResult {
 	best := searchResult{
-		Score: -terminalEval,
+		Value: -terminalEval,
 		Depth: depth,
 	}
-	for i, entry := range scoredMoves {
+	for _, entry := range scoredMoves {
 		if e.stopping == 1 {
 			break
 		}
@@ -486,12 +487,12 @@ func (e *Engine) searchRoot(p *Pos, scoredMoves []ScoredMove, alpha, beta, depth
 			}
 		} else {
 			var stepList StepList
-			score := -e.search(p, &stepList, i == 0, -beta, -alpha, n, depth)
-			if score > alpha {
-				alpha = score
+			value := -e.search(PV, p, stack, &stepList, -beta, -alpha, n, depth)
+			if value > alpha {
+				alpha = value
 			}
-			if score > best.Score || best.Move == nil {
-				best.Score = score
+			if value > best.Value || best.Move == nil {
+				best.Value = value
 				best.Move = entry.move
 			}
 		}
@@ -499,11 +500,17 @@ func (e *Engine) searchRoot(p *Pos, scoredMoves []ScoredMove, alpha, beta, depth
 			panic(fmt.Sprintf("search_unmove_root: %s: %v", entry.move, err))
 		}
 	}
-	e.table.StoreMove(p, depth, best.Score, best.Move)
+	// Update PV
+	pv := make([]Step, len(best.Move), len(best.Move)+len(*stack)-2)
+	copy(pv, best.Move)
+	for _, e := range (*stack)[1 : len(*stack)-1] {
+		pv = append(pv, e.Step)
+	}
+	best.PV = pv
 	return best
 }
 
-func (e *Engine) search(p *Pos, stepList *StepList, pv bool, alpha, beta, depth, maxDepth int) int {
+func (e *Engine) search(nt NodeType, p *Pos, stack *[]Stack, stepList *StepList, alpha, beta, depth, maxDepth int) int {
 	alphaOrig := alpha
 	var bestStep *Step
 
@@ -534,24 +541,24 @@ func (e *Engine) search(p *Pos, stepList *StepList, pv bool, alpha, beta, depth,
 
 	// Step 2: Is this a terminal node or depth==0?
 	// Start quiescense search.
-	if depth == maxDepth || p.Terminal() {
-		return e.quiescence(p, alpha, beta)
+	if depth >= maxDepth || p.Terminal() {
+		return e.quiescence(nt, p, alpha, beta)
 	}
 
 	// Step 2a: Assertions.
 	assert("!(0 < depth && depth < maxDepth)", 0 < depth && depth < maxDepth)
 
 	// Step 2c. Try null move pruning.
-	if eval := p.Score(); !pv && eval >= beta && e.nullMoveR > 0 && depth+e.nullMoveR < maxDepth {
+	if eval := p.Score(); nt != PV && eval >= beta && e.nullMoveR > 0 && depth+e.nullMoveR < maxDepth {
 		p.Pass()
-		score := -e.search(p, stepList, pv, -beta, -alpha, depth+e.nullMoveR+1, maxDepth)
+		nullValue := -e.search(NonPV, p, stack, stepList, -beta, -alpha, depth+e.nullMoveR+1, maxDepth)
 		p.Unpass()
-		if score >= beta {
-			return score // null move pruning
+		if nullValue >= beta {
+			return nullValue // null move pruning
 		}
 	}
 
-	if pv && !tableMove && maxDepth-depth >= 8 {
+	if nt != PV && !tableMove && maxDepth-depth >= 8 {
 		// If position is not in table, and is PV line, decrease maxDepth by 2.
 		maxDepth -= 2
 	}
@@ -564,7 +571,7 @@ func (e *Engine) search(p *Pos, stepList *StepList, pv bool, alpha, beta, depth,
 	// Step 3: Main search.
 	selector := e.stepSelector(stepList.steps[l:])
 	nodes := 0
-	first := true
+
 	for step, ok := selector.Select(); ok; step, ok = selector.Select() {
 		n := step.Len()
 		if depth+n > maxDepth {
@@ -578,11 +585,10 @@ func (e *Engine) search(p *Pos, stepList *StepList, pv bool, alpha, beta, depth,
 		}
 		var value int
 		if p.side == initSide {
-			value = e.search(p, stepList, pv && first, alpha, beta, depth+n, maxDepth)
+			value = e.search(nt, p, stack, stepList, alpha, beta, depth+n, maxDepth)
 		} else {
-			value = -e.search(p, stepList, pv && first, -beta, -alpha, depth+n, maxDepth)
+			value = -e.search(nt, p, stack, stepList, -beta, -alpha, depth+n, maxDepth)
 		}
-		first = false
 		if err := p.Unstep(); err != nil {
 			panic(fmt.Sprintf("search_unstep: %v", err))
 		}
@@ -607,7 +613,23 @@ func (e *Engine) search(p *Pos, stepList *StepList, pv bool, alpha, beta, depth,
 	// Truncate steps generated at this ply.
 	stepList.Truncate(l)
 
+	// Update stack and tracing info.
 	e.searchInfo.addNodes(depth, nodes)
+	(*stack)[depth].Depth = depth
+	(*stack)[depth].Eval = alpha
+
+	// Update PV.
+	if nt == PV {
+		var pv []Step
+		if bestStep != nil {
+			(*stack)[depth].Step = *bestStep
+			pv = append(pv, *bestStep)
+		}
+		if depth+1 < len(*stack) {
+			pv = append(pv, (*stack)[depth+1].PV...)
+		}
+		(*stack)[depth].PV = pv
+	}
 
 	// Step 4: Store transposition table entry.
 	if e.useTable {
@@ -634,7 +656,7 @@ func (e *Engine) search(p *Pos, stepList *StepList, pv bool, alpha, beta, depth,
 
 // TODO(ajzaff): Measure the effect of counting quienscence nodes on the EBF.
 // This has direct consequences on move timings.
-func (e *Engine) quiescence(p *Pos, alpha, beta int) int {
+func (e *Engine) quiescence(nt NodeType, p *Pos, alpha, beta int) int {
 	assert("!(alpha >= -inf && alpha < beta && beta <= inf)",
 		alpha >= -inf && alpha < beta && beta <= inf)
 
@@ -657,9 +679,9 @@ func (e *Engine) quiescence(p *Pos, alpha, beta int) int {
 		}
 		var score int
 		if p.side == initSide {
-			score = e.quiescence(p, alpha, beta)
+			score = e.quiescence(nt, p, alpha, beta)
 		} else {
-			score = -e.quiescence(p, -beta, -alpha)
+			score = -e.quiescence(nt, p, -beta, -alpha)
 		}
 		if err := p.Unstep(); err != nil {
 			panic(fmt.Sprintf("quiescense_unstep: %v", err))

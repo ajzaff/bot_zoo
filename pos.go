@@ -408,12 +408,10 @@ func (p *Pos) Move(steps []Step) error {
 	if p.threefold.Lookup(p.zhash) >= 3 {
 		return errRecurringPosition
 	}
-	p.threefold.Increment(p.zhash)
 	return nil
 }
 
 func (p *Pos) Unmove() error {
-	p.threefold.Decrement(p.zhash)
 	if err := p.Unpass(); err != nil {
 		return err
 	}

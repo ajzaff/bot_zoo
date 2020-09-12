@@ -1,10 +1,13 @@
 package zoo
 
+// Stack is a structure maintained for each ply of search.
+// It contains all the information relevant to that ply.
+// The stack is used for reconstructing the searched PV.
 type Stack struct {
-	PV      []Step
-	Depth   int
-	Current Step
-	Eval    int
+	PV    []Step
+	Depth int
+	Step  Step
+	Eval  int
 }
 
 // StepList implements an efficient data structure for storing steps from search lines.
