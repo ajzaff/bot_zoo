@@ -230,20 +230,21 @@ func recurring2(ka, kb StepKind, a, b Step) bool {
 
 func recurring4(a, b, c, d Step) bool {
 	ka, kb, kc, kd := a.Kind(), b.Kind(), c.Kind(), d.Kind()
-	return recurring2(ka, kb, a, b) && recurring2(kb, kc, b, c) ||
-		recurring2(ka, kc, a, c) && recurring2(kb, kd, b, d) ||
-		recurring2(ka, kd, a, d) && recurring2(kb, kc, b, c)
+	return recurring2(ka, kb, a, b) || recurring2(kb, kc, b, c) ||
+		recurring2(ka, kc, a, c) || recurring2(kb, kd, b, d) ||
+		recurring2(ka, kd, a, d) || recurring2(kb, kc, b, c)
 }
 
-// Recurring evaluates statically whether the move leads to a recurring position.
-// The provided move should be terminated with a (pass) move.
+// Recurring evaluates statically whether the move leads to a recurring position
+// Or whether a move contains intermediate redundancies like a unnecessary pivot
+// or push pull pairs. The provided move should be terminated with a (pass) move.
 func Recurring(move []Step) bool {
 	switch len(move) {
-	case 1:
+	case 1: // (pass)
 		return true
-	case 3:
+	case 3: // default (pass)
 		return recurring2(move[0].Kind(), move[1].Kind(), move[0], move[1])
-	case 5:
+	case 5: // step step (pass)
 		return recurring4(move[0], move[1], move[2], move[3])
 	default: // 1, 3, other lengths
 		return false

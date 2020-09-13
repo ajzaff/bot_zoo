@@ -1,0 +1,67 @@
+1g Ra2 Db2 Rc2 Ed2 He2 Hf2 Rg2 Rh2 Ra1 Mb1 Cc1 Cd1 Re1 Rf1 Rg1 Dh1
+1s ra8 rb8 rc8 rd8 re8 rf8 rg8 rh8 da7 hb7 cc7 md7 ee7 cf7 hg7 dh7
+2g Db2n Mb1n Ed2n He2n
+2s ee7s ee6s ee5s md7s
+3g Rg2n Db3e Ed3n Dc3e
+3s ee4e He3n He4n ef4w
+4g Hf2w Ed4n Ed5s md6s
+4s He5n ee4n md5n ee5s
+5g Rf1n Ed4n Ed5e He6n
+5s cc7e md6e hb7s cd7s
+6g me6e Ee5n He7w cf7w mf6x
+6s ee4w ed4n Dd3n hg7s
+7g Cc1w Cd1w He2n
+7s cd6w ed5n Dd4n cc6n
+8g Rg1w ce7e Ee6n Ee7s
+8s ed6w Hd7s ec6s Hd6w Hc6x
+9g Ee6s Dd5s Dd4s Ee5w
+9s ec5s ec4e Dd3w ed4s
+10g Dh1w Ra2n Rf2e Ra3e
+10s hg6s hg5s hg4n Rg3n
+11g Rg2n Rh2n Rh3n Ed5s
+11s hg5w hf5s Rg4n hf4e
+12g Ed4e He3e Ee4e
+12s dh7s dh6s Rh4s dh5s
+13g Ef4w Hf3n Hf4n Ee4e
+13s Rg5e hg4n ed3n Dc3e
+14g Dg1e Ef4e Eg4w dh4w
+14s ed4e ee4n Hf5n Hf6x ee5e
+15g Ef4s dg4w Ef3w df4s df3x
+15s ef5s ef4e Rg3w eg4s
+16g Rf1e Rb3n Rf3n
+16s hg5w Rh5w da7e hb6s
+17g Ee3n Rf4e Ee4e Rg5e
+17s cf7s cf6e cg6s hf5w
+18g Rg1w Ef4w Ee4e he5s
+18s re8s re7s re6s he4w
+19g Mb2n Mb3e Dd3e Mc3e
+19s re5w hd4w hc4n Rb4e
+20g Rc2w Ef4n Ef5s cg5w
+20s rd5e cf5e eg3s eg2e
+21g Rb2w Md3n Rc4w Md4s
+21s eh2w Dh1n eg2w Dh2w
+22g Cc1n Ra2e Rb2n Rh3w
+22s ef2w ee2w Md3n ed2n
+23g Ef4w Md4n Md5n Md6e
+23s ed3n ed4n ed5n rf8s
+24g Re1w re5w Ee4n Me6n
+24s Rb4e hb5s rd5s ed6e
+25g Dg2w Df2w De2w Dd2n
+25s ee6e Me7s ef6s Me6e Mf6x
+26g Rg4e Ee5w Rh5n Rh6n
+26s ef5s ef4w De3s ee4s
+27g Ed5e hc5e Ee5e
+27s Rc4n hb4e Rc5n Rc6x hc4n
+28g Rh4n Ef5s cg5w Rh5n
+28s rd4e hd5s hd4w Dd3n
+29g Rf1w Rg3e Rh6w Rg6n
+29s cc7e hc5e hd5e Dd4n
+30g De2w re4w Ef4w Ee4e
+30s Dd5n he5w Dd6w Dc6x hd5n
+31g Cb1e Rh3n Ef4w cf5s
+31s hc4w hb4e Rb3n hd6s
+32g rd4s Ee4w hc4n Ed4w
+32s ee3n ee4w hc5w rd3e
+33g Dd2e De2w re3s Rh4n
+33s cf4w ce4s re2e rf2s
+34g
