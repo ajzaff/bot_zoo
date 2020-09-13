@@ -15,7 +15,7 @@ type byLen []ScoredMove
 
 func (a byLen) Len() int           { return len(a) }
 func (a byLen) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a byLen) Less(i, j int) bool { return len(a[i].move) > len(a[j].move) }
+func (a byLen) Less(i, j int) bool { return len(a[i].move) < len(a[j].move) }
 
 type byScore []ScoredMove
 
