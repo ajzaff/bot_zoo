@@ -241,7 +241,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 					break
 				}
 				rem := deadline.Sub(time.Now())
-				if mindepth() > e.minDepth && rem < 1*time.Second {
+				if mindepth() >= e.minDepth && rem < 1*time.Second {
 					e.Logf("stop search now (budget=%s, remaining=%s)", budget, rem)
 					e.Stop()
 				}
