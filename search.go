@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-const maxPly = 1024
+const maxPly int16 = 1024
 
 type nodeType int
 
@@ -16,6 +16,7 @@ const (
 )
 
 type searchResult struct {
+	ID    int
 	Depth int16
 	Value Value
 	Nodes int
@@ -64,7 +65,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 	// with slightly varied root node orderings. This leads to
 	// arriving at a given (deeper) position faster on average.
 	for i := 0; i < e.concurrency; i++ {
-		go func(rootValue Value) {
+		go func(id int, rootValue Value) {
 			defer func() {
 				// FIXME(ajzaff):
 				// We would like to use this final result, but it's very unstable due
@@ -90,7 +91,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 
 			alpha, beta := -Inf, +Inf
 			stack := make([]Stack, 1, maxPly)
-			best := searchResult{Value: -Inf}
+			best := searchResult{ID: id, Value: -Inf}
 
 			// Main search loop:
 		mainLoop:
@@ -139,6 +140,10 @@ func (e *Engine) iterativeDeepeningRoot() {
 						if alpha < -Inf {
 							alpha = -Inf
 						}
+
+						// TODO(ajzaff): We want to extend the search after failing low.
+						// Notify the main thread of a fail low immediately to avoid
+						// submitting a suboptimal value from another search.
 					} else if value >= beta {
 						e.Logf("%d [%d) %s", depth, beta, MoveString(stack[0].PV))
 
@@ -160,14 +165,14 @@ func (e *Engine) iterativeDeepeningRoot() {
 					}
 
 					// Rescore the PV move and sort stably.
-					// for i := range scoredMoves {
-					// 	if MoveEqual(scoredMoves[i].move, best.Move) {
-					// 		scoredMoves[i].score = +Inf
-					// 	} else {
-					// 		scoredMoves[i].score = -Inf
-					// 	}
-					// }
-					// sortMoves(scoredMoves)
+					for i := range scoredMoves {
+						if MoveEqual(scoredMoves[i].move, best.Move) {
+							scoredMoves[i].score = +Inf
+						} else {
+							scoredMoves[i].score = -Inf
+						}
+					}
+					sortMoves(scoredMoves)
 
 					// Update aspiration window delta
 					delta += delta/4 + 5
@@ -186,7 +191,19 @@ func (e *Engine) iterativeDeepeningRoot() {
 				// Send best move from (possibly cancelled) last ply to the done chan.
 				e.resultChan <- best
 			}
-		}(e.best.Value)
+		}(i, e.best.Value)
+	}
+
+	// Track the depth for each goroutine to validate mindepth.
+	goroutineDepths := make(map[int]int16) // goroutine => depth
+	var mindepth = func() int16 {
+		min := int16(-1)
+		for _, d := range goroutineDepths {
+			if min == -1 || d < min {
+				min = d
+			}
+		}
+		return min
 	}
 
 	// Track the number of running goroutines.
@@ -205,6 +222,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 				e.best.Nodes += b.Nodes
 				e.best.Move = b.Move
 				e.best.PV = b.PV
+				goroutineDepths[b.ID] = b.Depth
 
 				e.Logf("%d [%d] %s", e.best.Depth, e.best.Value, MoveString(e.best.PV))
 
@@ -223,7 +241,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 					break
 				}
 				rem := deadline.Sub(time.Now())
-				if e.best.Depth >= e.minDepth && rem < 1*time.Second {
+				if mindepth() > e.minDepth && rem < 1*time.Second {
 					e.Logf("stop search now (budget=%s, remaining=%s)", budget, rem)
 					e.Stop()
 				}

@@ -1,0 +1,6 @@
+1g Ra1 Rb1 Rc1 Rd1 Ce1 Rf1 Rg1 Rh1 Ha2 Db2 Hc2 Ed2 Me2 Cf2 Dg2 Rh2
+1s da8 rb8 rc8 rd8 he8 cf8 rg8 rh8 da7 hb7 cc7 ed7 me7 rf7 rg7 rh7
+2g Ed2n Hc2n Hc3n Me2n
+2s hb7s ed7s me7s he8s
+3g Me3n Ha2n Ha3n Db2n
+3s

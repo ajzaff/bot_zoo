@@ -26,7 +26,7 @@ type Engine struct {
 	// Search won't stop unless a terminal score is achieved.
 	fixedDepth int16
 
-	// minDepth for time based iterative deepening.
+	// minDepth completed for iterative deepening.
 	minDepth int16
 
 	// ponder implies we will search until we're asked explicitly to stop.
