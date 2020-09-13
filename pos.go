@@ -134,6 +134,10 @@ func (p *Pos) Clone() *Pos {
 	)
 }
 
+func (p *Pos) ZHash() uint64 {
+	return p.zhash
+}
+
 func (p *Pos) Depth() int {
 	return p.depth
 }

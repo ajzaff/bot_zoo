@@ -148,7 +148,7 @@ type Capture struct {
 }
 
 func (c Capture) Valid() bool {
-	return c.Piece != Empty
+	return c.Src.Valid()
 }
 
 type StepKind uint8
@@ -195,6 +195,7 @@ func ParseStep(s string) (Step, error) {
 			Dest:   invalidSquare,
 			Alt:    src1,
 			Piece1: piece1,
+			Cap:    Capture{Src: invalidSquare},
 		}, nil
 	}
 	delta1 := ParseDelta(s[3])
@@ -209,6 +210,7 @@ func ParseStep(s string) (Step, error) {
 			Dest:   dest1,
 			Alt:    invalidSquare,
 			Piece1: piece1,
+			Cap:    Capture{Src: invalidSquare},
 		}, nil
 	}
 	if len(s) < 9 {
@@ -222,7 +224,7 @@ func ParseStep(s string) (Step, error) {
 	if !src2.Valid() {
 		return invalidStep, fmt.Errorf("invalid second square: %q", s[6:8])
 	}
-	cap1 := Capture{}
+	cap1 := Capture{Src: invalidSquare}
 	delta2 := ParseDelta(s[8])
 	if s[8] == 'x' {
 		if !piece1.SameColor(piece2) {
@@ -263,6 +265,7 @@ func ParseStep(s string) (Step, error) {
 		Alt:    alt,
 		Piece1: piece1,
 		Piece2: piece2,
+		Cap:    Capture{Src: invalidSquare},
 	}
 
 	// No capture:

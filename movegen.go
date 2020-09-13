@@ -56,21 +56,14 @@ func (p *Pos) capture(presence Bitboard, src, dest Square) Capture {
 	return Capture{}
 }
 
-// FIXME(ajzaff);
-// A step pool could be used as a global cache of steps
-// (or slices of steps) to releive pressure on the GC.
-// The memory allocated in generateSteps has been a
-// bottleneck in the past (allocating GiB of memory in long
-// searches).
-
 // generateSteps appends all legal steps to a.
 // a legal step is any sliding step, push or
 // pull step in which the Src, Dest, or Alt is occupied
 // and the Src piece is not frozen, and all captures
 // are completed.
-func (p *Pos) generateSteps(a *[]Step) {
+func (p *Pos) generateSteps(a *[]*Step) {
 	if p.stepsLeft < 4 {
-		*a = append(*a, Step{Pass: true})
+		*a = append(*a, &Step{Pass: true})
 	}
 	if p.stepsLeft == 0 {
 		return
@@ -93,20 +86,18 @@ func (p *Pos) generateSteps(a *[]Step) {
 		} else {
 			db = stepsB[src]
 		}
+		emptyDB := db & empty
 
 		// Generate default step from src to dest with possible capture.
-		// Keep track of legal destinations to use later.
-		var dests []Square
-		for b2 := db & empty; b2 > 0; b2 &= b2 - 1 {
+		for b2 := emptyDB; b2 > 0; b2 &= b2 - 1 {
 			dest := b2.Square()
-			*a = append(*a, Step{
+			*a = append(*a, &Step{
 				Piece1: t,
 				Src:    src,
 				Dest:   dest,
 				Alt:    invalidSquare,
 				Cap:    p.capture(presence, src, dest),
 			})
-			dests = append(dests, dest)
 		}
 		// Pushing and pulling is not possible.
 		if p.stepsLeft < 2 || t.SameType(GRabbit) {
@@ -117,7 +108,7 @@ func (p *Pos) generateSteps(a *[]Step) {
 			dest := b2.Square()
 			for ab := stepsB[dest] & ^sb & empty; ab > 0; ab &= ab - 1 {
 				alt := ab.Square()
-				step := Step{
+				step := &Step{
 					Piece1: t,
 					Piece2: p.At(dest),
 					Src:    src,
@@ -134,9 +125,10 @@ func (p *Pos) generateSteps(a *[]Step) {
 		}
 		// Generate pulls from alt to src (to dest) with possible capture.
 		for ab := stepsB[src] & enemyPresence & p.Weaker(t); ab > 0; ab &= ab - 1 {
-			for _, dest := range dests {
+			for b2 := emptyDB; b2 > 0; b2 &= b2 - 1 {
+				dest := b2.Square()
 				alt := ab.Square()
-				step := Step{
+				step := &Step{
 					Piece1: t,
 					Piece2: p.At(alt),
 					Src:    src,

@@ -65,10 +65,10 @@ func (a *AEI) handleExt(text string) error {
 	case strings.HasPrefix(text, "step"):
 		parts := strings.SplitN(text, " ", 2)
 		if len(parts) < 2 {
-			var steps []Step
-			a.engine.Pos().generateSteps(&steps)
-			selector := newStepSelector(a.engine.Pos(), steps)
-			for score, step, ok := selector.SelectScore(); ok; score, step, ok = selector.SelectScore() {
+			var stepList StepList
+			stepList.Generate(a.engine.Pos())
+			for i := 0; i < stepList.Len(); i++ {
+				step, score := stepList.AtScore(i)
 				a.Logf("[%d] %s", score, step)
 			}
 			return nil

@@ -9,8 +9,6 @@ const (
 	BoundExact
 )
 
-const clusterSize = 3
-
 // TableEntry is the transposition table entry.
 // The layout is made as compact as possible to save memory.
 type TableEntry struct {
@@ -116,9 +114,11 @@ type Table struct {
 	table        []*tableCluster
 }
 
+const clusterSize = 3
+
 // TableCluster is a cluster of the table storing the entries.
 type tableCluster struct {
-	entries []TableEntry
+	entries [clusterSize]TableEntry
 }
 
 // cluster uses the 32 lowest order bits of the key to determine the cluster index.
@@ -155,12 +155,15 @@ func (t *Table) Clear() {
 // A call to Resize during active search is problematic and should be prevented.
 func (t *Table) Resize(mbSize int) {
 	t.Clear()
-	t.clusterCount = mbSize * 1024 * 1024 / 24 // sizeof(tableCluster)
+	t.clusterCount = mbSize * 1024 * 1024 / 36 // sizeof(tableCluster)
 	t.table = make([]*tableCluster, t.clusterCount)
 	for i := 0; i < t.clusterCount; i++ {
 		t.table[i] = new(tableCluster)
-		t.table[i].entries = make([]TableEntry, clusterSize)
 	}
+}
+
+func (t *Table) NewSearch() {
+	t.gen8 += 8
 }
 
 // Probe returns the entry matching the key and found = true, or returns
@@ -168,11 +171,11 @@ func (t *Table) Resize(mbSize int) {
 func (t *Table) Probe(key uint64) (e *TableEntry, found bool) {
 	key16 := uint16(key >> 48)
 	cluster := t.cluster(key)
-	_ = cluster.entries[clusterSize-1] // suppress bounds checking.
 
 	for i := 0; i < clusterSize; i++ {
 		e := &cluster.entries[i]
 		if e.Key16 == 0 || e.Key16 == key16 {
+			e.Gen8Bound = uint8(t.gen8 | (e.Gen8Bound & 0x7)) // Refresh
 			return e, e.Key16 == key16
 		}
 	}
@@ -181,7 +184,7 @@ func (t *Table) Probe(key uint64) (e *TableEntry, found bool) {
 	replace := &cluster.entries[0]
 	for i := 1; i < clusterSize; i++ {
 		e := &cluster.entries[i]
-		// Handle cyclic generation overflow.
+		// Pick least valuable entry whilst handling cyclic generation overflow.
 		// See stockfish/tt.cpp for explaination.
 		if e.Depth-((uint8(263+int(t.gen8))-e.Gen8Bound)&0xf8) >
 			e.Depth-((uint8(263+int(t.gen8))-e.Gen8Bound)&0xf8) {
