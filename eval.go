@@ -46,24 +46,6 @@ var rabbitMaterialValue = []Value{
 	3700,
 }
 
-var hostageValue = []Value{
-	0,
-	5,  // Rabbit
-	8,  // Dog
-	20, // Horse
-	50, // Camel
-	0,
-}
-
-func (p *Pos) hostageScore(side Color) (value Value) {
-	for b := p.frozen[side] & p.presence[side.Opposite()]; b > 0; b &= b - 1 {
-		if t := p.board[b.Square()]; p.frozenB(t, b) {
-			value += hostageValue[t&decolorMask]
-		}
-	}
-	return value
-}
-
 func (p *Pos) positionScore(side Color) (value Value) {
 	ps := positionValue[side]
 	for _, t := range []Piece{
@@ -91,7 +73,6 @@ func (p *Pos) valueOf(side Color) (value Value) {
 	for t := GCat; t <= GElephant; t++ {
 		value += pieceValue[t] * Value(p.Bitboard(t.MakeColor(side)).Count())
 	}
-	value += p.hostageScore(side)
 	value += p.positionScore(side)
 	return value
 }

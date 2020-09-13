@@ -46,32 +46,40 @@ var goalRange = [2]Bitboard{
 	^NotRank1 | ^NotRank1<<8 | ^NotRank1<<16, // Silver
 }
 
-func scoreStep(step Step) Value {
-	switch side := step.Piece1.Color(); {
-	case step.Piece1.SameType(GRabbit) && step.Dest.Bitboard()&goalRanks[step.Piece1.Color()] != 0: // Goal:
-		return +Inf
-	case step.Piece1.SameType(GRabbit) && step.Dest.Bitboard()&goalRange[step.Piece1.Color()] != 0: // Coarse goal threat:
-		return 1000
-	case step.Capture(): // Self captures to be avoided, captures good:
+func scoreStep(p *Pos, step Step) Value {
+	side := step.Piece1.Color()
+	var value Value
+	// Add +Inf - |step| for goal moves.
+	if step.Piece1.SameType(GRabbit) && step.Dest.Bitboard()&goalRanks[step.Piece1.Color()] != 0 {
+		value += +Inf - Value(step.Len()) // find shortest mate
+	}
+	// Add O(large) for rabbit moves close to goal.
+	if step.Piece1.SameType(GRabbit) && step.Dest.Bitboard()&goalRange[step.Piece1.Color()] != 0 { // Coarse goal threat:
+		value += 2000
+	}
+	// Add static value of capture:
+	if step.Capture() {
 		t := step.Cap.Piece
 		if t.Color() == side {
-			return -pieceValue[t&decolorMask]
+			value -= pieceValue[t&decolorMask]
+		} else {
+			value += pieceValue[t&decolorMask]
 		}
-		return pieceValue[t&decolorMask]
-	default:
-		return 0
 	}
+	return value
 }
 
 // stepSelector handles scoring and sorting steps and provides
 // Select for getting the next best step that meets the conditions.
 type stepSelector struct {
+	p      *Pos
 	steps  []Step
 	scores []Value
 }
 
-func newStepSelector(steps []Step) *stepSelector {
+func newStepSelector(p *Pos, steps []Step) *stepSelector {
 	s := &stepSelector{
+		p:      p,
 		steps:  steps,
 		scores: make([]Value, len(steps)),
 	}
@@ -88,7 +96,7 @@ func (a stepSelector) Swap(i, j int) {
 
 func (s *stepSelector) score() {
 	for i, step := range s.steps {
-		s.scores[i] = scoreStep(step)
+		s.scores[i] = scoreStep(s.p, step)
 	}
 	sort.Stable(s)
 }
@@ -128,7 +136,7 @@ func (s *stepSelector) SelectCapture() (Step, bool) {
 // scoreMoves is generally called at the search root and provides a better initial
 // order before the PV order takes over. These relative orders will be maintained
 // later due to stable sort so it's very important to have a goo order heuristic.
-func (e *Engine) scoreMoves(moves [][]Step) []ScoredMove {
+func (e *Engine) scoreMoves(p *Pos, moves [][]Step) []ScoredMove {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	r.Shuffle(len(moves), func(i, j int) {
 		moves[i], moves[j] = moves[j], moves[i]
@@ -141,7 +149,7 @@ func (e *Engine) scoreMoves(moves [][]Step) []ScoredMove {
 		}
 		// Add individual step values.
 		for _, step := range move {
-			scoredMoves[i].score += scoreStep(step)
+			scoredMoves[i].score += scoreStep(p, step)
 		}
 	}
 	sortMoves(scoredMoves)

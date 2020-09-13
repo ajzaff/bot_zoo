@@ -8,8 +8,6 @@ import (
 	"time"
 )
 
-const transposeTableSize = 2000000
-
 type Engine struct {
 	timeControl TimeControl
 	timeInfo    *TimeInfo
@@ -24,10 +22,10 @@ type Engine struct {
 
 	// depth != 0 implies fixed depth.
 	// Search won't stop unless a terminal score is achieved.
-	fixedDepth int16
+	fixedDepth uint8
 
 	// minDepth completed for iterative deepening.
-	minDepth int16
+	minDepth uint8
 
 	// ponder implies we will search until we're asked explicitly to stop.
 	// We don't set the best move after a ponder.
@@ -43,7 +41,7 @@ type Engine struct {
 
 	// Null move depth reduction factor R.
 	// TODO(ajzaff): Use an adaptive value of R.
-	nullMoveR int16
+	nullMoveR uint8
 
 	// concurrency setting of Lazy-SMP search in number of goroutines.
 	concurrency int
@@ -65,7 +63,7 @@ func NewEngine(seed int64) *Engine {
 		concurrency:    4,
 		rootOrderNoise: 5,
 		nullMoveR:      4,
-		table:          NewTable(transposeTableSize),
+		table:          NewTable(),
 		useTable:       true,
 	}
 	e.AEI = NewAEI(e, nil, os.Stdout)
@@ -105,7 +103,7 @@ func (e *Engine) Go() {
 }
 
 // GoFixed starts a fixed-depth search routine and blocks until it finishes.
-func (e *Engine) GoFixed(fixedDepth int16) {
+func (e *Engine) GoFixed(fixedDepth uint8) {
 	if atomic.CompareAndSwapInt32(&e.running, 0, 1) {
 		e.ponder = false
 		prevDepth := e.fixedDepth
@@ -154,7 +152,7 @@ func searchRateKNps(nodes int, start time.Time) int64 {
 	return int64(float64(nodes) / (float64(time.Now().Sub(start)) / float64(time.Second)) / 1000)
 }
 
-func (e *Engine) printSearchInfo(nodes int, depth int16, start time.Time, best searchResult) {
+func (e *Engine) printSearchInfo(nodes int, depth uint8, start time.Time, best searchResult) {
 	if e.ponder {
 		e.Logf("ponder")
 	}
@@ -164,5 +162,5 @@ func (e *Engine) printSearchInfo(nodes int, depth int16, start time.Time, best s
 	e.writef("info pv %s\n", MoveString(best.PV))
 	e.writef("info nodes %d\n", nodes)
 	e.Logf("rate %d kN/s", searchRateKNps(nodes, start))
-	e.Logf("transpositions %d", e.table.Len())
+	e.Logf("hashfull %d", e.table.Hashfull())
 }

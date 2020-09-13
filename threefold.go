@@ -31,7 +31,7 @@ func (t *Threefold) Clear() {
 }
 
 // Lookup the repetition count for the given position key.
-func (t *Threefold) Lookup(key int64) int {
+func (t *Threefold) Lookup(key uint64) int {
 	v, ok := t.m.Load(key)
 	if !ok {
 		return 0
@@ -40,7 +40,7 @@ func (t *Threefold) Lookup(key int64) int {
 }
 
 // Increment the position key and return the number of repetitions.
-func (t *Threefold) Increment(key int64) int {
+func (t *Threefold) Increment(key uint64) int {
 	v, ok := t.m.LoadOrStore(key, 1)
 	if !ok {
 		return 1
@@ -51,7 +51,7 @@ func (t *Threefold) Increment(key int64) int {
 }
 
 // Decrement the position key and return the number of repetitions.
-func (t *Threefold) Decrement(key int64) int {
+func (t *Threefold) Decrement(key uint64) int {
 	v, ok := t.m.LoadOrStore(key, 0)
 	if !ok {
 		return 0

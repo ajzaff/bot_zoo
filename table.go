@@ -1,156 +1,205 @@
 package zoo
 
-import (
-	"container/list"
-	"fmt"
-	"sync"
-)
-
-type Bound int
+type Bound uint8
 
 const (
-	NoBound Bound = iota
-	UpperBound
-	LowerBound
-	ExactBound
+	BoundNone Bound = iota
+	BoundUpper
+	BoundLower
+	BoundExact
 )
 
-// EntrySize is the approximate TableEntry size in bytes.
-// This can be calculated using the unsafe package:
-//	unsafe.Sizeof(TableEntry{})
-const EntrySize = 40
+const clusterSize = 3
 
+// TableEntry is the transposition table entry.
+// The layout is made as compact as possible to save memory.
 type TableEntry struct {
-	Bound
-	ZHash int64
-	Depth int16
+	// Key is the upper part of the ZHash (16 bits).
+	Key16 uint16
+	// Value of the entry (16 bits).
 	Value Value
-	Step  *Step
+	// Eval of the entry (16 bits).
+	Eval Value
+	// Depth of the entry (8 bits).
+	Depth uint8
+	// Gen8Bound packs the bound type, PV, and aging parameter (8 bits).
+	Gen8Bound uint8
+	// Step packed into a uint32 (32 bits).
+	Step uint32
 }
 
+func (e *TableEntry) Clear() {
+	e.Key16 = 0
+	e.Value = 0
+	e.Eval = 0
+	e.Depth = 0
+	e.Gen8Bound = 0
+	e.Step = 0
+}
+
+// PV returns whether the entry is a PV entry.
+func (e *TableEntry) PV() bool {
+	return e.Gen8Bound&4 != 0
+}
+
+// Bound extracts the bound from this entry.
+func (e *TableEntry) Bound() Bound {
+	return Bound(e.Gen8Bound & 0x3)
+}
+
+// GetStep returns the real Step from the entry and position cotext.
+func (e *TableEntry) GetStep(p *Pos) Step {
+	src := Square(e.Step)
+	dest := Square(e.Step >> 8)
+	alt := Square(e.Step >> 16)
+	cap := Square(e.Step >> 24)
+	step := Step{
+		Piece1: p.At(src),
+		Src:    src,
+		Dest:   dest,
+		Alt:    alt,
+		Cap: Capture{
+			Src: cap,
+		},
+	}
+	if dest.AdjacentTo(alt) { // Push
+		step.Piece2 = p.At(dest)
+	} else if alt.Valid() { // Pull
+		step.Piece2 = p.At(alt)
+	}
+	if cap.Valid() {
+		step.Cap.Piece = p.At(cap)
+	}
+	return step
+}
+
+// saveStep packs the step into 32 bits
+// using the following layout (little endian):
+//	src (8 bits)
+//	dest (8 bits)
+//	alt (8 bits)
+//	capture src (8 bits)
+func (e *TableEntry) saveStep(step Step) {
+	e.Step = uint32(step.Src) |
+		uint32(step.Dest)<<8 |
+		uint32(step.Alt)<<16 |
+		uint32(step.Cap.Src)<<24
+}
+
+// Save the information into the TableEntry if it is more valuable.
+func (e *TableEntry) Save(key uint64, v, ev Value, pv bool, b Bound, gen, depth uint8, step Step) {
+	key16 := uint16(key >> 48)
+	if step.Kind() != KindInvalid || key16 != e.Key16 {
+		// Preserve step information. Only reset step if valid
+		// and on key change (modulo Type 1 key errors).
+		e.saveStep(step)
+	}
+	// Overwrite more valuable entries.
+	if key16 != e.Key16 || depth > e.Depth-4 || b == BoundExact {
+		e.Key16 = key16
+		e.Value = v
+		e.Eval = ev
+		g := gen
+		if pv {
+			g |= 1 << 2
+		}
+		e.Gen8Bound = g | uint8(b)
+		e.Depth = depth
+	}
+}
+
+// Table is the main clustered transposition table for the engine.
 type Table struct {
-	cap   int
-	list  *list.List              // guarded by m
-	table map[int64]*list.Element // zhash => *list.Element
-	m     sync.Mutex
+	cap          int
+	clusterCount int
+	gen8         uint8 // aging parameter
+	table        []*tableCluster
 }
 
-func NewTable(cap int) *Table {
-	return &Table{
-		cap:   cap,
-		list:  list.New(),
-		table: make(map[int64]*list.Element),
-	}
+// TableCluster is a cluster of the table storing the entries.
+type tableCluster struct {
+	entries []TableEntry
 }
 
+// cluster uses the 32 lowest order bits of the key to determine the cluster index.
+func (t *Table) cluster(key uint64) *tableCluster {
+	return t.table[(uint64(uint32(key))*uint64(t.clusterCount))>>32]
+}
+
+// NewTableSize returns a table with the given mbSize.
+func NewTableSize(mbSize int) *Table {
+	t := &Table{}
+	t.Resize(defaultSizeMB)
+	return t
+}
+
+const defaultSizeMB = 50
+
+// NewTable returns a table with the default size.
+func NewTable() *Table {
+	return NewTableSize(defaultSizeMB)
+}
+
+// Clear clears the hash table.
+// A call to Clear during active search is problematic and should be prevented.
 func (t *Table) Clear() {
-	t.table = make(map[int64]*list.Element)
-	t.list.Init()
-}
-
-func (t *Table) ProbeDepth(key int64, depth int16) (e *TableEntry, ok bool) {
-	t.m.Lock()
-	defer t.m.Unlock()
-	elem, ok := t.table[key]
-	if !ok {
-		return nil, false
-	}
-	t.list.MoveToBack(elem)
-	if e := elem.Value.(*TableEntry); depth <= e.Depth {
-		return e, true
-	}
-	return nil, false
-}
-
-func (t *Table) Len() int {
-	return t.list.Len()
-}
-
-func (t *Table) Cap() int {
-	return t.cap
-}
-
-func (t *Table) SetCap(cap int) {
-	t.cap = cap
-}
-
-// locks excluded: t.m
-func (t *Table) remove(e *list.Element) {
-	delete(t.table, t.list.Remove(e).(*TableEntry).ZHash)
-}
-
-// locks excluded: t.m
-func (t *Table) pop() {
-	t.remove(t.list.Front())
-}
-
-func (t *Table) Store(e *TableEntry) {
-	t.m.Lock()
-	defer t.m.Unlock()
-	if t.Cap() == 0 {
-		return
-	}
-	if elem, ok := t.table[e.ZHash]; ok {
-		t.list.MoveToBack(elem)
-		// TODO(ajzaff): I just experimented with using an always rewrite strategy
-		// which seemed to reduce the EBF somewhat. More testing is needed to determine
-		// the right strategy.
-		if step := elem.Value.(*TableEntry).Step; step != nil && e.Step == nil {
-			// Preserve any old steps for this position.
-			e.Step = step
+	// TODO(ajzaff): Clear using multiple goroutines.
+	for i := 0; i < t.clusterCount; i++ {
+		for j := 0; j < clusterSize; j++ {
+			t.table[i].entries[j].Clear()
 		}
-		elem.Value = e
-		return
 	}
-	for t.Len() >= t.Cap() {
-		t.pop()
-	}
-	t.table[e.ZHash] = t.list.PushBack(e)
 }
 
-func (t *Table) StoreMove(p *Pos, depth int16, value Value, move []Step) {
-	for _, step := range move {
-		entry := &TableEntry{
-			Bound: ExactBound,
-			ZHash: p.zhash,
-			Depth: depth,
-			Value: value,
-			Step:  new(Step),
+// Resize the table by reallocating a new table of the specified size in MB.
+// A call to Resize during active search is problematic and should be prevented.
+func (t *Table) Resize(mbSize int) {
+	t.Clear()
+	t.clusterCount = mbSize * 1024 * 1024 / 24 // sizeof(tableCluster)
+	t.table = make([]*tableCluster, t.clusterCount)
+	for i := 0; i < t.clusterCount; i++ {
+		t.table[i] = new(tableCluster)
+		t.table[i].entries = make([]TableEntry, clusterSize)
+	}
+}
+
+// Probe returns the entry matching the key and found = true, or returns
+// the least valuable entry (to be overwritten with a call to Save) and found = false.
+func (t *Table) Probe(key uint64) (e *TableEntry, found bool) {
+	key16 := uint16(key >> 48)
+	cluster := t.cluster(key)
+	_ = cluster.entries[clusterSize-1] // suppress bounds checking.
+
+	for i := 0; i < clusterSize; i++ {
+		e := &cluster.entries[i]
+		if e.Key16 == 0 || e.Key16 == key16 {
+			return e, e.Key16 == key16
 		}
-		*entry.Step = step
-		t.Store(entry)
-		defer func() {
-			if err := p.Unstep(); err != nil {
-				panic(fmt.Sprintf("store_unstep: %v", err))
+	}
+
+	// Find an entry to be replaced according to the replacement strategy.
+	replace := &cluster.entries[0]
+	for i := 1; i < clusterSize; i++ {
+		e := &cluster.entries[i]
+		// Handle cyclic generation overflow.
+		// See stockfish/tt.cpp for explaination.
+		if e.Depth-((uint8(263+int(t.gen8))-e.Gen8Bound)&0xf8) >
+			e.Depth-((uint8(263+int(t.gen8))-e.Gen8Bound)&0xf8) {
+			replace = e
+		}
+	}
+	return replace, false
+}
+
+// Hashfull approximates the hashtable fullness (per million sampled entries).
+func (t *Table) Hashfull() int {
+	cnt := 0
+	for i := 0; i < 1000/clusterSize; i++ {
+		for j := 0; j < clusterSize; j++ {
+			if t.table[i].entries[j].Gen8Bound&0xf8 == t.gen8 {
+				cnt++
 			}
-		}()
-		if err := p.Step(step); err != nil {
-			panic(fmt.Sprintf("store_step: %s: %s: %v", move, step, err))
 		}
 	}
-}
-
-// Best returns the best move by probing the table.
-// This is similar to PV but only returns steps for the current side.
-func (t *Table) Best(p *Pos) (move []Step, score Value, err error) {
-	initSide := p.Side()
-	for i := 0; initSide == p.Side(); i++ {
-		e, ok := t.ProbeDepth(p.zhash, 0)
-		if !ok || e.Step == nil {
-			break
-		}
-		if i == 0 {
-			score = e.Value
-		}
-		if err := p.Step(*e.Step); err != nil {
-			return move, score, err
-		}
-		move = append(move, *e.Step)
-		defer func() {
-			if err := p.Unstep(); err != nil {
-				panic(fmt.Errorf("best_unstep: %v", err))
-			}
-		}()
-	}
-	return move, score, nil
+	return cnt * 1000 / (clusterSize * (1000 / clusterSize))
 }

@@ -19,8 +19,7 @@ func (a *AEI) handleExt(text string) error {
 		return nil
 	case text == "movenow":
 		a.engine.GoFixed(8)
-		move, _, _ := a.engine.table.Best(a.engine.Pos())
-		if len(move) > 0 {
+		if move := a.engine.best.Move; len(move) > 0 {
 			a.engine.Pos().Move(move)
 		} else {
 			a.Logf("no best move found in table")
@@ -32,7 +31,7 @@ func (a *AEI) handleExt(text string) error {
 			n, _ = strconv.Atoi(parts[1])
 		}
 		moves := a.engine.getRootMovesLen(a.engine.Pos(), 4)
-		scoredMoves := a.engine.scoreMoves(moves)
+		scoredMoves := a.engine.scoreMoves(a.engine.Pos(), moves)
 		if n == 0 {
 			n = len(scoredMoves)
 		}
@@ -68,7 +67,7 @@ func (a *AEI) handleExt(text string) error {
 		if len(parts) < 2 {
 			var steps []Step
 			a.engine.Pos().generateSteps(&steps)
-			selector := newStepSelector(steps)
+			selector := newStepSelector(a.engine.Pos(), steps)
 			for score, step, ok := selector.SelectScore(); ok; score, step, ok = selector.SelectScore() {
 				a.Logf("[%d] %s", score, step)
 			}

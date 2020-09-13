@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-const maxPly int16 = 1024
+const maxPly uint8 = 246
 
 type nodeType int
 
@@ -16,7 +16,7 @@ const (
 
 type searchResult struct {
 	ID    int
-	Depth int16
+	Depth uint8
 	Value Value
 	Nodes int
 	Move  []Step
@@ -77,7 +77,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 			// Generate all moves for use in this goroutine and add rootOrderNoise if configured.
 			// Shuffling moves increases variance in concurrent search.
 			moves := e.getRootMovesLen(p, 4)
-			scoredMoves := e.scoreMoves(moves)
+			scoredMoves := e.scoreMoves(p, moves)
 
 			alpha, beta := -Inf, +Inf
 			stack := make([]Stack, 1, maxPly)
@@ -85,7 +85,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 
 			// Main search loop:
 		mainLoop:
-			for depth := int16(1); depth < maxPly; depth++ {
+			for depth := uint8(1); depth < maxPly; depth++ {
 				// Aspiration window tracks the previous score for search.
 				// Whenever we fail high or low widen the window.
 				// Start with a small aspiration window and, in the case of a fail
@@ -117,6 +117,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 						// Stop the search goroutine if a terminal value is achieved.
 						best.Value = value
 						best.Move = move
+						best.Depth = depth
 						best.Nodes = stack[0].Nodes
 						best.PV = stack[0].PV
 						break
@@ -183,11 +184,11 @@ func (e *Engine) iterativeDeepeningRoot() {
 	}
 
 	// Track the depth for each goroutine to validate mindepth.
-	goroutineDepths := make(map[int]int16) // goroutine => depth
-	var mindepth = func() int16 {
-		min := int16(-1)
+	goroutineDepths := make(map[int]uint8) // goroutine => depth
+	var mindepth = func() uint8 {
+		var min uint8
 		for _, d := range goroutineDepths {
-			if min == -1 || d < min {
+			if min == 0 || d < min {
 				min = d
 			}
 		}
@@ -248,7 +249,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 	}
 }
 
-func (e *Engine) searchRoot(p *Pos, stack *[]Stack, scoredMoves []ScoredMove, alpha, beta Value, depth int16) (bestMove []Step, bestValue Value) {
+func (e *Engine) searchRoot(p *Pos, stack *[]Stack, scoredMoves []ScoredMove, alpha, beta Value, depth uint8) (bestMove []Step, bestValue Value) {
 
 	// Step 1. Terminal node? We have no moves.
 	eval := p.Value()
@@ -269,7 +270,7 @@ func (e *Engine) searchRoot(p *Pos, stack *[]Stack, scoredMoves []ScoredMove, al
 			}
 		} else {
 			var stepList StepList
-			value := -e.search(PV, p, stack, &stepList, -beta, -alpha, int16(n), depth)
+			value := -e.search(PV, p, stack, &stepList, -beta, -alpha, uint8(n), depth)
 			if value > alpha {
 				alpha = value
 			}
@@ -289,9 +290,20 @@ func (e *Engine) searchRoot(p *Pos, stack *[]Stack, scoredMoves []ScoredMove, al
 		}
 	}
 
-	// Store best move
+	// Store best move by playing out the move and saving entries.
 	if e.useTable {
-		e.table.StoreMove(p, depth, bestValue, bestMove)
+		for _, step := range bestMove {
+			e, _ := e.table.Probe(p.zhash)
+			e.Save(p.zhash, bestValue, eval, true, BoundExact, uint8(p.Depth()), depth, step)
+			defer func() {
+				if err := p.Unstep(); err != nil {
+					panic(fmt.Sprintf("store_unstep: %s: %s: %v", bestMove, step, err))
+				}
+			}()
+			if err := p.Step(step); err != nil {
+				panic(fmt.Sprintf("store_step: %s: %s: %v", bestMove, step, err))
+			}
+		}
 	}
 
 	(*stack)[0].Nodes = 1
@@ -301,26 +313,32 @@ func (e *Engine) searchRoot(p *Pos, stack *[]Stack, scoredMoves []ScoredMove, al
 	return bestMove, bestValue
 }
 
-func (e *Engine) search(nt nodeType, p *Pos, stack *[]Stack, stepList *StepList, alpha, beta Value, depth, maxDepth int16) Value {
-	alphaOrig := alpha
-	var bestStep *Step
+func (e *Engine) search(nt nodeType, p *Pos, stack *[]Stack, stepList *StepList, alpha, beta Value, depth, maxDepth uint8) Value {
+
+	var (
+		alphaOrig = alpha
+		bestStep  *Step
+		eval      Value
+		tableMove bool
+	)
 
 	// Step 1: Check the transposition table.
-	var tableMove bool
 	if e.useTable {
-		if entry, ok := e.table.ProbeDepth(p.zhash, maxDepth-depth); ok {
+		if e, found := e.table.Probe(p.zhash); found {
 			// tableMove = true
-			bestStep = entry.Step
-			switch entry.Bound {
-			case ExactBound:
-				return entry.Value
-			case LowerBound:
-				if alpha < entry.Value {
-					alpha = entry.Value
+			bestStep = new(Step)
+			*bestStep = e.GetStep(p)
+			eval = e.Eval
+			switch e.Bound() {
+			case BoundExact:
+				return e.Value
+			case BoundLower:
+				if alpha < e.Value {
+					alpha = e.Value
 				}
-			case UpperBound:
-				if beta > entry.Value {
-					beta = entry.Value
+			case BoundUpper:
+				if beta > e.Value {
+					beta = e.Value
 				}
 			}
 		}
@@ -330,8 +348,11 @@ func (e *Engine) search(nt nodeType, p *Pos, stack *[]Stack, stepList *StepList,
 		return alpha // fail-hard cutoff
 	}
 
+	if !tableMove {
+		eval = p.Value()
+	}
+
 	// Step 1a. Terminal node?
-	eval := p.Value()
 	if eval.Terminal() {
 		return eval
 	}
@@ -355,8 +376,8 @@ func (e *Engine) search(nt nodeType, p *Pos, stack *[]Stack, stepList *StepList,
 		}
 	}
 
+	// If position is not in table, and is not PV line, decrease maxDepth by 2.
 	if nt != PV && !tableMove && maxDepth-depth >= 8 {
-		// If position is not in table, and is PV line, decrease maxDepth by 2.
 		maxDepth -= 2
 	}
 
@@ -366,11 +387,11 @@ func (e *Engine) search(nt nodeType, p *Pos, stack *[]Stack, stepList *StepList,
 	stepList.Generate(p)
 
 	// Step 3: Main search.
-	selector := newStepSelector(stepList.steps[l:])
+	selector := newStepSelector(p, stepList.steps[l:])
 
 	for step, ok := selector.Select(); ok; step, ok = selector.Select() {
 		n := step.Len()
-		if depth+int16(n) > maxDepth {
+		if depth+uint8(n) > maxDepth {
 			continue
 		}
 		initSide := p.side
@@ -380,9 +401,9 @@ func (e *Engine) search(nt nodeType, p *Pos, stack *[]Stack, stepList *StepList,
 		}
 		var value Value
 		if p.side == initSide {
-			value = e.search(nt, p, stack, stepList, alpha, beta, depth+int16(n), maxDepth)
+			value = e.search(nt, p, stack, stepList, alpha, beta, depth+uint8(n), maxDepth)
 		} else {
-			value = -e.search(nt, p, stack, stepList, -beta, -alpha, depth+int16(n), maxDepth)
+			value = -e.search(nt, p, stack, stepList, -beta, -alpha, depth+uint8(n), maxDepth)
 		}
 		if err := p.Unstep(); err != nil {
 			panic(fmt.Sprintf("search_unstep: %v", err))
@@ -434,22 +455,18 @@ func (e *Engine) search(nt nodeType, p *Pos, stack *[]Stack, stepList *StepList,
 	}
 
 	// Step 4: Store transposition table entry.
-	if e.useTable {
-		entry := &TableEntry{
-			ZHash: p.zhash,
-			Depth: maxDepth - depth,
-			Value: alpha,
-			Step:  bestStep,
-		}
+	if e.useTable && bestStep != nil {
+		e, _ := e.table.Probe(p.zhash)
+		var bound Bound
 		switch {
 		case alpha <= alphaOrig:
-			entry.Bound = UpperBound
+			bound = BoundUpper
 		case alpha >= beta:
-			entry.Bound = LowerBound
+			bound = BoundLower
 		default:
-			entry.Bound = ExactBound
+			bound = BoundExact
 		}
-		e.table.Store(entry)
+		e.Save(p.zhash, alpha, eval, nt == PV, bound, uint8(p.Depth()), depth, *bestStep)
 	}
 
 	// Return best score.

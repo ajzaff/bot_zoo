@@ -21,7 +21,7 @@ type Pos struct {
 	moves      [][]Step   // moves to arrive at this position after appending steps
 	steps      []Step     // steps of the current move
 	stepsLeft  int        // steps remaining in the current move
-	zhash      int64      // zhash of the current position
+	zhash      uint64     // zhash of the current position
 }
 
 func newPos(
@@ -40,7 +40,7 @@ func newPos(
 	moves [][]Step,
 	steps []Step,
 	stepsLeft int,
-	zhash int64,
+	zhash uint64,
 ) *Pos {
 	if board == nil {
 		board = make([]Piece, 64)

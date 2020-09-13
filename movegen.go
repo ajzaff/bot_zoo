@@ -154,7 +154,7 @@ func (p *Pos) generateSteps(a *[]Step) {
 	}
 }
 
-func (p *Pos) getRootMovesLenInternal(set map[int64]bool, prefix []Step, moves *[][]Step, stepsLeft int) {
+func (p *Pos) getRootMovesLenInternal(set map[uint64]bool, prefix []Step, moves *[][]Step, stepsLeft int) {
 	if stepsLeft == 0 {
 		move := make([]Step, len(prefix), len(prefix)+1)
 		copy(move, prefix)
@@ -210,7 +210,7 @@ func (e *Engine) getRootMovesLen(p *Pos, depth int) [][]Step {
 	}
 	var moves [][]Step
 	var prefix []Step
-	set := map[int64]bool{p.zhash: true}
+	set := map[uint64]bool{p.zhash: true}
 	for i := 1; i <= depth; i++ {
 		p.getRootMovesLenInternal(set, prefix, &moves, i)
 	}

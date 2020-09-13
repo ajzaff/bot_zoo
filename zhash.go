@@ -7,12 +7,12 @@ import (
 
 const zseed = 1337
 
-var zkeys [1 + 5 + 15*64]int64
+var zkeys [1 + 5 + 15*64]uint64
 
-func newZKey(r *rand.Rand, usedKeys map[int64]bool) int64 {
-	candidate := int64(0)
+func newZKey(r *rand.Rand, usedKeys map[uint64]bool) uint64 {
+	candidate := uint64(0)
 	for usedKeys[candidate] {
-		candidate = r.Int63()
+		candidate = r.Uint64()
 	}
 	usedKeys[candidate] = true
 	return candidate
@@ -20,28 +20,28 @@ func newZKey(r *rand.Rand, usedKeys map[int64]bool) int64 {
 
 func init() {
 	r := rand.New(rand.NewSource(zseed))
-	usedKeys := map[int64]bool{0: true}
+	usedKeys := map[uint64]bool{0: true}
 	for i := range zkeys {
 		zkeys[i] = newZKey(r, usedKeys)
 	}
 }
 
-func ZSilverKey() int64 {
+func ZSilverKey() uint64 {
 	return zkeys[0]
 }
 
-func ZStepsKey(steps int) int64 {
+func ZStepsKey(steps int) uint64 {
 	if steps < 0 || steps > 4 {
 		panic(fmt.Sprintf("invalid steps: %d", steps))
 	}
 	return zkeys[1+steps]
 }
 
-func ZPieceKey(p Piece, i Square) int64 {
+func ZPieceKey(p Piece, i Square) uint64 {
 	return zkeys[1+5+int(p)*64+int(i)]
 }
 
-func ZHash(bitboards []Bitboard, side Color, steps int) int64 {
+func ZHash(bitboards []Bitboard, side Color, steps int) uint64 {
 	zhash := ZStepsKey(steps)
 	if side != Gold {
 		zhash ^= ZSilverKey()
