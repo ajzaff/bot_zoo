@@ -261,6 +261,14 @@ func (e *Engine) iterativeDeepeningRoot() {
 }
 
 func (e *Engine) searchRoot(p *Pos, stack *[]Stack, scoredMoves []ScoredMove, alpha, beta Value, depth int16) (bestMove []Step, bestValue Value) {
+
+	// Step 1. Terminal node? We have no moves.
+	eval := p.Value()
+	if eval.Terminal() {
+		return nil, eval
+	}
+
+	// Step 2. Full root search.
 	bestValue = -Win
 	for _, entry := range scoredMoves {
 		if e.stopping == 1 {
@@ -334,6 +342,12 @@ func (e *Engine) search(nt nodeType, p *Pos, stack *[]Stack, stepList *StepList,
 		return alpha // fail-hard cutoff
 	}
 
+	// Step 1a. Terminal node?
+	eval := p.Value()
+	if eval.Terminal() {
+		return eval
+	}
+
 	// Step 2: Is this a terminal node or depth==0?
 	// Start quiescense search.
 	if depth >= maxDepth || p.Terminal() {
@@ -344,7 +358,7 @@ func (e *Engine) search(nt nodeType, p *Pos, stack *[]Stack, stepList *StepList,
 	assert("!(0 < depth && depth < maxDepth)", 0 < depth && depth < maxDepth)
 
 	// Step 2c. Try null move pruning.
-	if eval := p.Value(); nt != PV && eval >= beta && e.nullMoveR > 0 && depth+e.nullMoveR < maxDepth {
+	if nt != PV && eval >= beta && e.nullMoveR > 0 && depth+e.nullMoveR < maxDepth {
 		p.Pass()
 		nullValue := -e.search(NonPV, p, stack, stepList, -beta, -alpha, depth+e.nullMoveR+1, maxDepth)
 		p.Unpass()
