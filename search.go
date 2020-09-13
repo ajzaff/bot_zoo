@@ -216,13 +216,13 @@ func (e *Engine) iterativeDeepeningRoot() {
 		deadline := e.timeInfo.Start[e.Pos().Side()].Add(budget)
 		select {
 		case b := <-e.resultChan:
+			goroutineDepths[b.ID] = b.Depth
 			if b.Depth > e.best.Depth || (b.Depth == e.best.Depth && b.Value > e.best.Value) {
 				e.best.Depth = b.Depth
 				e.best.Value = b.Value
 				e.best.Nodes += b.Nodes
 				e.best.Move = b.Move
 				e.best.PV = b.PV
-				goroutineDepths[b.ID] = b.Depth
 
 				e.Logf("%d [%d] %s", e.best.Depth, e.best.Value, MoveString(e.best.PV))
 
