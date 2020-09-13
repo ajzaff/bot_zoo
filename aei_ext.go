@@ -32,10 +32,7 @@ func (a *AEI) handleExt(text string) error {
 			n, _ = strconv.Atoi(parts[1])
 		}
 		moves := a.engine.getRootMovesLen(a.engine.Pos(), 4)
-		scoredMoves := make([]ScoredMove, len(moves))
-		for i, move := range moves {
-			scoredMoves[i] = ScoredMove{score: -Inf, move: move}
-		}
+		scoredMoves := a.engine.scoreMoves(moves)
 		if n == 0 {
 			n = len(scoredMoves)
 		}
@@ -71,7 +68,7 @@ func (a *AEI) handleExt(text string) error {
 		if len(parts) < 2 {
 			var steps []Step
 			a.engine.Pos().generateSteps(&steps)
-			selector := newStepSelector(a.engine.p.side, steps)
+			selector := newStepSelector(steps)
 			for score, step, ok := selector.SelectScore(); ok; score, step, ok = selector.SelectScore() {
 				a.Logf("[%d] %s", score, step)
 			}

@@ -2,7 +2,6 @@ package zoo
 
 import (
 	"fmt"
-	"math/rand"
 	"time"
 )
 
@@ -77,17 +76,8 @@ func (e *Engine) iterativeDeepeningRoot() {
 
 			// Generate all moves for use in this goroutine and add rootOrderNoise if configured.
 			// Shuffling moves increases variance in concurrent search.
-			r := rand.New(rand.NewSource(time.Now().UnixNano()))
 			moves := e.getRootMovesLen(p, 4)
-			r.Shuffle(len(moves), func(i, j int) {
-				moves[i], moves[j] = moves[j], moves[i]
-			})
-			scoredMoves := make([]ScoredMove, len(moves))
-			for i, move := range moves {
-				if e.rootOrderNoise != 0 {
-					scoredMoves[i] = ScoredMove{score: Value(float64(e.rootOrderNoise) * r.Float64()), move: move}
-				}
-			}
+			scoredMoves := e.scoreMoves(moves)
 
 			alpha, beta := -Inf, +Inf
 			stack := make([]Stack, 1, maxPly)
@@ -378,7 +368,7 @@ func (e *Engine) search(nt nodeType, p *Pos, stack *[]Stack, stepList *StepList,
 	stepList.Generate(p)
 
 	// Step 3: Main search.
-	selector := newStepSelector(p.side, stepList.steps[l:])
+	selector := newStepSelector(stepList.steps[l:])
 
 	for step, ok := selector.Select(); ok; step, ok = selector.Select() {
 		n := step.Len()
