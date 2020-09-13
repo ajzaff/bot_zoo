@@ -144,8 +144,6 @@ func (e *Engine) iterativeDeepeningRoot() {
 					} else {
 						// The result was within the window.
 						// Ready to search the next ply.
-						e.Logf("%d [%d] %s", depth, value, MoveString(stack[0].PV))
-
 						best.Value = value
 						best.Move = move
 						best.Depth = depth
