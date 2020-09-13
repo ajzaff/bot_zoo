@@ -19,7 +19,7 @@ type StepList struct {
 
 // Generate the moves for position p and append them to the move list.
 func (l *StepList) Generate(p *Pos) {
-	p.Steps(&l.steps)
+	p.generateSteps(&l.steps)
 }
 
 // Truncate truncates the list to the given length n.

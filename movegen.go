@@ -31,9 +31,12 @@ func trappedB(b, presence Bitboard) Bitboard {
 	return b & unguardedB(Traps, presence)
 }
 
-// captureB determines if a move from srcB to destB would result in a capture
-// without making the move. If so, the piece and square of the captured piece is returned.
-func (p *Pos) capture(presence, srcB, destB Bitboard, src, dest Square) Capture {
+// capture computes statically the capture resulting from a move from src to dest if any.
+// The possible types of captures are abandoning a trapped piece or
+// capturing ourselves by stepping onto an unguarded trap square.
+func (p *Pos) capture(presence Bitboard, src, dest Square) Capture {
+	srcB := src.Bitboard()
+	destB := dest.Bitboard()
 	newPresence := presence ^ (srcB | destB)
 	if b := unguardedB(destB&Traps, newPresence); b != 0 {
 		// Capture of piece pushed from srcB to destB.
@@ -53,108 +56,101 @@ func (p *Pos) capture(presence, srcB, destB Bitboard, src, dest Square) Capture 
 	return Capture{}
 }
 
-// Steps is a low level helper for getting steps in a current position
-// without allocating a new array backed slice every time.
-// This (and scoreSteps) was caught in profiling as the biggest cost to search.
-func (p *Pos) Steps(a *[]Step) {
-	if p.stepsLeft == 0 {
+// FIXME(ajzaff);
+// A step pool could be used as a global cache of steps
+// (or slices of steps) to releive pressure on the GC.
+// The memory allocated in generateSteps has been a
+// bottleneck in the past (allocating GiB of memory in long
+// searches).
+
+// generateSteps appends all legal steps to a.
+// a legal step is any sliding step, push or
+// pull step in which the Src, Dest, or Alt is occupied
+// and the Src piece is not frozen, and all captures
+// are completed.
+func (p *Pos) generateSteps(a *[]Step) {
+	if p.stepsLeft < 4 {
 		*a = append(*a, Step{Pass: true})
+	}
+	if p.stepsLeft == 0 {
 		return
 	}
-	c1, c2 := p.side, p.side.Opposite()
-	canPush := p.stepsLeft > 1
-	for t := GRabbit.MakeColor(c1); t <= GElephant.MakeColor(c1); t++ {
-		ts := p.bitboards[t]
-		if ts == 0 {
+	c := p.Side()
+	presence := p.Presence(c)
+	enemyPresence := p.Presence(c.Opposite())
+	empty := p.Empty()
+	for b := presence; b > 0; b &= b - 1 {
+		sb := b & -b
+		src := b.Square()
+		t := p.board[src]
+
+		if p.frozenB(t, sb) {
 			continue
 		}
-		sB := stepsB
-
-		// My rabbits can only step forward.
+		var db Bitboard
 		if t.SameType(GRabbit) {
-			sB = rabbitStepsB[p.side]
+			db = rabbitStepsB[c][src]
+		} else {
+			db = stepsB[src]
 		}
-		ts.Each(func(sb Bitboard) {
-			src := sb.Square()
 
-			// TODO(ajzaff): Move this to the Each.
-			if p.frozenB(t, sb) {
-				return
-			}
-
-			// Find pullable pieces next to src (if canPush):
-			var pullPieces []Piece
-			var pullAlts []Bitboard
-			if canPush && GRabbit.WeakerThan(t) {
-				(sb.Neighbors() & p.presence[c2]).Each(func(nb Bitboard) {
-					r := p.board[nb.Square()]
-					if r.Color() == c2 && r.WeakerThan(t) {
-						pullPieces = append(pullPieces, r)
-						pullAlts = append(pullAlts, nb)
-					}
-				})
-			}
-
-			sB[src].Each(func(db Bitboard) {
-				dest := db.Square()
-
-				if p.bitboards[Empty]&db == 0 {
-					if p.presence[c2]&db == 0 {
-						return
-					}
-
-					// Generate all pushes out of this dest (if canPush):
-					// Check that there's an empty place to push them to.
-					if canPush {
-						r := p.board[dest]
-						if r.WeakerThan(t) {
-							dbn := db.Neighbors()
-							(dbn & p.bitboards[Empty]).Each(func(ab Bitboard) {
-								step := Step{
-									Src:    src,
-									Dest:   db.Square(),
-									Alt:    ab.Square(),
-									Piece1: t,
-									Piece2: r,
-								}
-								if cap := p.capture(p.presence[c1], sb, db, src, dest); cap.Valid() {
-									step.Cap = cap
-								} else if cap := p.capture(p.presence[c2], db, ab, dest, ab.Square()); cap.Valid() {
-									step.Cap = cap
-								}
-								*a = append(*a, step)
-							})
-						}
-					}
-					return
-				}
+		// Generate default step from src to dest with possible capture.
+		// Keep track of legal destinations to use later.
+		var dests []Square
+		for b2 := db & empty; b2 > 0; b2 &= b2 - 1 {
+			dest := b2.Square()
+			*a = append(*a, Step{
+				Piece1: t,
+				Src:    src,
+				Dest:   dest,
+				Alt:    invalidSquare,
+				Cap:    p.capture(presence, src, dest),
+			})
+			dests = append(dests, dest)
+		}
+		// Pushing and pulling is not possible.
+		if p.stepsLeft < 2 || t.SameType(GRabbit) {
+			continue
+		}
+		// Generate pushes from src to dest (to alt) with possible capture.
+		for b2 := db & enemyPresence & p.Weaker(t); b2 > 0; b2 &= b2 - 1 {
+			dest := b2.Square()
+			for ab := stepsB[dest] & ^sb & empty; ab > 0; ab &= ab - 1 {
+				alt := ab.Square()
 				step := Step{
+					Piece1: t,
+					Piece2: p.At(dest),
 					Src:    src,
 					Dest:   dest,
-					Alt:    invalidSquare,
-					Piece1: t,
+					Alt:    alt,
 				}
-				if cap := p.capture(p.presence[c1], sb, db, src, dest); cap.Valid() {
+				if cap := p.capture(presence, src, dest); cap.Valid() {
+					step.Cap = cap
+				} else if cap := p.capture(enemyPresence, dest, alt); cap.Valid() {
 					step.Cap = cap
 				}
 				*a = append(*a, step)
-
-				// Generate all pulls to this dest (if canPush):
-				for i := range pullPieces {
-					step.Alt = pullAlts[i].Square()
-					step.Piece2 = pullPieces[i]
-					if !step.Capture() {
-						if cap := p.capture(p.presence[c2], pullAlts[i], sb, step.Alt, src); cap.Valid() {
-							step.Cap = cap
-						}
-					}
-					*a = append(*a, step)
+			}
+		}
+		// Generate pulls from alt to src (to dest) with possible capture.
+		for ab := stepsB[src] & enemyPresence & p.Weaker(t); ab > 0; ab &= ab - 1 {
+			for _, dest := range dests {
+				alt := ab.Square()
+				step := Step{
+					Piece1: t,
+					Piece2: p.At(alt),
+					Src:    src,
+					Dest:   dest,
+					Alt:    alt,
 				}
-			})
-		})
-	}
-	if p.stepsLeft < 4 {
-		*a = append(*a, Step{Pass: true})
+				if cap := p.capture(presence, src, dest); cap.Valid() {
+					step.Cap = cap
+				} else if cap := p.capture(enemyPresence, alt, src); cap.Valid() {
+					step.Cap = cap
+				}
+				*a = append(*a, step)
+			}
+		}
 	}
 }
 
@@ -209,8 +205,8 @@ func (e *Engine) getRootMovesLen(p *Pos, depth int) [][]Step {
 	if depth <= 0 || depth > 4 {
 		panic("depth <= 0 || depth > 4")
 	}
-	if p.stepsLeft-depth < 0 {
-		panic("stepsLeft < depth")
+	if depth > p.stepsLeft {
+		depth = p.stepsLeft
 	}
 	var moves [][]Step
 	var prefix []Step

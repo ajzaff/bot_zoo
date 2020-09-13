@@ -35,35 +35,6 @@ func sortMoves(a []ScoredMove) {
 	sort.Stable(byScore(a))
 }
 
-// rescorePVMoves updates the scored moves for the PV
-// to +inf and sets everything else to -inf.
-func (e *Engine) rescorePVMoves(p *Pos, scoredMoves []ScoredMove) {
-
-	// 1: Check the table to get the PV move if any.
-	if !e.useTable {
-		return
-	}
-	var best []Step
-	v, _, _ := e.table.Best(p)
-	if len(v) == 0 {
-		return
-	}
-	best = v
-
-	// 2: Range over all moves.
-	for i := range scoredMoves {
-		scoredMove := scoredMoves[i]
-
-		// 2a: Update the best move from the table to +inf.
-		if MoveEqual(scoredMove.move, best) {
-			scoredMoves[i].score = +Inf
-			continue
-		}
-
-		scoredMoves[i].score = -Inf
-	}
-}
-
 // stepSelector handles scoring and sorting steps and provides
 // Select for getting the next best step that meets the conditions.
 type stepSelector struct {
@@ -89,16 +60,27 @@ func (a stepSelector) Swap(i, j int) {
 	a.scores[i], a.scores[j] = a.scores[j], a.scores[i]
 }
 
+var goalRange = [2]Bitboard{
+	// Gold
+	^NotRank8 | ^NotRank8>>8 | ^NotRank8>>16,
+	// Silver
+	^NotRank1 | ^NotRank1<<8 | ^NotRank1<<16,
+}
+
 func (s *stepSelector) score() {
 	for i, step := range s.steps {
 		switch {
-		case step.Capture():
+		case step.Piece1.SameType(GRabbit) && step.Dest.Bitboard()&goalRange[step.Piece1.Color()] != 0:
+			// Coarse goal threats.
+			s.scores[i] = 5000
+		case step.Capture(): // Self captures to be avoided.
 			t := step.Cap.Piece
 			if t.Color() == s.side {
 				s.scores[i] = -pieceValue[t&decolorMask]
 			} else {
 				s.scores[i] = pieceValue[t&decolorMask]
 			}
+		default:
 		}
 	}
 	sort.Stable(s)

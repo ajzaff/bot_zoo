@@ -159,6 +159,34 @@ func (p *Pos) Frozen(i Square) bool {
 	return p.frozenB(p.board[i], i.Bitboard())
 }
 
+func (p *Pos) Nonempty() Bitboard {
+	return ^p.bitboards[Empty]
+}
+
+func (p *Pos) Empty() Bitboard {
+	return p.bitboards[Empty]
+}
+
+func (p *Pos) Presence(c Color) Bitboard {
+	return p.presence[c]
+}
+
+func (p *Pos) Bitboard(t Piece) Bitboard {
+	return p.bitboards[t]
+}
+
+func (p *Pos) At(i Square) Piece {
+	return p.board[i]
+}
+
+func (p *Pos) Stronger(t Piece) Bitboard {
+	return p.stronger[t&decolorMask]
+}
+
+func (p *Pos) Weaker(t Piece) Bitboard {
+	return p.weaker[t&decolorMask]
+}
+
 func (p *Pos) Place(piece Piece, i Square) error {
 	if piece == Empty {
 		return p.Remove(piece, i)

@@ -36,7 +36,6 @@ func (a *AEI) handleExt(text string) error {
 		for i, move := range moves {
 			scoredMoves[i] = ScoredMove{score: -Inf, move: move}
 		}
-		a.engine.rescorePVMoves(a.engine.Pos(), scoredMoves)
 		if n == 0 {
 			n = len(scoredMoves)
 		}
@@ -71,7 +70,7 @@ func (a *AEI) handleExt(text string) error {
 		parts := strings.SplitN(text, " ", 2)
 		if len(parts) < 2 {
 			var steps []Step
-			a.engine.Pos().Steps(&steps)
+			a.engine.Pos().generateSteps(&steps)
 			selector := newStepSelector(a.engine.p.side, steps)
 			for score, step, ok := selector.SelectScore(); ok; score, step, ok = selector.SelectScore() {
 				a.Logf("[%d] %s", score, step)

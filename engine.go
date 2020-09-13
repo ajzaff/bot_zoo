@@ -63,7 +63,7 @@ func NewEngine(seed int64) *Engine {
 		p:              NewEmptyPosition(),
 		minDepth:       8,
 		concurrency:    4,
-		rootOrderNoise: 200,
+		rootOrderNoise: 5,
 		nullMoveR:      4,
 		table:          NewTable(transposeTableSize),
 		useTable:       true,

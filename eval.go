@@ -1,8 +1,8 @@
 package zoo
 
 const (
-	Inf Value = 20000
-	Win Value = 10000
+	Inf Value = 30000
+	Win Value = 20000
 )
 
 type Value int16
@@ -33,16 +33,17 @@ var pieceValue = []Value{
 	1300, // Elephant
 }
 
+// rabbitMaterialValue value of each rabbit with i rabbits remaining.
 var rabbitMaterialValue = []Value{
 	0,
-	12200,
-	12900,
-	13500,
-	14000,
-	14400,
-	14700,
-	14900,
-	15000,
+	900,
+	1600,
+	2200,
+	2700,
+	3100,
+	3400,
+	3600,
+	3700,
 }
 
 var hostageValue = []Value{
@@ -55,11 +56,11 @@ var hostageValue = []Value{
 }
 
 func (p *Pos) hostageScore(side Color) (value Value) {
-	(p.frozen[side] & p.presence[side.Opposite()]).Each(func(b Bitboard) {
+	for b := p.frozen[side] & p.presence[side.Opposite()]; b > 0; b &= b - 1 {
 		if t := p.board[b.Square()]; p.frozenB(t, b) {
 			value += hostageValue[t&decolorMask]
 		}
-	})
+	}
 	return value
 }
 
@@ -74,7 +75,7 @@ func (p *Pos) positionScore(side Color) (value Value) {
 		GElephant,
 	} {
 		ps := ps[t]
-		for b := p.bitboards[t]; b > 0; b &= b - 1 {
+		for b := p.Bitboard(t.MakeColor(side)); b > 0; b &= b - 1 {
 			value += ps[b.Square()]
 		}
 	}
@@ -82,13 +83,13 @@ func (p *Pos) positionScore(side Color) (value Value) {
 }
 
 func (p *Pos) valueOf(side Color) (value Value) {
-	if v := p.bitboards[GRabbit.MakeColor(side)].Count(); v <= 8 {
-		value += rabbitMaterialValue[v]
-	} else {
-		value += rabbitMaterialValue[8] + Value(v) - 8
+	n := p.bitboards[GRabbit.MakeColor(side)].Count()
+	if n > 8 {
+		n = 8
 	}
-	for s := GCat; s <= GElephant; s++ {
-		value += pieceValue[s] * Value(p.bitboards[s.MakeColor(side)].Count())
+	value += rabbitMaterialValue[n]
+	for t := GCat; t <= GElephant; t++ {
+		value += pieceValue[t] * Value(p.Bitboard(t.MakeColor(side)).Count())
 	}
 	value += p.hostageScore(side)
 	value += p.positionScore(side)

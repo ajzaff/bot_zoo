@@ -119,13 +119,13 @@ func (t *Table) StoreMove(p *Pos, depth int16, value Value, move []Step) {
 		}
 		*entry.Step = step
 		t.Store(entry)
+		defer func() {
+			if err := p.Unstep(); err != nil {
+				panic(fmt.Sprintf("store_unstep: %v", err))
+			}
+		}()
 		if err := p.Step(step); err != nil {
 			panic(fmt.Sprintf("store_step: %s: %s: %v", move, step, err))
-		}
-	}
-	for i := len(move) - 1; i >= 0; i-- {
-		if err := p.Unstep(); err != nil {
-			panic(fmt.Sprintf("store_step: %s: %s: %v", move, move[i], err))
 		}
 	}
 }

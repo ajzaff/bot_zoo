@@ -160,14 +160,14 @@ func (e *Engine) iterativeDeepeningRoot() {
 					}
 
 					// Rescore the PV move and sort stably.
-					for i := range scoredMoves {
-						if MoveEqual(scoredMoves[i].move, best.Move) {
-							scoredMoves[i].score = +Inf
-						} else {
-							scoredMoves[i].score = -Inf
-						}
-					}
-					sortMoves(scoredMoves)
+					// for i := range scoredMoves {
+					// 	if MoveEqual(scoredMoves[i].move, best.Move) {
+					// 		scoredMoves[i].score = +Inf
+					// 	} else {
+					// 		scoredMoves[i].score = -Inf
+					// 	}
+					// }
+					// sortMoves(scoredMoves)
 
 					// Update aspiration window delta
 					delta += delta/4 + 5
@@ -249,11 +249,7 @@ func (e *Engine) searchRoot(p *Pos, stack *[]Stack, scoredMoves []ScoredMove, al
 			break
 		}
 		n := MoveLen(entry.move)
-		if int16(n) > depth {
-			continue
-		}
-		err := p.Move(entry.move)
-		if err != nil {
+		if err := p.Move(entry.move); err != nil {
 			if err != errRecurringPosition {
 				panic(fmt.Sprintf("search_move_root: %s: %v", entry.move, err))
 			}
@@ -278,6 +274,12 @@ func (e *Engine) searchRoot(p *Pos, stack *[]Stack, scoredMoves []ScoredMove, al
 			panic(fmt.Sprintf("search_unmove_root: %s: %v", entry.move, err))
 		}
 	}
+
+	// Store best move
+	if e.useTable {
+		e.table.StoreMove(p, depth, bestValue, bestMove)
+	}
+
 	(*stack)[0].Nodes = 1
 	for i := 1; i < 5 && i < len(*stack); i++ {
 		(*stack)[0].Nodes += (*stack)[i].Nodes
@@ -293,7 +295,7 @@ func (e *Engine) search(nt nodeType, p *Pos, stack *[]Stack, stepList *StepList,
 	var tableMove bool
 	if e.useTable {
 		if entry, ok := e.table.ProbeDepth(p.zhash, maxDepth-depth); ok {
-			tableMove = true
+			// tableMove = true
 			bestStep = entry.Step
 			switch entry.Bound {
 			case ExactBound:
@@ -441,12 +443,13 @@ func (e *Engine) quiescence(nt nodeType, p *Pos, stepList *StepList, alpha, beta
 		alpha >= -Inf && alpha < beta && beta <= Inf)
 
 	eval := p.Value()
-	if eval >= beta {
-		return beta
-	}
-	if alpha < eval {
-		alpha = eval
-	}
+	return eval
+	// if eval >= beta {
+	// 	return beta
+	// }
+	// if alpha < eval {
+	// 	alpha = eval
+	// }
 
 	// // Generate steps and add them to the list.
 	// // We will start search from move l and later truncate the list to this initial length.
@@ -482,5 +485,5 @@ func (e *Engine) quiescence(nt nodeType, p *Pos, stepList *StepList, alpha, beta
 	// stepList.Truncate(l)
 
 	// return alpha
-	return alpha
+	// return alpha
 }

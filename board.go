@@ -48,23 +48,15 @@ func (b Bitboard) Square() Square {
 	return bsfIndex64[((b&-b)*debruijn64)>>58]
 }
 
-func (b Bitboard) Each(f func(e Bitboard)) {
-	for b > 0 {
-		e := b & -b
-		b &= ^e
-		f(e)
-	}
-}
-
-var countTable [256]int
+var countTable [256]int16
 
 func init() {
-	for i := 1; i < 256; i++ {
+	for i := int16(1); i < 256; i++ {
 		countTable[i] = countTable[i/2] + (i & 1)
 	}
 }
 
-func (b Bitboard) Count() int {
+func (b Bitboard) Count() int16 {
 	return countTable[b&0xff] +
 		countTable[(b>>8)&0xff] +
 		countTable[(b>>16)&0xff] +
