@@ -2,7 +2,7 @@ package zoo
 
 import "fmt"
 
-type Color int
+type Color int8
 
 const (
 	Gold Color = iota
@@ -10,7 +10,7 @@ const (
 )
 const (
 	colorMask   = 8
-	decolorMask = ^colorMask
+	decolorMask = 7
 )
 
 func ParseColor(s string) Color {
@@ -47,7 +47,7 @@ func (c Color) String() string {
 	return string(c.Byte())
 }
 
-type Piece int
+type Piece int8
 
 const pchars = " RCDHMExxrcdhme"
 
@@ -80,18 +80,22 @@ const (
 )
 
 func (p Piece) Color() Color {
-	if p&colorMask == 0 {
+	if int8(p)&colorMask == 0 {
 		return Gold
 	}
 	return Silver
 }
 
+func (p Piece) Decolor() Piece {
+	return p & Piece(decolorMask)
+}
+
 func (p Piece) MakeColor(c Color) Piece {
-	return p&decolorMask | c.PieceMask()
+	return p&Piece(decolorMask) | c.PieceMask()
 }
 
 func (p Piece) SameType(piece Piece) bool {
-	return p&decolorMask == piece&decolorMask
+	return int8(p)&decolorMask == int8(piece)&decolorMask
 }
 
 func (p Piece) HasColor() bool {
@@ -99,24 +103,27 @@ func (p Piece) HasColor() bool {
 }
 
 func (p Piece) SameColor(piece Piece) bool {
-	return p.HasColor() && piece.HasColor() && p&colorMask == piece&colorMask
+	return p.HasColor() && piece.HasColor() && int8(p)&colorMask == int8(piece)&colorMask
 }
 
 func (p Piece) WeakerThan(piece Piece) bool {
-	return p&decolorMask < piece&decolorMask
+	return int8(p)&decolorMask < int8(piece)&decolorMask
 }
 
 func (p Piece) Valid() bool {
-	return p < 15 && p != 7 && p != 8
+	return p >= 0 && p < 15 && p != 7 && p != 8
 }
 
 func (p Piece) validForPrint() bool {
-	return p < 15
+	return p >= 0 && p < 15
 }
 
 func (p Piece) Byte() byte {
 	if p.validForPrint() {
 		return pchars[p]
+	}
+	if p < 0 {
+		return ' '
 	}
 	return '?'
 }

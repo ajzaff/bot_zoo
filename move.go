@@ -56,8 +56,8 @@ func splitMove(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	p2, _ := ParsePiece(data[indices[2]])
 	s1 := ParseSquare(string(data[indices[0]+1 : indices[0]+3]))
 	s2 := ParseSquare(string(data[indices[2]+1 : indices[2]+3]))
-	d1 := s1.Translate(ParseDelta(data[indices[0]+3]))
-	d2 := s2.Translate(ParseDelta(data[indices[2]+3]))
+	d1 := s1.Translate(MakeDeltaFromByte(data[indices[0]+3]))
+	d2 := s2.Translate(MakeDeltaFromByte(data[indices[2]+3]))
 	cap := data[indices[2]+3] == 'x'
 
 	// The do not match the pattern and should not go together:
@@ -101,23 +101,23 @@ func ParseMove(s string) ([]Step, error) {
 	if err := sc.Err(); err != nil {
 		return nil, fmt.Errorf("%s: %v", s, err)
 	}
-	res = append(res, Step{Pass: true})
+	res = append(res, Pass)
 	return res, nil
 }
 
 // MoveString outputs a legal move string.
-func MoveString(move []Step) string {
+func MoveString(p *Pos, move []Step) string {
 	var sb strings.Builder
 	var join bool
 	for _, step := range move {
-		if step.Pass {
+		if step.Pass() {
 			continue
 		}
 		if join {
 			sb.WriteByte(' ')
 		}
 		join = true
-		sb.WriteString(step.String())
+		sb.WriteString(step.String(p))
 	}
 	return sb.String()
 }
@@ -142,17 +142,136 @@ func MoveEqual(a, b []Step) bool {
 	return true
 }
 
-type Capture struct {
-	Piece
-	Src Square
+// Step represents a compact step as used in the engine.
+// It uses the following layout (little endian):
+//	src (8 bits)
+//	dest delta (3 bits)
+//	alt (8 bits)
+//	piece1 (4 bits)
+//	piece2 (4 bits)
+//	capture piece (4 bits)
+// A Pass step has all the capture bits set, which would
+// correspond to an illegal piece. The canonical invalid
+// step has all bits set.
+type Step uint32
+
+// MakeStep makes a step with all given parameters.
+func MakeStep(src, dest, alt Square, p1, p2, cap Piece) Step {
+	return Step(src&0xff) |
+		Step(src.Delta(dest).Packed())<<8 |
+		Step(alt&0xff)<<11 |
+		Step(p1&0xf)<<19 |
+		Step(p2&0xf)<<24 |
+		Step(cap&0xf)<<28
 }
 
-func (c Capture) Valid() bool {
-	return c.Src.Valid()
+// MakeSetup makes a setup step.
+func MakeSetup(piece Piece, alt Square) Step {
+	v := MakeStep(0xff, 0xff, alt, piece, 0xf, 0xf)
+	v |= Step(piece)
+	return v
 }
 
+// MakeDefaultCapture makes a default step with a capture.
+func MakeDefaultCapture(src, dest Square, p1, cap Piece) Step {
+	return MakeStep(src, dest, 0xff, p1, 0xf, cap)
+}
+
+// MakeDefault makes a default step.
+func MakeDefault(src, dest Square, p1 Piece) Step {
+	return MakeDefaultCapture(src, dest, p1, 0xf)
+}
+
+// MakeAlternateCapture makes a push/pull step with a capture.
+func MakeAlternateCapture(src, dest, alt Square, p1, p2, cap Piece) Step {
+	return MakeStep(src, dest, alt, p1, p2, cap)
+}
+
+// MakeAlternate makes a push/pull step.
+func MakeAlternate(src, dest, alt Square, p1, p2 Piece) Step {
+	return MakeAlternateCapture(src, dest, alt, p1, p2, 0xf)
+}
+
+// Pass is a Step representing the pas step which delimits all moves.
+const Pass Step = 0xf0000000
+
+const invalidStep Step = 0xffffffff
+
+// Src square for the originating piece.
+func (s Step) Src() Square {
+	return Square(s & 0xff)
+}
+
+// Dest square for the originating piece.
+func (s Step) Dest() Square {
+	return s.Src().Translate(MakeDeltaFromPacked(uint8((s >> 8) & 3)))
+}
+
+// Alt square for the alternate piece.
+func (s Step) Alt() Square {
+	return Square((s >> 11) & 0xff)
+}
+
+// Piece1 returns the primary piece square.
+func (s Step) Piece1() Piece {
+	return Piece((s >> 19) & 0xf)
+}
+
+// Piece2 returns the alternate piece.
+func (s Step) Piece2() Piece {
+	return Piece((s >> 24) & 0xf)
+}
+
+// Cap returns the capture piece.
+func (s Step) Cap() Piece {
+	return Piece((s >> 28) & 0xf)
+}
+
+// Capture returns whether the step has a capture.
+func (s Step) Capture() bool {
+	return s&0xf0000000 < 0xf0000000
+}
+
+// CapSquare computes the capture square given the position p as context.
+func (s Step) CapSquare(p *Pos) Square {
+	if !s.Capture() {
+		return invalidSquare
+	}
+	alt := s.Alt()
+	if alt.Trap() {
+		return alt
+	}
+	if v := alt.AdjacentTrap(); v.Valid() {
+		return v
+	}
+	src := s.Src()
+	if src.Trap() {
+		return src
+	}
+	if v := src.AdjacentTrap(); v.Valid() {
+		return v
+	}
+	if dest := s.Dest(); dest.Trap() {
+		return dest
+	}
+	return invalidSquare
+}
+
+// Pass returns whether the step passes the turn.
+func (s Step) Pass() bool {
+	return s == Pass
+}
+
+// SetupPiece returns the piece only when this is a setup move.
+func (s Step) SetupPiece() Piece {
+	return Piece(s & 0xf)
+}
+
+// StepKind defines the granular kind of step such as
+// default, push, or pull, used in String.
 type StepKind uint8
 
+// StepKind constants.
 const (
 	KindInvalid StepKind = iota
 	KindDefault
@@ -160,19 +279,6 @@ const (
 	KindPush
 	KindPull
 )
-
-type Step struct {
-	Src, Dest, Alt Square
-	Piece1, Piece2 Piece
-	Cap            Capture
-	Pass           bool
-}
-
-var invalidStep = Step{
-	Src:  invalidSquare,
-	Dest: invalidSquare,
-	Alt:  invalidSquare,
-}
 
 // ParseStep parses a single step and optional capture.
 func ParseStep(s string) (Step, error) {
@@ -190,28 +296,16 @@ func ParseStep(s string) (Step, error) {
 	}
 	// Return the setup step:
 	if len(s) == 3 {
-		return Step{
-			Src:    invalidSquare,
-			Dest:   invalidSquare,
-			Alt:    src1,
-			Piece1: piece1,
-			Cap:    Capture{Src: invalidSquare},
-		}, nil
+		return MakeSetup(piece1, src1), nil
 	}
-	delta1 := ParseDelta(s[3])
+	delta1 := MakeDeltaFromByte(s[3])
 	if delta1 == 0 {
 		return invalidStep, fmt.Errorf("invalid first delta: %c", s[3])
 	}
 	dest1 := src1.Translate(delta1)
 	// Return single step:
 	if len(s) == 4 {
-		return Step{
-			Src:    src1,
-			Dest:   dest1,
-			Alt:    invalidSquare,
-			Piece1: piece1,
-			Cap:    Capture{Src: invalidSquare},
-		}, nil
+		return MakeDefault(src1, dest1, piece1), nil
 	}
 	if len(s) < 9 {
 		return invalidStep, fmt.Errorf("too short step sequence: %q", s)
@@ -224,28 +318,21 @@ func ParseStep(s string) (Step, error) {
 	if !src2.Valid() {
 		return invalidStep, fmt.Errorf("invalid second square: %q", s[6:8])
 	}
-	cap1 := Capture{Src: invalidSquare}
-	delta2 := ParseDelta(s[8])
+	cap := Piece(0xf)
+	delta2 := MakeDeltaFromByte(s[8])
 	if s[8] == 'x' {
 		if !piece1.SameColor(piece2) {
 			return invalidStep, fmt.Errorf("invalid first capture color: %q", s)
 		}
-		cap1.Piece = piece2
-		cap1.Src = src2
+		cap = piece2
 	} else if delta2 == 0 {
 		return invalidStep, fmt.Errorf("invalid second delta: %c", s[8])
 	}
 	dest2 := src2.Translate(delta2)
 
 	// Return default self capture:
-	if cap1.Valid() && len(s) == 9 {
-		return Step{
-			Src:    src1,
-			Dest:   dest1,
-			Alt:    invalidSquare,
-			Piece1: piece1,
-			Cap:    cap1,
-		}, nil
+	if cap.Valid() && len(s) == 9 {
+		return MakeDefaultCapture(src1, dest1, piece1, piece2), nil
 	}
 	if piece1.SameColor(piece2) {
 		return invalidStep, fmt.Errorf("invalid push or pull color: %q", s)
@@ -258,75 +345,51 @@ func ParseStep(s string) (Step, error) {
 		dest1, dest2 = dest2, dest1
 	}
 	// Alt for the push/pull becomes src2:
-	alt := src2
-	step := Step{
-		Src:    src1,
-		Dest:   dest1,
-		Alt:    alt,
-		Piece1: piece1,
-		Piece2: piece2,
-		Cap:    Capture{Src: invalidSquare},
-	}
-
 	// No capture:
 	if len(s) == 9 {
-		return step, nil
+		return MakeAlternate(src1, dest1, src2, piece1, piece2), nil
 	}
 
-	piece3, err := ParsePiece(s[10])
-	if err != nil {
+	if cap, err = ParsePiece(s[10]); err != nil {
 		return invalidStep, err
 	}
-	src3 := ParseSquare(s[11:13])
-	if !src3.Valid() {
+	if v := ParseSquare(s[11:13]); !v.Valid() {
 		return invalidStep, fmt.Errorf("invalid capture square: %q", s[11:13])
 	}
 	if s[13] != 'x' {
 		return invalidStep, fmt.Errorf("invalid capture delta: %c", s[13])
 	}
-	step.Cap = Capture{
-		Piece: piece3,
-		Src:   src3,
-	}
-	return step, nil
+	return MakeAlternateCapture(src1, dest1, src2, piece1, piece2, cap), nil
 }
 
 func (s Step) Kind() StepKind {
-	sv, dv := s.Src.Valid(), s.Dest.Valid()
-	p1e, p2e := s.Piece1 == Empty, s.Piece2 == Empty
-	switch {
-	case s.Alt.Valid():
+	switch src, dest, alt := s.Src(), s.Dest(), s.Alt(); {
+	case alt.Valid():
 		switch {
-		case sv && dv:
+		case src.Valid() && dest.Valid():
 			switch {
-			case p1e || p2e:
-				return KindInvalid
-			case s.Dest.AdjacentTo(s.Alt):
+			case dest.AdjacentTo(alt):
 				return KindPush
-			case s.Src.AdjacentTo(s.Alt):
+			case src.AdjacentTo(alt):
 				return KindPull
 			default:
 				return KindInvalid
 			}
-		case !p1e:
+		case !s.Cap().Valid():
 			return KindSetup
 		default:
 			return KindInvalid
 		}
-	case !p1e && sv && dv:
+	case src.Valid() && dest.Valid():
 		return KindDefault
 	default:
 		return KindInvalid
 	}
 }
 
-func (s Step) Capture() bool {
-	return s.Cap.Piece != Empty
-}
-
 func (s Step) Len() int {
 	switch kind := s.Kind(); {
-	case s.Pass:
+	case s.Pass():
 		return 0
 	case kind == KindDefault, kind == KindSetup:
 		return 1
@@ -337,41 +400,36 @@ func (s Step) Len() int {
 	}
 }
 
-func (s Step) String() string {
+// String returns the formatted step given the position p.
+func (s Step) String(p *Pos) string {
 	var sb strings.Builder
 	switch kind := s.Kind(); {
-	case s.Pass:
+	case s.Pass():
 		fmt.Fprint(&sb, "(pass)")
-		if s.Capture() {
-			fmt.Fprintf(&sb, " %c?%sx", s.Cap.Piece.Byte(), s.Cap.Src)
-		}
 	case kind == KindSetup:
-		fmt.Fprintf(&sb, "%c%s", s.Piece1.Byte(), s.Alt)
-		if s.Capture() {
-			fmt.Fprintf(&sb, " %c?%sx", s.Cap.Piece.Byte(), s.Cap.Src)
-		}
+		fmt.Fprintf(&sb, "%c%s", s.Piece1().Byte(), s.Alt())
 	case kind == KindPush:
-		fmt.Fprintf(&sb, "%c%s%s", s.Piece2.Byte(), s.Dest, NewDelta(s.Dest.Delta(s.Alt)))
-		if s.Cap.Piece.SameColor(s.Piece2) {
-			fmt.Fprintf(&sb, " %c%sx", s.Cap.Piece.Byte(), s.Cap.Src)
+		fmt.Fprintf(&sb, "%c%s%s", s.Piece2().Byte(), s.Dest(), s.Dest().Delta(s.Alt()).String())
+		if s.Cap().SameColor(s.Piece2()) {
+			fmt.Fprintf(&sb, " %c%sx", s.Cap().Byte(), s.CapSquare(p))
 		}
-		fmt.Fprintf(&sb, " %c%s%s", s.Piece1.Byte(), s.Src, NewDelta(s.Src.Delta(s.Dest)))
-		if s.Cap.Piece.SameColor(s.Piece1) {
-			fmt.Fprintf(&sb, " %c%sx", s.Cap.Piece.Byte(), s.Cap.Src)
+		fmt.Fprintf(&sb, " %c%s%s", s.Piece1().Byte(), s.Src(), s.Src().Delta(s.Dest()).String())
+		if s.Cap().SameColor(s.Piece1()) {
+			fmt.Fprintf(&sb, " %c%sx", s.Cap().Byte(), s.CapSquare(p))
 		}
 	case kind == KindPull:
-		fmt.Fprintf(&sb, "%c%s%s", s.Piece1.Byte(), s.Src, NewDelta(s.Src.Delta(s.Dest)))
-		if s.Cap.Piece.SameColor(s.Piece1) {
-			fmt.Fprintf(&sb, " %c%sx", s.Cap.Piece.Byte(), s.Cap.Src)
+		fmt.Fprintf(&sb, "%c%s%s", s.Piece1().Byte(), s.Src(), s.Src().Delta(s.Dest()).String())
+		if s.Cap().SameColor(s.Piece1()) {
+			fmt.Fprintf(&sb, " %c%sx", s.Cap().Byte(), s.CapSquare(p))
 		}
-		fmt.Fprintf(&sb, " %c%s%s", s.Piece2.Byte(), s.Alt, NewDelta(s.Alt.Delta(s.Src)))
-		if s.Cap.Piece.SameColor(s.Piece2) {
-			fmt.Fprintf(&sb, " %c%sx", s.Cap.Piece.Byte(), s.Cap.Src)
+		fmt.Fprintf(&sb, " %c%s%s", s.Piece2().Byte(), s.Alt(), s.Alt().Delta(s.Src()).String())
+		if s.Cap().SameColor(s.Piece2()) {
+			fmt.Fprintf(&sb, " %c%sx", s.Cap().Byte(), s.CapSquare(p))
 		}
 	case kind == KindDefault:
-		fmt.Fprintf(&sb, "%c%s%s", s.Piece1.Byte(), s.Src, NewDelta(s.Src.Delta(s.Dest)))
+		fmt.Fprintf(&sb, "%c%s%s", s.Piece1().Byte(), s.Src(), s.Src().Delta(s.Dest()).String())
 		if s.Capture() {
-			fmt.Fprintf(&sb, " %c%sx", s.Cap.Piece.Byte(), s.Cap.Src)
+			fmt.Fprintf(&sb, " %c%sx", s.Cap().Byte(), s.CapSquare(p))
 		}
 	default: // Invalid
 		return s.GoString()
@@ -379,11 +437,8 @@ func (s Step) String() string {
 	return sb.String()
 }
 
+// GoString returns the formatted GoString for this step.
 func (s Step) GoString() string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "Step(src=%s, dest=%s, alt=%s, piece1=%s, piece2=%s)", s.Src, s.Dest, s.Alt, s.Piece1, s.Piece2)
-	if s.Capture() {
-		fmt.Fprintf(&sb, " %c%sx", s.Cap.Piece.Byte(), s.Cap.Src)
-	}
-	return sb.String()
+	return fmt.Sprintf("Step(src=%s, dest=%s, alt=%s, p1=%s, p2=%s, cap=%s)",
+		s.Src(), s.Dest(), s.Alt(), s.Piece1(), s.Piece2(), s.Cap())
 }

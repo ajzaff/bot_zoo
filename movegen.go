@@ -34,26 +34,20 @@ func trappedB(b, presence Bitboard) Bitboard {
 // capture computes statically the capture resulting from a move from src to dest if any.
 // The possible types of captures are abandoning a trapped piece or
 // capturing ourselves by stepping onto an unguarded trap square.
-func (p *Pos) capture(presence Bitboard, src, dest Square) Capture {
+func (p *Pos) capture(presence Bitboard, src, dest Square) Piece {
 	srcB := src.Bitboard()
 	destB := dest.Bitboard()
 	newPresence := presence ^ (srcB | destB)
 	if b := unguardedB(destB&Traps, newPresence); b != 0 {
 		// Capture of piece pushed from srcB to destB.
-		return Capture{
-			Piece: p.board[src],
-			Src:   dest,
-		}
+		return p.At(src)
 	}
 	if b := trappedB(newPresence&srcB.Neighbors(), newPresence); b != 0 {
 		// Capture of piece left next to src.
 		// TODO(ajzaff): It would be more clear to have a adjacentTrap helper for this.
-		return Capture{
-			Piece: p.board[b.Square()],
-			Src:   b.Square(),
-		}
+		return p.At(b.Square())
 	}
-	return Capture{}
+	return 0xf
 }
 
 // generateSteps appends all legal steps to a.
@@ -61,9 +55,9 @@ func (p *Pos) capture(presence Bitboard, src, dest Square) Capture {
 // pull step in which the Src, Dest, or Alt is occupied
 // and the Src piece is not frozen, and all captures
 // are completed.
-func (p *Pos) generateSteps(a *[]*Step) {
+func (p *Pos) generateSteps(a *[]Step) {
 	if p.stepsLeft < 4 {
-		*a = append(*a, &Step{Pass: true})
+		*a = append(*a, Pass)
 	}
 	if p.stepsLeft == 0 {
 		return
@@ -91,13 +85,7 @@ func (p *Pos) generateSteps(a *[]*Step) {
 		// Generate default step from src to dest with possible capture.
 		for b2 := emptyDB; b2 > 0; b2 &= b2 - 1 {
 			dest := b2.Square()
-			*a = append(*a, &Step{
-				Piece1: t,
-				Src:    src,
-				Dest:   dest,
-				Alt:    invalidSquare,
-				Cap:    p.capture(presence, src, dest),
-			})
+			*a = append(*a, MakeDefaultCapture(src, dest, t, p.capture(presence, src, dest)))
 		}
 		// Pushing and pulling is not possible.
 		if p.stepsLeft < 2 || t.SameType(GRabbit) {
@@ -108,19 +96,13 @@ func (p *Pos) generateSteps(a *[]*Step) {
 			dest := b2.Square()
 			for ab := stepsB[dest] & ^sb & empty; ab > 0; ab &= ab - 1 {
 				alt := ab.Square()
-				step := &Step{
-					Piece1: t,
-					Piece2: p.At(dest),
-					Src:    src,
-					Dest:   dest,
-					Alt:    alt,
-				}
 				if cap := p.capture(presence, src, dest); cap.Valid() {
-					step.Cap = cap
+					*a = append(*a, MakeAlternateCapture(src, dest, alt, t, p.At(dest), cap))
 				} else if cap := p.capture(enemyPresence, dest, alt); cap.Valid() {
-					step.Cap = cap
+					*a = append(*a, MakeAlternateCapture(src, dest, alt, t, p.At(dest), cap))
+				} else {
+					*a = append(*a, MakeAlternate(src, dest, alt, t, p.At(dest)))
 				}
-				*a = append(*a, step)
 			}
 		}
 		// Generate pulls from alt to src (to dest) with possible capture.
@@ -128,19 +110,13 @@ func (p *Pos) generateSteps(a *[]*Step) {
 			for b2 := emptyDB; b2 > 0; b2 &= b2 - 1 {
 				dest := b2.Square()
 				alt := ab.Square()
-				step := &Step{
-					Piece1: t,
-					Piece2: p.At(alt),
-					Src:    src,
-					Dest:   dest,
-					Alt:    alt,
-				}
 				if cap := p.capture(presence, src, dest); cap.Valid() {
-					step.Cap = cap
+					*a = append(*a, MakeAlternateCapture(src, dest, alt, t, p.At(alt), cap))
 				} else if cap := p.capture(enemyPresence, alt, src); cap.Valid() {
-					step.Cap = cap
+					*a = append(*a, MakeAlternateCapture(src, dest, alt, t, p.At(alt), cap))
+				} else {
+					*a = append(*a, MakeAlternate(src, dest, alt, t, p.At(alt)))
 				}
-				*a = append(*a, step)
 			}
 		}
 	}
@@ -150,8 +126,8 @@ func (p *Pos) getRootMovesLenInternal(set map[uint64]bool, prefix []Step, moves 
 	if stepsLeft == 0 {
 		move := make([]Step, len(prefix), len(prefix)+1)
 		copy(move, prefix)
-		if !prefix[len(prefix)-1].Pass {
-			move = append(move, Step{Pass: true})
+		if !prefix[len(prefix)-1].Pass() {
+			move = append(move, Pass)
 		}
 		if !set[p.zhash] {
 			set[p.zhash] = true
@@ -174,7 +150,7 @@ func (p *Pos) getRootMovesLenInternal(set map[uint64]bool, prefix []Step, moves 
 		if err := p.Step(step); err != nil {
 			panic(err)
 		}
-		if step.Pass {
+		if step.Pass() {
 			if !set[p.zhash] {
 				set[p.zhash] = true
 				move := make([]Step, len(prefix))
@@ -217,7 +193,7 @@ func recurring2(ka, kb StepKind, a, b Step) bool {
 	return (ka == KindDefault && kb == KindDefault ||
 		ka == KindPush && kb == KindPull ||
 		ka == KindPull && kb == KindPush) &&
-		a.Src == b.Dest && a.Dest == b.Src
+		a.Src() == b.Dest() && a.Dest() == b.Src()
 }
 
 func recurring4(a, b, c, d Step) bool {

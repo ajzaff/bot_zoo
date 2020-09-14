@@ -49,7 +49,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 			Depth: 1,
 		}
 		if !e.ponder {
-			e.writef("bestmove %s\n", MoveString(best.Move))
+			e.writef("bestmove %s\n", MoveString(p, best.Move))
 		}
 		return
 	}
@@ -122,7 +122,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 					}
 
 					if value <= alpha {
-						e.Logf("%d (%d] %s", depth, alpha, MoveString(stack[0].PV))
+						e.Logf("%d (%d] %s", depth, alpha, MoveString(p, stack[0].PV))
 
 						beta = (alpha + beta) / 2
 						alpha = value - delta
@@ -134,7 +134,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 						// Notify the main thread of a fail low immediately to avoid
 						// submitting a suboptimal value from another search.
 					} else if value >= beta {
-						e.Logf("%d [%d) %s", depth, beta, MoveString(stack[0].PV))
+						e.Logf("%d [%d) %s", depth, beta, MoveString(p, stack[0].PV))
 
 						beta = value + delta
 						if beta > Inf {
@@ -211,7 +211,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 				e.best.Move = b.Move
 				e.best.PV = b.PV
 
-				e.Logf("%d [%d] %s", e.best.Depth, e.best.Value, MoveString(e.best.PV))
+				e.Logf("%d [%d] %s", e.best.Depth, e.best.Value, MoveString(p, e.best.PV))
 
 				if e.best.Value.Winning() {
 					// Stop after finding a winning move.
@@ -243,7 +243,7 @@ func (e *Engine) iterativeDeepeningRoot() {
 	// Print search info and "bestmove" if not pondering.
 	e.printSearchInfo(e.best.Nodes, e.best.Depth, e.timeInfo.Start[e.Pos().Side()], e.best)
 	if !e.ponder {
-		e.writef("bestmove %s\n", MoveString(e.best.Move))
+		e.writef("bestmove %s\n", MoveString(p, e.best.Move))
 	}
 }
 
@@ -264,7 +264,7 @@ func (e *Engine) searchRoot(p *Pos, stack *[]Stack, scoredMoves []ScoredMove, al
 		n := MoveLen(entry.move)
 		if err := p.Move(entry.move); err != nil {
 			if err != errRecurringPosition {
-				panic(fmt.Sprintf("search_move_root: %s: %v", entry.move, err))
+				panic(fmt.Sprintf("search_move_root: %s: %v", MoveString(p, entry.move), err))
 			}
 		} else {
 			var stepList StepList
@@ -284,7 +284,7 @@ func (e *Engine) searchRoot(p *Pos, stack *[]Stack, scoredMoves []ScoredMove, al
 			}
 		}
 		if err := p.Unmove(); err != nil {
-			panic(fmt.Sprintf("search_unmove_root: %s: %v", entry.move, err))
+			panic(fmt.Sprintf("search_unmove_root: %s: %v", MoveString(p, entry.move), err))
 		}
 	}
 
@@ -295,11 +295,11 @@ func (e *Engine) searchRoot(p *Pos, stack *[]Stack, scoredMoves []ScoredMove, al
 			e.Save(p.zhash, bestValue, eval, true, BoundExact, uint8(p.Depth()), depth, step)
 			defer func() {
 				if err := p.Unstep(); err != nil {
-					panic(fmt.Sprintf("store_unstep: %s: %s: %v", bestMove, step, err))
+					panic(fmt.Sprintf("store_unstep: %s: %s: %v", MoveString(p, bestMove), step.String(p), err))
 				}
 			}()
 			if err := p.Step(step); err != nil {
-				panic(fmt.Sprintf("store_step: %s: %s: %v", bestMove, step, err))
+				panic(fmt.Sprintf("store_step: %s: %s: %v", MoveString(p, bestMove), step.String(p), err))
 			}
 		}
 	}
@@ -333,7 +333,7 @@ func (e *Engine) search(nt nodeType, p *Pos, stack *[]Stack, stepList *StepList,
 		if e, found := e.table.Probe(p.zhash); found {
 			tableHit = true
 			tablePV = pv || e.PV()
-			tableStep = e.GetStep(p)
+			tableStep = e.Step
 			bestStep = tableStep
 			tableValue = e.Value
 			tableBound = e.Bound()

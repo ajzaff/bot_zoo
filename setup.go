@@ -151,15 +151,10 @@ func (e *Engine) randomSetup(r *rand.Rand) []Step {
 	for i := rank; i >= rank-1; i-- {
 		for j := 0; j < 8; j++ {
 			at := Square(8*i + j)
-			setup = append(setup, Step{
-				Src:    invalidSquare,
-				Dest:   invalidSquare,
-				Alt:    at,
-				Piece1: ps[0],
-			})
+			setup = append(setup, MakeSetup(ps[0], at))
 			ps = ps[1:]
 		}
 	}
-	setup = append(setup, Step{Pass: true})
+	setup = append(setup, Pass)
 	return setup
 }

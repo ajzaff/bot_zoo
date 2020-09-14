@@ -23,7 +23,7 @@ type TableEntry struct {
 	// Gen8Bound packs the bound type, PV, and aging parameter (8 bits).
 	Gen8Bound uint8
 	// Step packed into a uint32 (32 bits).
-	Step uint32
+	Step Step
 }
 
 func (e *TableEntry) Clear() {
@@ -45,52 +45,13 @@ func (e *TableEntry) Bound() Bound {
 	return Bound(e.Gen8Bound & 0x3)
 }
 
-// GetStep returns the real Step from the entry and position cotext.
-func (e *TableEntry) GetStep(p *Pos) Step {
-	src := Square(e.Step)
-	dest := Square(e.Step >> 8)
-	alt := Square(e.Step >> 16)
-	cap := Square(e.Step >> 24)
-	step := Step{
-		Piece1: p.At(src),
-		Src:    src,
-		Dest:   dest,
-		Alt:    alt,
-		Cap: Capture{
-			Src: cap,
-		},
-	}
-	if dest.AdjacentTo(alt) { // Push
-		step.Piece2 = p.At(dest)
-	} else if alt.Valid() { // Pull
-		step.Piece2 = p.At(alt)
-	}
-	if cap.Valid() {
-		step.Cap.Piece = p.At(cap)
-	}
-	return step
-}
-
-// saveStep packs the step into 32 bits
-// using the following layout (little endian):
-//	src (8 bits)
-//	dest (8 bits)
-//	alt (8 bits)
-//	capture src (8 bits)
-func (e *TableEntry) saveStep(step Step) {
-	e.Step = uint32(step.Src) |
-		uint32(step.Dest)<<8 |
-		uint32(step.Alt)<<16 |
-		uint32(step.Cap.Src)<<24
-}
-
 // Save the information into the TableEntry if it is more valuable.
 func (e *TableEntry) Save(key uint64, v, ev Value, pv bool, b Bound, gen, depth uint8, step Step) {
 	key16 := uint16(key >> 48)
 	if step.Kind() != KindInvalid || key16 != e.Key16 {
 		// Preserve step information. Only reset step if valid
 		// and on key change (modulo Type 1 key errors).
-		e.saveStep(step)
+		e.Step = step
 	}
 	// Overwrite more valuable entries.
 	if key16 != e.Key16 || depth > e.Depth-4 || b == BoundExact {

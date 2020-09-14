@@ -24,7 +24,7 @@ func (i Square) Bitboard() Bitboard {
 	return Bitboard(1) << i
 }
 
-func (src Square) Delta(dest Square) int8 {
+func (src Square) Delta(dest Square) Delta {
 	if src == dest {
 		return 0
 	}
@@ -43,8 +43,22 @@ func (src Square) Delta(dest Square) int8 {
 	}
 }
 
+func (i Square) AdjacentTrap() Square {
+	if i.Valid() {
+		b := stepsB[i] & Traps
+		if b != 0 {
+			return b.Square()
+		}
+	}
+	return invalidSquare
+}
+
+func (i Square) Trap() bool {
+	return i == 18 || i == 21 || i == 42 || i == 45
+}
+
 func (i Square) AdjacentTo(j Square) bool {
-	return i.Delta(j) != 0
+	return i.Valid() && j.Valid() && i.Delta(j) != 0
 }
 
 func (i Square) String() string {
@@ -57,9 +71,61 @@ func (i Square) String() string {
 	return strconv.Itoa(int(i))
 }
 
-const invalidSquare = 255
+const invalidSquare Square = 255
 
-func NewDelta(d int8) string {
+type Delta int8
+
+const (
+	invalidDelta       = 0
+	invalidPackedDelta = 7
+)
+
+func MakeDeltaFromPacked(p uint8) Delta {
+	switch p {
+	case 0:
+		return +8
+	case 1:
+		return -8
+	case 2:
+		return +1
+	case 3:
+		return -1
+	default:
+		return invalidDelta
+	}
+}
+
+func MakeDeltaFromByte(b byte) Delta {
+	switch b {
+	case 'n':
+		return +8
+	case 's':
+		return -8
+	case 'e':
+		return +1
+	case 'w':
+		return -1
+	default:
+		return 0
+	}
+}
+
+func (d Delta) Packed() uint8 {
+	switch d {
+	case +8:
+		return 0
+	case -8:
+		return 1
+	case 1:
+		return 2
+	case -1:
+		return 3
+	default:
+		return invalidPackedDelta
+	}
+}
+
+func (d Delta) String() string {
 	switch d {
 	case +8:
 		return "n"
@@ -74,22 +140,7 @@ func NewDelta(d int8) string {
 	}
 }
 
-func ParseDelta(b byte) int8 {
-	switch b {
-	case 'n':
-		return +8
-	case 's':
-		return -8
-	case 'e':
-		return 1
-	case 'w':
-		return -1
-	default:
-		return 0
-	}
-}
-
-func (i Square) Translate(d int8) Square {
+func (i Square) Translate(d Delta) Square {
 	if !i.Valid() {
 		return invalidSquare
 	}

@@ -18,7 +18,7 @@ type Stack struct {
 
 // StepList implements an efficient data structure for storing scored steps from search lines.
 type StepList struct {
-	steps  []*Step
+	steps  []Step
 	scores []Value
 	p      int // start index for sorting a subset of moves
 }
@@ -54,7 +54,7 @@ func (l *StepList) Generate(p *Pos) {
 		l.scores = append(l.scores, *slice...)
 	}
 	for i := n; i < l.Len(); i++ {
-		l.scores[i] = scoreStep(p, *l.steps[i])
+		l.scores[i] = scoreStep(p, l.steps[i])
 	}
 	l.p = n
 	sort.Stable(l)
@@ -67,9 +67,9 @@ func (l *StepList) Truncate(n int) {
 }
 
 func (l *StepList) AtScore(i int) (step Step, score Value) {
-	return *l.steps[i], l.scores[i]
+	return l.steps[i], l.scores[i]
 }
 
 func (l *StepList) At(i int) Step {
-	return *l.steps[i]
+	return l.steps[i]
 }

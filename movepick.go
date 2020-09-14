@@ -47,23 +47,30 @@ var goalRange = [2]Bitboard{
 }
 
 func scoreStep(p *Pos, step Step) Value {
-	side := step.Piece1.Color()
+	src := step.Src()
+	if !src.Valid() {
+		// Ignore likely setup move.
+		return 0
+	}
+	dest := step.Dest()
+	assert("dest is invalid", dest.Valid())
+	piece1 := p.At(src)
+	side := piece1.Color()
 	var value Value
 	// Add +Inf - |step| for goal moves.
-	if step.Piece1.SameType(GRabbit) && step.Dest.Bitboard()&goalRanks[step.Piece1.Color()] != 0 {
+	if piece1.SameType(GRabbit) && dest.Bitboard()&goalRanks[side] != 0 {
 		value += +Inf - Value(step.Len()) // find shortest mate
 	}
 	// Add O(large) for rabbit moves close to goal.
-	if step.Piece1.SameType(GRabbit) && step.Dest.Bitboard()&goalRange[step.Piece1.Color()] != 0 { // Coarse goal threat:
+	if piece1.SameType(GRabbit) && dest.Bitboard()&goalRange[side] != 0 { // Coarse goal threat:
 		value += 2000
 	}
 	// Add static value of capture:
 	if step.Capture() {
-		t := step.Cap.Piece
-		if t.Color() == side {
-			value -= pieceValue[t&decolorMask]
+		if t := step.Cap(); t.Color() == side {
+			value -= pieceValue[t.Decolor()]
 		} else {
-			value += pieceValue[t&decolorMask]
+			value += pieceValue[t.Decolor()]
 		}
 	}
 	return value

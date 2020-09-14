@@ -13,173 +13,64 @@ func TestParseMove(t *testing.T) {
 		wantErr bool
 	}{{
 		input: "Da4n",
-		want: []Step{{
-			Src:    ParseSquare("a4"),
-			Dest:   ParseSquare("a5"),
-			Alt:    invalidSquare,
-			Piece1: GDog,
-			Cap:    Capture{Src: invalidSquare},
-		}, {
-			Pass: true,
-		}},
+		want: []Step{
+			MakeDefault(ParseSquare("a4"), ParseSquare("a5"), GDog),
+			Pass,
+		},
 	}, {
 		input: "Da4n Da5e",
-		want: []Step{{
-			Src:    ParseSquare("a4"),
-			Dest:   ParseSquare("a5"),
-			Alt:    invalidSquare,
-			Piece1: GDog,
-			Cap:    Capture{Src: invalidSquare},
-		}, {
-			Src:    ParseSquare("a5"),
-			Dest:   ParseSquare("b5"),
-			Alt:    invalidSquare,
-			Piece1: GDog,
-			Cap:    Capture{Src: invalidSquare},
-		}, {
-			Pass: true,
-		}},
+		want: []Step{
+			MakeDefault(ParseSquare("a4"), ParseSquare("a5"), GDog),
+			MakeDefault(ParseSquare("a5"), ParseSquare("b5"), GDog),
+			Pass,
+		},
 	}, {
 		input: "Da4n Ra3n",
-		want: []Step{{
-			Src:    ParseSquare("a4"),
-			Dest:   ParseSquare("a5"),
-			Alt:    invalidSquare,
-			Piece1: GDog,
-			Cap:    Capture{Src: invalidSquare},
-		}, {
-			Src:    ParseSquare("a3"),
-			Dest:   ParseSquare("a4"),
-			Alt:    invalidSquare,
-			Piece1: GRabbit,
-			Cap:    Capture{Src: invalidSquare},
-		}, {
-			Pass: true,
-		}},
+		want: []Step{
+			MakeDefault(ParseSquare("a4"), ParseSquare("a5"), GDog),
+			MakeDefault(ParseSquare("a3"), ParseSquare("a4"), GRabbit),
+			Pass,
+		},
 	}, {
 		input: "Da4n ra3n",
-		want: []Step{{
-			Src:    ParseSquare("a4"),
-			Dest:   ParseSquare("a5"),
-			Alt:    ParseSquare("a3"),
-			Piece1: GDog,
-			Piece2: SRabbit,
-			Cap:    Capture{Src: invalidSquare},
-		}, {
-			Pass: true,
-		}},
+		want: []Step{
+			MakeAlternate(ParseSquare("a4"), ParseSquare("a5"), ParseSquare("a3"), GDog, SRabbit),
+			Pass,
+		},
 	}, {
 		input: "Dh3s Rh2n Rg1e Rf1e",
-		want: []Step{{
-			Src:    ParseSquare("h3"),
-			Dest:   ParseSquare("h2"),
-			Alt:    invalidSquare,
-			Piece1: GDog,
-			Cap:    Capture{Src: invalidSquare},
-		}, {
-			Src:    ParseSquare("h2"),
-			Dest:   ParseSquare("h3"),
-			Alt:    invalidSquare,
-			Piece1: GRabbit,
-			Cap:    Capture{Src: invalidSquare},
-		}, {
-			Src:    ParseSquare("g1"),
-			Dest:   ParseSquare("h1"),
-			Alt:    invalidSquare,
-			Piece1: GRabbit,
-			Cap:    Capture{Src: invalidSquare},
-		}, {
-			Src:    ParseSquare("f1"),
-			Dest:   ParseSquare("g1"),
-			Alt:    invalidSquare,
-			Piece1: GRabbit,
-			Cap:    Capture{Src: invalidSquare},
-		}, {
-			Pass: true,
-		}},
+		want: []Step{
+			MakeDefault(ParseSquare("h3"), ParseSquare("h2"), GDog),
+			MakeDefault(ParseSquare("h2"), ParseSquare("h3"), GRabbit),
+			MakeDefault(ParseSquare("g1"), ParseSquare("h1"), GRabbit),
+			MakeDefault(ParseSquare("f1"), ParseSquare("g1"), GRabbit),
+			Pass,
+		},
 	}, {
 		input: "Md2n Dh2n Md3n Md4s",
-		want: []Step{{
-			Src:    ParseSquare("d2"),
-			Dest:   ParseSquare("d3"),
-			Alt:    invalidSquare,
-			Piece1: GCamel,
-			Cap:    Capture{Src: invalidSquare},
-		}, {
-			Src:    ParseSquare("h2"),
-			Dest:   ParseSquare("h3"),
-			Alt:    invalidSquare,
-			Piece1: GDog,
-			Cap:    Capture{Src: invalidSquare},
-		}, {
-			Src:    ParseSquare("d3"),
-			Dest:   ParseSquare("d4"),
-			Alt:    invalidSquare,
-			Piece1: GCamel,
-			Cap:    Capture{Src: invalidSquare},
-		}, {
-			Src:    ParseSquare("d4"),
-			Dest:   ParseSquare("d3"),
-			Alt:    invalidSquare,
-			Piece1: GCamel,
-			Cap:    Capture{Src: invalidSquare},
-		}, {
-			Pass: true,
-		}},
+		want: []Step{
+			MakeDefault(ParseSquare("d2"), ParseSquare("d3"), GCamel),
+			MakeDefault(ParseSquare("h2"), ParseSquare("h3"), GDog),
+			MakeDefault(ParseSquare("d3"), ParseSquare("d4"), GCamel),
+			MakeDefault(ParseSquare("d4"), ParseSquare("d3"), GCamel),
+			Pass,
+		},
 	}, {
 		input: "Hc4s rc5s Hc3w rc4s rc3x",
-		want: []Step{{
-			Src:    ParseSquare("c4"),
-			Dest:   ParseSquare("c3"),
-			Alt:    ParseSquare("c5"),
-			Piece1: GHorse,
-			Piece2: SRabbit,
-			Cap:    Capture{Src: invalidSquare},
-		}, {
-			Src:    ParseSquare("c3"),
-			Dest:   ParseSquare("b3"),
-			Alt:    ParseSquare("c4"),
-			Piece1: GHorse,
-			Piece2: SRabbit,
-			Cap: Capture{
-				Piece: SRabbit,
-				Src:   ParseSquare("c3"),
-			},
-		}, {
-			Pass: true,
-		}},
+		want: []Step{
+			MakeAlternate(ParseSquare("c4"), ParseSquare("c3"), ParseSquare("c5"), GHorse, SRabbit),
+			MakeAlternateCapture(ParseSquare("c3"), ParseSquare("b3"), ParseSquare("c4"), GHorse, SRabbit, SRabbit),
+			Pass,
+		},
 	}, {
 		input: "Rf1w Rg1w Hg2w Hb3w Cc3x",
-		want: []Step{{
-			Src:    ParseSquare("f1"),
-			Dest:   ParseSquare("e1"),
-			Alt:    invalidSquare,
-			Piece1: GRabbit,
-			Cap:    Capture{Src: invalidSquare},
-		}, {
-			Src:    ParseSquare("g1"),
-			Dest:   ParseSquare("f1"),
-			Alt:    invalidSquare,
-			Piece1: GRabbit,
-			Cap:    Capture{Src: invalidSquare},
-		}, {
-			Src:    ParseSquare("g2"),
-			Dest:   ParseSquare("f2"),
-			Alt:    invalidSquare,
-			Piece1: GHorse,
-			Cap:    Capture{Src: invalidSquare},
-		}, {
-			Src:    ParseSquare("b3"),
-			Dest:   ParseSquare("a3"),
-			Alt:    invalidSquare,
-			Piece1: GHorse,
-			Cap: Capture{
-				Piece: GCat,
-				Src:   ParseSquare("c3"),
-			},
-		}, {
-			Pass: true,
-		}},
+		want: []Step{
+			MakeDefault(ParseSquare("f1"), ParseSquare("e1"), GRabbit),
+			MakeDefault(ParseSquare("g1"), ParseSquare("f1"), GRabbit),
+			MakeDefault(ParseSquare("g2"), ParseSquare("f2"), GHorse),
+			MakeDefaultCapture(ParseSquare("b3"), ParseSquare("a3"), GHorse, GCat),
+			Pass,
+		},
 	}} {
 		t.Run(tc.input, func(t *testing.T) {
 			got, err := ParseMove(tc.input)
