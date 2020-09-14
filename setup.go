@@ -104,7 +104,7 @@ func (e *Engine) RandomSetup() []Step {
 		move := e.randomSetup(r)
 		if err := p.Move(move); err != nil {
 			log.Println(fmt.Errorf("random_setup_move: %v", err))
-			panic(fmt.Errorf("random_setup_move: %v", err))
+			ppanic(p, fmt.Errorf("random_setup_move: %v", err))
 		}
 		if score := p.positionScore(side); score > bestScore {
 			best = move
@@ -113,7 +113,7 @@ func (e *Engine) RandomSetup() []Step {
 		if err := p.Unmove(); err != nil {
 			log.Println(fmt.Errorf("random_setup_unmove: %v", err))
 
-			panic(fmt.Errorf("random_setup_unmove: %v", err))
+			ppanic(p, fmt.Errorf("random_setup_unmove: %v", err))
 		}
 	}
 	return best

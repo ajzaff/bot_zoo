@@ -25,7 +25,7 @@ func (v Value) Losing() bool {
 
 var pieceValue = []Value{
 	0,
-	0,
+	100,
 	200,  // Cat
 	300,  // Dog
 	500,  // Horse

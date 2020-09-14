@@ -39,7 +39,7 @@ func (a *AEI) handleExt(text string) error {
 			if i >= n {
 				break
 			}
-			a.Logf("[%d] %s", e.score, MoveString(a.engine.Pos(), e.move))
+			a.Logf("[%d] %s", e.score, MoveString(e.move))
 		}
 		a.Logf("%d", len(scoredMoves))
 		return nil
@@ -59,7 +59,7 @@ func (a *AEI) handleExt(text string) error {
 		return nil
 	case text == "pv":
 		if len(a.engine.best.PV) > 0 {
-			a.Logf("[%d] %s", a.engine.best.Value, MoveString(a.engine.Pos(), a.engine.best.PV))
+			a.Logf("[%d] %s", a.engine.best.Value, MoveString(a.engine.best.PV))
 		}
 		return nil
 	case strings.HasPrefix(text, "step"):
@@ -69,7 +69,7 @@ func (a *AEI) handleExt(text string) error {
 			stepList.Generate(a.engine.Pos())
 			for i := 0; i < stepList.Len(); i++ {
 				step, score := stepList.AtScore(i)
-				a.Logf("[%d] %s", score, step.String(a.engine.Pos()))
+				a.Logf("[%d] %s", score, step)
 			}
 			return nil
 		}

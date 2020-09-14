@@ -32,6 +32,6 @@ func BenchmarkOpening(b *testing.B) {
 	}
 	e.SetPos(p)
 	for n := 0; n < b.N; n++ {
-		e.GoFixed(7)
+		e.GoFixed(6)
 	}
 }

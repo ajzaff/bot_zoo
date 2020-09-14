@@ -106,7 +106,7 @@ func ParseMove(s string) ([]Step, error) {
 }
 
 // MoveString outputs a legal move string.
-func MoveString(p *Pos, move []Step) string {
+func MoveString(move []Step) string {
 	var sb strings.Builder
 	var join bool
 	for _, step := range move {
@@ -117,7 +117,7 @@ func MoveString(p *Pos, move []Step) string {
 			sb.WriteByte(' ')
 		}
 		join = true
-		sb.WriteString(step.String(p))
+		sb.WriteString(step.String())
 	}
 	return sb.String()
 }
@@ -233,38 +233,45 @@ func (s Step) Capture() bool {
 }
 
 // CapSquare computes the capture square given the position p as context.
-func (s Step) CapSquare(p *Pos) Square {
+func (s Step) CapSquare() Square {
 	if !s.Capture() {
 		return invalidSquare
 	}
-	alt := s.Alt()
-	if alt.Trap() {
-		return alt
+	c := s.Piece1().Color()
+	cap := s.Cap()
+	switch s.Kind() {
+	case KindDefault:
+		return s.Dest()
+	case KindPush:
+		alt := s.Alt()
+		if alt.Trap() {
+			return alt
+		}
+		if dest := s.Dest(); dest.Trap() {
+			return dest
+		}
+		if v := s.Src().AdjacentTrap(); c == cap.Color() && v.Valid() {
+			return v
+		}
+		return s.Dest().AdjacentTrap()
+	case KindPull:
+		src := s.Src()
+		if v := src.AdjacentTrap(); c == cap.Color() && v.Valid() {
+			return v
+		}
+		dest := s.Dest()
+		if dest.Trap() {
+			return dest
+		}
+		return s.Alt().AdjacentTrap()
+	default:
+		return invalidSquare
 	}
-	if v := alt.AdjacentTrap(); v.Valid() {
-		return v
-	}
-	src := s.Src()
-	if src.Trap() {
-		return src
-	}
-	if v := src.AdjacentTrap(); v.Valid() {
-		return v
-	}
-	if dest := s.Dest(); dest.Trap() {
-		return dest
-	}
-	return invalidSquare
 }
 
 // Pass returns whether the step passes the turn.
 func (s Step) Pass() bool {
 	return s == Pass
-}
-
-// SetupPiece returns the piece only when this is a setup move.
-func (s Step) SetupPiece() Piece {
-	return Piece(s & 0xf)
 }
 
 // StepKind defines the granular kind of step such as
@@ -401,7 +408,7 @@ func (s Step) Len() int {
 }
 
 // String returns the formatted step given the position p.
-func (s Step) String(p *Pos) string {
+func (s Step) String() string {
 	var sb strings.Builder
 	switch kind := s.Kind(); {
 	case s.Pass():
@@ -411,25 +418,25 @@ func (s Step) String(p *Pos) string {
 	case kind == KindPush:
 		fmt.Fprintf(&sb, "%c%s%s", s.Piece2().Byte(), s.Dest(), s.Dest().Delta(s.Alt()).String())
 		if s.Cap().SameColor(s.Piece2()) {
-			fmt.Fprintf(&sb, " %c%sx", s.Cap().Byte(), s.CapSquare(p))
+			fmt.Fprintf(&sb, " %c%sx", s.Cap().Byte(), s.CapSquare())
 		}
 		fmt.Fprintf(&sb, " %c%s%s", s.Piece1().Byte(), s.Src(), s.Src().Delta(s.Dest()).String())
 		if s.Cap().SameColor(s.Piece1()) {
-			fmt.Fprintf(&sb, " %c%sx", s.Cap().Byte(), s.CapSquare(p))
+			fmt.Fprintf(&sb, " %c%sx", s.Cap().Byte(), s.CapSquare())
 		}
 	case kind == KindPull:
 		fmt.Fprintf(&sb, "%c%s%s", s.Piece1().Byte(), s.Src(), s.Src().Delta(s.Dest()).String())
 		if s.Cap().SameColor(s.Piece1()) {
-			fmt.Fprintf(&sb, " %c%sx", s.Cap().Byte(), s.CapSquare(p))
+			fmt.Fprintf(&sb, " %c%sx", s.Cap().Byte(), s.CapSquare())
 		}
 		fmt.Fprintf(&sb, " %c%s%s", s.Piece2().Byte(), s.Alt(), s.Alt().Delta(s.Src()).String())
 		if s.Cap().SameColor(s.Piece2()) {
-			fmt.Fprintf(&sb, " %c%sx", s.Cap().Byte(), s.CapSquare(p))
+			fmt.Fprintf(&sb, " %c%sx", s.Cap().Byte(), s.CapSquare())
 		}
 	case kind == KindDefault:
 		fmt.Fprintf(&sb, "%c%s%s", s.Piece1().Byte(), s.Src(), s.Src().Delta(s.Dest()).String())
 		if s.Capture() {
-			fmt.Fprintf(&sb, " %c%sx", s.Cap().Byte(), s.CapSquare(p))
+			fmt.Fprintf(&sb, " %c%sx", s.Cap().Byte(), s.CapSquare())
 		}
 	default: // Invalid
 		return s.GoString()

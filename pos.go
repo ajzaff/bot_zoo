@@ -290,65 +290,67 @@ func (p *Pos) Step(step Step) error {
 	}
 	n := step.Len()
 	if n > p.stepsLeft {
-		return fmt.Errorf("%s: not enough steps left", step.String(p))
+		return fmt.Errorf("%s: not enough steps left", step)
 	}
 	switch step.Kind() {
 	case KindSetup:
 		if step.Capture() {
-			return fmt.Errorf("%s: setup step has capture", step.String(p))
+			return fmt.Errorf("%s: setup step has capture", step)
 		}
 		if p.moveNum > 1 {
-			return fmt.Errorf("%s: setup move after first turn", step.String(p))
+			return fmt.Errorf("%s: setup move after first turn", step)
 		}
-		if err := p.Place(step.SetupPiece(), step.Alt()); err != nil {
-			return fmt.Errorf("%s: %v", step.String(p), err)
+		if err := p.Place(step.Piece1(), step.Alt()); err != nil {
+			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
 		}
 	case KindPush:
 		src, dest, alt := step.Src(), step.Dest(), step.Alt()
 		if err := p.Remove(step.Piece2(), dest); err != nil {
-			return fmt.Errorf("%s: %v", step.String(p), err)
+			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
 		}
 		if err := p.Place(step.Piece2(), alt); err != nil {
-			return fmt.Errorf("%s: %v", step.String(p), err)
+			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
 		}
 		if err := p.Remove(step.Piece1(), src); err != nil {
-			return fmt.Errorf("%s: %v", step.String(p), err)
+			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
 		}
 		if err := p.Place(step.Piece1(), dest); err != nil {
-			return fmt.Errorf("%s: %v", step.String(p), err)
+			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
 		}
 	case KindPull:
 		src, dest, alt := step.Src(), step.Dest(), step.Alt()
 		if err := p.Remove(step.Piece1(), src); err != nil {
-			return fmt.Errorf("%s: %v", step.String(p), err)
+			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
 		}
 		if err := p.Place(step.Piece1(), dest); err != nil {
-			return fmt.Errorf("%s: %v", step.String(p), err)
+			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
 		}
 		if err := p.Remove(step.Piece2(), alt); err != nil {
-			return fmt.Errorf("%s: %v", step.String(p), err)
+			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
 		}
 		if err := p.Place(step.Piece2(), src); err != nil {
-			return fmt.Errorf("%s: %v", step.String(p), err)
+			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
 		}
 	case KindDefault:
 		src, dest := step.Src(), step.Dest()
 		if err := p.Remove(step.Piece1(), src); err != nil {
-			return fmt.Errorf("%s: %v", step.String(p), err)
+			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
 		}
 		if err := p.Place(step.Piece1(), dest); err != nil {
-			return fmt.Errorf("%s: %v", step.String(p), err)
+			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
 		}
 	case KindInvalid:
-		return fmt.Errorf("invalid step: %s", step.String(p))
+		return fmt.Errorf("invalid step: %s", step)
 	}
 	p.depth += n
 	p.stepsLeft -= n
 	p.steps = append(p.steps, step)
 	if step.Capture() {
 		cap := step.Cap()
-		if err := p.Remove(cap, step.CapSquare(p)); err != nil {
-			return fmt.Errorf("%s: %v", step.String(p), err)
+		src := step.CapSquare()
+		passert(p, fmt.Sprintf("bad capture %s: %s", step.GoString(), src), cap.Valid() && src.Valid())
+		if err := p.Remove(cap, src); err != nil {
+			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
 		}
 	}
 	return nil
@@ -368,8 +370,11 @@ func (p *Pos) Unstep() error {
 	p.depth -= n
 	p.stepsLeft += n
 	if step.Capture() {
-		if err := p.Place(step.Cap(), step.CapSquare(p)); err != nil {
-			return fmt.Errorf("%s: %v", step.String(p), err)
+		cap := step.Cap()
+		src := step.CapSquare()
+		passert(p, fmt.Sprintf("bad capture %s: %s", step.GoString(), src), cap.Valid() && src.Valid())
+		if err := p.Place(cap, src); err != nil {
+			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
 		}
 	}
 	switch step.Kind() {
@@ -380,50 +385,48 @@ func (p *Pos) Unstep() error {
 		if p.moveNum > 1 {
 			return fmt.Errorf("setup move after first turn")
 		}
-		alt := step.Alt()
-		piece := p.At(alt)
-		return p.Remove(piece, alt)
+		return p.Remove(step.Piece1(), step.Alt())
 	case KindPush:
 		src, dest, alt := step.Src(), step.Dest(), step.Alt()
 		piece1, piece2 := p.At(dest), p.At(alt)
 		if err := p.Remove(piece1, dest); err != nil {
-			return fmt.Errorf("%s: %v", step.String(p), err)
+			return err
 		}
 		if err := p.Place(piece1, src); err != nil {
-			return fmt.Errorf("%s: %v", step.String(p), err)
+			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
 		}
 		if err := p.Remove(piece2, alt); err != nil {
-			return fmt.Errorf("%s: %v", step.String(p), err)
+			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
 		}
 		if err := p.Place(piece2, dest); err != nil {
-			return fmt.Errorf("%s: %v", step.String(p), err)
+			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
 		}
 	case KindPull:
 		src, dest, alt := step.Src(), step.Dest(), step.Alt()
 		piece1, piece2 := p.At(dest), p.At(src)
 		if err := p.Remove(piece2, src); err != nil {
-			return fmt.Errorf("%s: %v", step.String(p), err)
+			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
 		}
 		if err := p.Place(piece2, alt); err != nil {
-			return fmt.Errorf("%s: %v", step.String(p), err)
+			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
 		}
 		if err := p.Remove(piece1, dest); err != nil {
-			return fmt.Errorf("%s: %v", step.String(p), err)
+			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
 		}
 		if err := p.Place(piece1, src); err != nil {
-			return fmt.Errorf("%s: %v", step.String(p), err)
+			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
 		}
 	case KindDefault:
 		src, dest := step.Src(), step.Dest()
 		piece := p.At(dest)
 		if err := p.Remove(piece, dest); err != nil {
-			return fmt.Errorf("%s: %v", step.String(p), err)
+			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
 		}
 		if err := p.Place(piece, src); err != nil {
-			return fmt.Errorf("%s: %v", step.String(p), err)
+			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
 		}
 	case KindInvalid:
-		return fmt.Errorf("invalid step: %s", step.String(p))
+		return fmt.Errorf("invalid step: %s", step)
 	}
 	return nil
 }
@@ -432,20 +435,20 @@ var errRecurringPosition = errors.New("recurring position")
 
 func (p *Pos) Move(steps []Step) error {
 	if p.moveNum == 1 && MoveLen(steps) != 16 {
-		return fmt.Errorf("move %s: wrong number of setup moves", MoveString(p, steps))
+		return fmt.Errorf("move %s: wrong number of setup moves", MoveString(steps))
 	}
 	initSide := p.side
 	initZHash := p.zhash
 	for i, step := range steps {
 		if step.Pass() && i < len(steps)-1 {
-			return fmt.Errorf("move %s: pass before last step", MoveString(p, steps))
+			return fmt.Errorf("move %s: pass before last step", MoveString(steps))
 		}
 		if err := p.Step(step); err != nil {
-			return fmt.Errorf("move %s: %v", MoveString(p, steps), err)
+			return fmt.Errorf("move %s: %v", MoveString(steps), err)
 		}
 	}
 	if p.side == initSide {
-		return fmt.Errorf("move %s: no pass step", MoveString(p, steps))
+		return fmt.Errorf("move %s: no pass step", MoveString(steps))
 	}
 	// TODO(ajzaff): Movegen should filter moves that would result
 	// in recurring positions.
@@ -469,7 +472,7 @@ func (p *Pos) Unmove() error {
 			continue
 		}
 		if err := p.Unstep(); err != nil {
-			return fmt.Errorf("unmove %s: %v", MoveString(p, p.steps), err)
+			return fmt.Errorf("unmove %s: %v", MoveString(p.steps), err)
 		}
 	}
 	return nil

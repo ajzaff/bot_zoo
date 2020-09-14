@@ -159,7 +159,7 @@ func (e *Engine) printSearchInfo(nodes int, depth uint8, start time.Time, best s
 	e.writef("info depth %d\n", depth)
 	e.writef("info time %d\n", int(time.Now().Sub(start).Seconds()))
 	e.writef("info score %d\n", best.Value)
-	e.writef("info pv %s\n", MoveString(e.p, best.PV))
+	e.writef("info pv %s\n", MoveString(best.PV))
 	e.writef("info nodes %d\n", nodes)
 	e.Logf("rate %d kN/s", searchRateKNps(nodes, start))
 	e.Logf("hashfull %d", e.table.Hashfull())
