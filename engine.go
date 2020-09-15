@@ -91,7 +91,7 @@ func (e *Engine) startNow() {
 			panic(fmt.Sprintf("SEARCH_ERROR recovered: %v\n", r))
 		}
 	}()
-	go e.iterativeDeepeningRoot()
+	go e.searchRoot()
 }
 
 // Go starts the search routine in a new goroutine.
@@ -113,7 +113,7 @@ func (e *Engine) GoFixed(fixedDepth uint8) {
 				panic(fmt.Sprintf("SEARCH_ERROR_FIXED recovered: %v\n", r))
 			}
 		}()
-		e.iterativeDeepeningRoot()
+		e.searchRoot()
 		e.fixedDepth = prevDepth
 	}
 }

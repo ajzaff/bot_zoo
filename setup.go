@@ -106,7 +106,7 @@ func (e *Engine) RandomSetup() []Step {
 			log.Println(fmt.Errorf("random_setup_move: %v", err))
 			ppanic(p, fmt.Errorf("random_setup_move: %v", err))
 		}
-		if score := p.positionScore(side); score > bestScore {
+		if score := p.setupValue(side); score > bestScore {
 			best = move
 			bestScore = score
 		}

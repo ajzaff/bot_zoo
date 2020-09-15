@@ -2,7 +2,6 @@ package zoo
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 )
 
@@ -24,25 +23,6 @@ func (a *AEI) handleExt(text string) error {
 		} else {
 			a.Logf("no best move found in table")
 		}
-	case strings.HasPrefix(text, "moves"):
-		parts := strings.SplitN(text, " ", 2)
-		n := 0
-		if len(parts) == 2 {
-			n, _ = strconv.Atoi(parts[1])
-		}
-		moves := a.engine.getRootMovesLen(a.engine.Pos(), 4)
-		scoredMoves := a.engine.scoreMoves(a.engine.Pos(), moves)
-		if n == 0 {
-			n = len(scoredMoves)
-		}
-		for i, e := range scoredMoves {
-			if i >= n {
-				break
-			}
-			a.Logf("[%d] %s", e.score, MoveString(e.move))
-		}
-		a.Logf("%d", len(scoredMoves))
-		return nil
 	case strings.HasPrefix(text, "unmove"):
 		if err := a.engine.Pos().Unmove(); err != nil {
 			return err

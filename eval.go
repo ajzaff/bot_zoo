@@ -1,11 +1,11 @@
 package zoo
 
 const (
-	Inf Value = 30000
-	Win Value = 20000
+	Inf Value = 999
+	Win Value = 1
 )
 
-type Value int16
+type Value float64
 
 func (v Value) Infinite() bool {
 	return v >= Inf || v <= -Inf
@@ -21,60 +21,6 @@ func (v Value) Winning() bool {
 
 func (v Value) Losing() bool {
 	return v <= -Win
-}
-
-var pieceValue = []Value{
-	0,
-	100,
-	200,  // Cat
-	300,  // Dog
-	500,  // Horse
-	800,  // Camel
-	1300, // Elephant
-}
-
-// rabbitMaterialValue value of each rabbit with i rabbits remaining.
-var rabbitMaterialValue = []Value{
-	0,
-	900,
-	1600,
-	2200,
-	2700,
-	3100,
-	3400,
-	3600,
-	3700,
-}
-
-func (p *Pos) positionScore(side Color) (value Value) {
-	ps := positionValue[side]
-	for _, t := range []Piece{
-		GRabbit,
-		GCat,
-		GDog,
-		GHorse,
-		GCamel,
-		GElephant,
-	} {
-		ps := ps[t]
-		for b := p.Bitboard(t.MakeColor(side)); b > 0; b &= b - 1 {
-			value += ps[b.Square()]
-		}
-	}
-	return value
-}
-
-func (p *Pos) valueOf(side Color) (value Value) {
-	n := p.bitboards[GRabbit.MakeColor(side)].Count()
-	if n > 8 {
-		n = 8
-	}
-	value += rabbitMaterialValue[n]
-	for t := GCat; t <= GElephant; t++ {
-		value += pieceValue[t] * Value(p.Bitboard(t.MakeColor(side)).Count())
-	}
-	value += p.positionScore(side)
-	return value
 }
 
 func (p *Pos) terminalGoalValue() Value {
@@ -137,5 +83,5 @@ func (p *Pos) Value() Value {
 	if v := p.terminalValue(); v != 0 {
 		return v
 	}
-	return p.valueOf(p.side) - p.valueOf(p.side.Opposite())
+	return 0
 }
