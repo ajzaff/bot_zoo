@@ -339,16 +339,16 @@ func (e *Engine) search(nt nodeType, p *Pos, stack *[]Stack, stepList *StepList,
 			tableDepth = e.Depth
 			eval = e.Eval
 
-			if depth <= tableDepth {
+			if !pv && depth <= tableDepth {
 				switch tableBound {
 				case BoundExact:
 					return tableValue
 				case BoundLower:
-					if alpha < tableValue {
+					if tableValue < alpha {
 						alpha = tableValue
 					}
 				case BoundUpper:
-					if beta > tableValue {
+					if tableValue > beta {
 						beta = tableValue
 					}
 				}
