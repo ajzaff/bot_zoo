@@ -237,36 +237,38 @@ func (s Step) CapSquare() Square {
 	if !s.Capture() {
 		return invalidSquare
 	}
-	c := s.Piece1().Color()
-	cap := s.Cap()
-	switch s.Kind() {
-	case KindDefault:
-		return s.Dest()
-	case KindPush:
-		alt := s.Alt()
-		if alt.Trap() {
-			return alt
-		}
-		if dest := s.Dest(); dest.Trap() {
-			return dest
-		}
-		if v := s.Src().AdjacentTrap(); c == cap.Color() && v.Valid() {
-			return v
-		}
-		return s.Dest().AdjacentTrap()
-	case KindPull:
-		src := s.Src()
-		if v := src.AdjacentTrap(); c == cap.Color() && v.Valid() {
-			return v
-		}
-		dest := s.Dest()
-		if dest.Trap() {
-			return dest
-		}
-		return s.Alt().AdjacentTrap()
-	default:
-		return invalidSquare
+	src := s.Src()
+	if src.Trap() {
+		// Pulling piece onto a trap (e.g. Dc6s rc7s rc6x).
+		return src
 	}
+	dest := s.Dest()
+	if dest.Trap() {
+		// Default self capture (Dc5n Dc6x, Dc5n Dc6x rc4n).
+		return dest
+	}
+	alt := s.Alt()
+	if alt.Trap() {
+		// Push to trap on alt.
+		// (e.g. rc5n rc6x Dc4n, rc5n rc6x Dd5w).
+		return alt
+	}
+	if v := src.AdjacentTrap(); v.Valid() {
+		// Indirect capture abandons a piece on adjacent trap.
+		// (e.g. Dc5e Dc6x, Dc5e Dc6x rb5e, rd5e Dc5e Dc6x).
+		return v
+	}
+	if v := dest.AdjacentTrap(); v.Valid() {
+		// Indirect capture pushes a piece guarding the trap.
+		// (e.g. rc5e rc6x Db5e).
+		return v
+	}
+	if v := alt.AdjacentTrap(); v.Valid() {
+		// Indirect capture pulls a piece guarding the trap.
+		// (e.g. Db5s rc5w rc6x).
+		return v
+	}
+	panic(fmt.Sprintf("bad capture step: %s", s.GoString()))
 }
 
 // Pass returns whether the step passes the turn.

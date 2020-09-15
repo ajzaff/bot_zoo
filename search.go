@@ -248,7 +248,6 @@ func (e *Engine) iterativeDeepeningRoot() {
 }
 
 func (e *Engine) searchRoot(p *Pos, stack *[]Stack, scoredMoves []ScoredMove, alpha, beta Value, depth uint8) (bestMove []Step, bestValue Value) {
-
 	// Step 1. Terminal node? We have no moves.
 	eval := p.Value()
 	if eval.Terminal() {
@@ -312,24 +311,24 @@ func (e *Engine) searchRoot(p *Pos, stack *[]Stack, scoredMoves []ScoredMove, al
 }
 
 func (e *Engine) search(nt nodeType, p *Pos, stack *[]Stack, stepList *StepList, alpha, beta Value, depth, maxDepth uint8) Value {
-
 	var (
 		alphaOrig = alpha
 		pv        = nt == PV
-		tableHit  bool
-		tablePV   bool
-		tableStep Step
 		bestStep  Step
 		eval      Value
 	)
 
+	var (
+		tableHit   bool
+		tablePV    bool
+		tableValue Value
+		tableBound Bound
+		tableDepth uint8
+		tableStep  Step
+	)
+
 	// Step 1: Check the transposition table.
 	if e.useTable {
-		var (
-			tableValue Value
-			tableBound Bound
-			tableDepth uint8
-		)
 		if e, found := e.table.Probe(p.zhash); found {
 			tableHit = true
 			tablePV = pv || e.PV()
@@ -339,13 +338,20 @@ func (e *Engine) search(nt nodeType, p *Pos, stack *[]Stack, stepList *StepList,
 			tableBound = e.Bound()
 			tableDepth = e.Depth
 			eval = e.Eval
-		}
 
-		// Check for early table cutoff.
-		if !pv && tableHit && tableDepth >= depth {
-			if tableValue >= beta && tableBound&BoundLower != 0 ||
-				tableValue < beta && tableBound&BoundUpper != 0 {
-				return tableValue
+			if depth <= tableDepth {
+				switch tableBound {
+				case BoundExact:
+					return tableValue
+				case BoundLower:
+					if alpha < tableValue {
+						alpha = tableValue
+					}
+				case BoundUpper:
+					if beta > tableValue {
+						beta = tableValue
+					}
+				}
 			}
 		}
 	}
@@ -383,7 +389,7 @@ func (e *Engine) search(nt nodeType, p *Pos, stack *[]Stack, stepList *StepList,
 	}
 
 	// If position is not in table, and is not PV line, decrease maxDepth by 2.
-	if pv && !tableHit && maxDepth-depth >= 8 {
+	if !pv && !tableHit && maxDepth-depth >= 8 {
 		maxDepth -= 2
 	}
 
@@ -468,7 +474,7 @@ func (e *Engine) search(nt nodeType, p *Pos, stack *[]Stack, stepList *StepList,
 		default:
 			bound = BoundExact
 		}
-		entry.Save(p.zhash, alpha, eval, tablePV, bound, e.table.gen8, depth, bestStep)
+		entry.Save(p.zhash, alpha, eval, pv || tablePV, bound, e.table.gen8, depth, bestStep)
 	}
 
 	// Return best score.

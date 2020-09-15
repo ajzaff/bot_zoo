@@ -26,12 +26,12 @@ type Pos struct {
 
 func newPos(
 	board []Piece,
-	bitboards []Bitboard,
-	presence []Bitboard,
-	stronger []Bitboard,
-	weaker []Bitboard,
-	touching []Bitboard,
-	dominating []Bitboard,
+	bitboards,
+	presence,
+	stronger,
+	weaker,
+	touching,
+	dominating,
 	frozen []Bitboard,
 	threefold *Threefold,
 	side Color,
@@ -180,11 +180,7 @@ func (p *Pos) Bitboard(t Piece) Bitboard {
 }
 
 func (p *Pos) At(i Square) Piece {
-	v := p.board[i]
-	if v >= 0 {
-		return p.board[i]
-	}
-	return Empty
+	return p.board[i]
 }
 
 func (p *Pos) Stronger(t Piece) Bitboard {
@@ -348,7 +344,6 @@ func (p *Pos) Step(step Step) error {
 	if step.Capture() {
 		cap := step.Cap()
 		src := step.CapSquare()
-		passert(p, fmt.Sprintf("bad capture %s: %s", step.GoString(), src), cap.Valid() && src.Valid())
 		if err := p.Remove(cap, src); err != nil {
 			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
 		}
@@ -372,7 +367,6 @@ func (p *Pos) Unstep() error {
 	if step.Capture() {
 		cap := step.Cap()
 		src := step.CapSquare()
-		passert(p, fmt.Sprintf("bad capture %s: %s", step.GoString(), src), cap.Valid() && src.Valid())
 		if err := p.Place(cap, src); err != nil {
 			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
 		}

@@ -43,8 +43,14 @@ func main() {
 		}
 		f.Close()
 	}
-	if err := engine.RunAEI(os.Stdin); err != nil {
-		log.Fatal(err)
+	for {
+		err := engine.RunAEI(os.Stdin)
+		if err != nil {
+			if err == zoo.ErrAEIQuit {
+				break
+			}
+			log.Println(err)
+		}
 	}
 	log.Println("Goodbye!")
 }

@@ -54,7 +54,7 @@ func (e *TableEntry) Save(key uint64, v, ev Value, pv bool, b Bound, gen, depth 
 		e.Step = step
 	}
 	// Overwrite more valuable entries.
-	if key16 != e.Key16 || depth > e.Depth-4 || b == BoundExact {
+	if b == BoundExact || key16 != e.Key16 || depth > e.Depth {
 		e.Key16 = key16
 		e.Value = v
 		e.Eval = ev
@@ -72,7 +72,7 @@ type Table struct {
 	cap          int
 	clusterCount int
 	gen8         uint8 // aging parameter
-	table        []*tableCluster
+	table        []tableCluster
 }
 
 const clusterSize = 3
@@ -84,7 +84,7 @@ type tableCluster struct {
 
 // cluster uses the 32 lowest order bits of the key to determine the cluster index.
 func (t *Table) cluster(key uint64) *tableCluster {
-	return t.table[(uint64(uint32(key))*uint64(t.clusterCount))>>32]
+	return &t.table[(uint64(uint32(key))*uint64(t.clusterCount))>>32]
 }
 
 // NewTableSize returns a table with the given mbSize.
@@ -117,10 +117,7 @@ func (t *Table) Clear() {
 func (t *Table) Resize(mbSize int) {
 	t.Clear()
 	t.clusterCount = mbSize * 1024 * 1024 / 36 // sizeof(tableCluster)
-	t.table = make([]*tableCluster, t.clusterCount)
-	for i := 0; i < t.clusterCount; i++ {
-		t.table[i] = new(tableCluster)
-	}
+	t.table = make([]tableCluster, t.clusterCount)
 }
 
 func (t *Table) NewSearch() {
@@ -135,9 +132,9 @@ func (t *Table) Probe(key uint64) (e *TableEntry, found bool) {
 
 	for i := 0; i < clusterSize; i++ {
 		e := &cluster.entries[i]
-		if e.Key16 == 0 || e.Key16 == key16 {
+		if e.Key16 == key16 {
 			e.Gen8Bound = uint8(t.gen8 | (e.Gen8Bound & 0x7)) // Refresh
-			return e, e.Key16 == key16
+			return e, true
 		}
 	}
 

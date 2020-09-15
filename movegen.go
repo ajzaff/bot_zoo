@@ -5,6 +5,12 @@ var (
 	rabbitStepsB [2][64]Bitboard
 )
 
+// ExtStep contains a step and associated value.
+type ExtStep struct {
+	Step
+	Value
+}
+
 func init() {
 	for i := Square(0); i < 64; i++ {
 		b := i.Bitboard()
