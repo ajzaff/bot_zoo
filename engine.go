@@ -59,7 +59,7 @@ func NewEngine(seed int64) *Engine {
 	e := &Engine{
 		timeControl:    makeTimeControl(),
 		p:              NewEmptyPosition(),
-		minDepth:       8,
+		minDepth:       4,
 		concurrency:    4,
 		rootOrderNoise: 5,
 		nullMoveR:      4,

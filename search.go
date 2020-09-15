@@ -339,18 +339,24 @@ func (e *Engine) search(nt nodeType, p *Pos, stack *[]Stack, stepList *StepList,
 			tableDepth = e.Depth
 			eval = e.Eval
 
-			if !pv && depth <= tableDepth {
+			if !pv && maxDepth-depth <= tableDepth {
 				switch tableBound {
 				case BoundExact:
 					return tableValue
 				case BoundLower:
-					if tableValue < alpha {
-						alpha = tableValue
+					if tableValue <= alpha {
+						return tableValue
 					}
 				case BoundUpper:
-					if tableValue > beta {
-						beta = tableValue
+					if tableValue >= beta {
+						return tableValue
 					}
+				}
+				if tableValue > alpha {
+					alpha = tableValue
+				}
+				if tableValue < beta {
+					beta = tableValue
 				}
 			}
 		}
@@ -395,7 +401,7 @@ func (e *Engine) search(nt nodeType, p *Pos, stack *[]Stack, stepList *StepList,
 	}
 
 	// If position is not in table, and is not PV line, decrease maxDepth by 2.
-	if !pv && !tableHit && maxDepth-depth >= 8 {
+	if !pv && !tableHit && maxDepth-depth >= 6 {
 		maxDepth -= 2
 	}
 
@@ -479,7 +485,7 @@ func (e *Engine) search(nt nodeType, p *Pos, stack *[]Stack, stepList *StepList,
 		default:
 			bound = BoundExact
 		}
-		entry.Save(p.zhash, alpha, eval, pv || tablePV, bound, e.table.gen8, depth, bestStep)
+		entry.Save(p.zhash, alpha, eval, pv || tablePV, bound, e.table.gen8, maxDepth-depth, bestStep)
 	}
 
 	// Return best score.
