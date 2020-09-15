@@ -380,8 +380,14 @@ func (e *Engine) search(nt nodeType, p *Pos, stack *[]Stack, stepList *StepList,
 
 	// Step 2c. Try null move pruning.
 	if pv && eval >= beta && e.nullMoveR > 0 && depth+e.nullMoveR < maxDepth {
+		initSide := p.side
 		p.Pass()
-		nullValue := -e.search(NonPV, p, stack, stepList, -beta, -alpha, depth+e.nullMoveR+1, maxDepth)
+		var nullValue Value
+		if p.side == initSide {
+			nullValue = e.search(NonPV, p, stack, stepList, beta, beta+1, depth+e.nullMoveR+1, maxDepth)
+		} else {
+			nullValue = -e.search(NonPV, p, stack, stepList, -beta-1, -beta, depth+e.nullMoveR+1, maxDepth)
+		}
 		p.Unpass()
 		if nullValue >= beta {
 			return nullValue // null move pruning
