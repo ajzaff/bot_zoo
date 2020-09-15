@@ -232,43 +232,94 @@ func (s Step) Capture() bool {
 	return s&0xf0000000 < 0xf0000000
 }
 
+// Default returns true when this is a simple step (with no push or pull) but possible capture.
+func (s Step) Default() bool {
+	return !s.Alt().Valid()
+}
+
+// Push returns true when this step is a push.
+func (s Step) Push() bool {
+	dest, alt := s.Src(), s.Dest()
+	return s.Alt().Valid() && dest.AdjacentTo(alt)
+}
+
+// Pull returns true when this step is a pull.
+func (s Step) Pull() bool {
+	src, alt := s.Src(), s.Alt()
+	return s.Alt().Valid() && src.AdjacentTo(alt)
+}
+
+// SacrificesMaterial returns true when this step captures a piece of our own color.
+// This is possible via a self capture or removing ourselves as a defender.
+func (s Step) SacrificesMaterial() bool {
+	return s.Capture() && s.Cap().SameColor(s.Piece1())
+}
+
+// SelfCapture returns true when this step captures the first piece.
+func (s Step) SelfCapture() bool {
+	return s.Capture() && s.Dest().Trap() && s.Cap() == s.Piece1()
+}
+
+// DirectCapture returns true when this step pushes or pulls a piece onto a trap square.
+func (s Step) DirectCapture() bool {
+	return s.Capture() && s.Dest().Trap() && (s.Src().Trap() || s.Alt().Trap())
+}
+
+// IndirectCapture returns true when this step captures a piece by removing a defender.
+// This includes removing ourself as a defender.
+func (s Step) IndirectCapture() bool {
+	ours := s.SacrificesMaterial()
+	return s.Capture() && (!ours && s.Alt().AdjacentTrap().Valid() || ours && s.Src().AdjacentTrap().Valid())
+}
+
 // CapSquare computes the capture square given the position p as context.
 func (s Step) CapSquare() Square {
+	// Confusingly the step notation does not store the square that the
+	// captured piece was captured on. We need to compute it every time
+	// based on this table:
+	//	         push  pull  default
+	//	direct   alt   src   n/a
+	//	indirect dstA  altA  src
+	//	self     dest  dest  dest
 	if !s.Capture() {
 		return invalidSquare
 	}
-	src := s.Src()
-	if src.Trap() {
-		// Pulling piece onto a trap (e.g. Dc6s rc7s rc6x).
-		return src
+	if s.SelfCapture() {
+		return s.Dest()
 	}
-	dest := s.Dest()
-	if dest.Trap() {
-		// Default self capture (Dc5n Dc6x, Dc5n Dc6x rc4n).
-		return dest
+	if s.SacrificesMaterial() {
+		if v := s.Src().AdjacentTrap(); v.Valid() {
+			return v
+		}
+		panic(fmt.Sprintf("bad push: %v", s.GoString()))
 	}
-	alt := s.Alt()
-	if alt.Trap() {
-		// Push to trap on alt.
-		// (e.g. rc5n rc6x Dc4n, rc5n rc6x Dd5w).
-		return alt
+	switch s.Kind() {
+	case KindPush:
+		if s.DirectCapture() {
+			return s.Alt()
+		}
+		// Indirect capture:
+		if v := s.Dest().AdjacentTrap(); v.Valid() {
+			return v
+		}
+		panic(fmt.Sprintf("bad push: %v", s.GoString()))
+	case KindPull:
+		if s.DirectCapture() {
+			return s.Src()
+		}
+		// Indirect capture:
+		if v := s.Alt().AdjacentTrap(); v.Valid() {
+			return v
+		}
+		panic(fmt.Sprintf("bad pull: %v", s.GoString()))
+	default:
+		if s.IndirectCapture() {
+			if v := s.Src().AdjacentTrap(); v.Valid() {
+				return v
+			}
+		}
+		panic(fmt.Sprintf("bad default: %v", s.GoString()))
 	}
-	if v := src.AdjacentTrap(); v.Valid() {
-		// Indirect capture abandons a piece on adjacent trap.
-		// (e.g. Dc5e Dc6x, Dc5e Dc6x rb5e, rd5e Dc5e Dc6x).
-		return v
-	}
-	if v := dest.AdjacentTrap(); v.Valid() {
-		// Indirect capture pushes a piece guarding the trap.
-		// (e.g. rc5e rc6x Db5e).
-		return v
-	}
-	if v := alt.AdjacentTrap(); v.Valid() {
-		// Indirect capture pulls a piece guarding the trap.
-		// (e.g. Db5s rc5w rc6x).
-		return v
-	}
-	panic(fmt.Sprintf("bad capture step: %s", s.GoString()))
 }
 
 // Pass returns whether the step passes the turn.

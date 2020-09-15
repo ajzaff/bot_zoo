@@ -424,10 +424,10 @@ func (e *Engine) search(nt nodeType, p *Pos, stack *[]Stack, stepList *StepList,
 
 		if value > alpha {
 			alpha = value
-			tableStep = step
+			bestStep = step
 
 			// Update PV.
-			if pv {
+			if pv && bestStep.Kind() != KindInvalid {
 				var pv []Step
 				if bestStep.Kind() != KindInvalid {
 					(*stack)[depth].Step = bestStep
@@ -438,7 +438,6 @@ func (e *Engine) search(nt nodeType, p *Pos, stack *[]Stack, stepList *StepList,
 				}
 				(*stack)[depth].PV = pv
 			}
-
 		}
 		if alpha >= beta {
 			break // fail-hard cutoff
