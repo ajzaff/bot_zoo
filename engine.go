@@ -15,33 +15,16 @@ type Engine struct {
 	*AEI
 
 	// Search result from the last search.
-	best       searchResult
-	resultChan chan searchResult
+	best       []ExtStep
+	resultChan chan ExtStep
 
 	p *Pos
-
-	// depth != 0 implies fixed depth.
-	// Search won't stop unless a terminal score is achieved.
-	fixedDepth uint8
-
-	// minDepth completed for iterative deepening.
-	minDepth uint8
 
 	// ponder implies we will search until we're asked explicitly to stop.
 	// We don't set the best move after a ponder.
 	// We don't clear the transposition table when we're done.
 	// Ponder will stop terminal score is achieved.
-	ponder     bool
-	lastPonder bool
-
-	// rootOrderNoise applied during search to root moves.
-	// works in conjunction with concurrency to take
-	// advantage of the increased randomness.
-	rootOrderNoise float64
-
-	// Null move depth reduction factor R.
-	// TODO(ajzaff): Use an adaptive value of R.
-	nullMoveR uint8
+	ponder bool
 
 	// concurrency setting of Lazy-SMP search in number of goroutines.
 	concurrency int
@@ -50,6 +33,9 @@ type Engine struct {
 	table    *Table
 	useTable bool
 
+	// controls whether to pick the best move or sample.
+	pickBest bool
+
 	// semi-atomic
 	stopping int32
 	running  int32
@@ -57,14 +43,11 @@ type Engine struct {
 
 func NewEngine(seed int64) *Engine {
 	e := &Engine{
-		timeControl:    makeTimeControl(),
-		p:              NewEmptyPosition(),
-		minDepth:       4,
-		concurrency:    4,
-		rootOrderNoise: 5,
-		nullMoveR:      4,
-		table:          NewTable(),
-		useTable:       true,
+		timeControl: makeTimeControl(),
+		p:           NewEmptyPosition(),
+		concurrency: 4,
+		table:       NewTable(),
+		useTable:    true,
 	}
 	e.AEI = NewAEI(e, nil, os.Stdout)
 	return e
@@ -102,22 +85,6 @@ func (e *Engine) Go() {
 	}
 }
 
-// GoFixed starts a fixed-depth search routine and blocks until it finishes.
-func (e *Engine) GoFixed(fixedDepth uint8) {
-	if atomic.CompareAndSwapInt32(&e.running, 0, 1) {
-		e.ponder = false
-		prevDepth := e.fixedDepth
-		e.fixedDepth = fixedDepth
-		defer func() {
-			if r := recover(); r != nil {
-				panic(fmt.Sprintf("SEARCH_ERROR_FIXED recovered: %v\n", r))
-			}
-		}()
-		e.searchRoot()
-		e.fixedDepth = prevDepth
-	}
-}
-
 // GoPonder starts the ponder search in a new goroutine.
 func (e *Engine) GoPonder() {
 	if atomic.CompareAndSwapInt32(&e.running, 0, 1) {
@@ -152,14 +119,13 @@ func searchRateKNps(nodes int, start time.Time) int64 {
 	return int64(float64(nodes) / (float64(time.Now().Sub(start)) / float64(time.Second)) / 1000)
 }
 
-func (e *Engine) printSearchInfo(nodes int, depth uint8, start time.Time, best searchResult) {
+func (e *Engine) printSearchInfo(nodes int, depth uint8, start time.Time, best ExtStep) {
 	if e.ponder {
 		e.Logf("ponder")
 	}
 	e.writef("info depth %d\n", depth)
 	e.writef("info time %d\n", int(time.Now().Sub(start).Seconds()))
 	e.writef("info score %d\n", best.Value)
-	e.writef("info pv %s\n", MoveString(best.PV))
 	e.writef("info nodes %d\n", nodes)
 	e.Logf("rate %d kN/s", searchRateKNps(nodes, start))
 	e.Logf("hashfull %d", e.table.Hashfull())

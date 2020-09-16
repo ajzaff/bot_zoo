@@ -1,4 +1,4 @@
-module ajz.dev/games/arimaa-zoo
+module github.com/ajzaff/bot_zoo
 
 go 1.14
 

@@ -72,15 +72,6 @@ func (a *AEI) handleOption(text string) error {
 			return err
 		}
 		a.engine.timeInfo.Reserve[Silver] = time.Duration(v) * time.Second
-	// case "gused":
-	// 	v, err := strconv.Atoi(value)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	a.engine.timeInfo. = time.Duration(v) * time.Second
-	// case "sused":
-	// case "moveused":
-	// case "lastmoveused":
 	case "hash":
 		v, err := strconv.Atoi(value)
 		if err != nil {
@@ -88,17 +79,15 @@ func (a *AEI) handleOption(text string) error {
 		}
 		a.Logf("setting hash table size to %d MB", v)
 		a.engine.table.Resize(v)
-	case "depth":
-		v, err := strconv.Atoi(value)
-		if err != nil {
-			return err
-		}
-		if v < 0 {
-			return fmt.Errorf("depth < 0")
-		}
-		a.engine.fixedDepth = uint8(v)
 
-		// Custom Zoo engine options:
+	// Unsupported for now:
+	// 	"gused":
+	// 	"sused":
+	// 	"moveused":
+	// 	"lastmoveused":
+	// 	"depth":
+
+	// Custom Zoo engine options:
 	case "goroutines":
 		v, err := strconv.Atoi(value)
 		if err != nil {
@@ -108,15 +97,6 @@ func (a *AEI) handleOption(text string) error {
 			return fmt.Errorf("goroutines <= 0")
 		}
 		a.engine.concurrency = v
-	case "mindepth":
-		v, err := strconv.Atoi(value)
-		if err != nil {
-			return err
-		}
-		if v < 0 {
-			return fmt.Errorf("depth < 0")
-		}
-		a.engine.minDepth = uint8(v)
 
 	default:
 		return fmt.Errorf("unsupported option: %q", option)

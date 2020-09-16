@@ -16,13 +16,6 @@ func (a *AEI) handleExt(text string) error {
 		pos.moveNum = 2
 		a.engine.SetPos(pos)
 		return nil
-	case text == "movenow":
-		a.engine.GoFixed(8)
-		if move := a.engine.best.Move; len(move) > 0 {
-			a.engine.Pos().Move(move)
-		} else {
-			a.Logf("no best move found in table")
-		}
 	case strings.HasPrefix(text, "unmove"):
 		if err := a.engine.Pos().Unmove(); err != nil {
 			return err
@@ -37,19 +30,14 @@ func (a *AEI) handleExt(text string) error {
 	case text == "depth":
 		a.Logf("%d", a.engine.Pos().Depth())
 		return nil
-	case text == "pv":
-		if len(a.engine.best.PV) > 0 {
-			a.Logf("[%d] %s", a.engine.best.Value, MoveString(a.engine.best.PV))
-		}
-		return nil
 	case strings.HasPrefix(text, "step"):
 		parts := strings.SplitN(text, " ", 2)
 		if len(parts) < 2 {
 			var stepList StepList
 			stepList.Generate(a.engine.Pos())
 			for i := 0; i < stepList.Len(); i++ {
-				step, score := stepList.AtScore(i)
-				a.Logf("[%d] %s", score, step)
+				step := stepList.At(i)
+				a.Logf("[%d] %s", step.Value, step.Step)
 			}
 			return nil
 		}

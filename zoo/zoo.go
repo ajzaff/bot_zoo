@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	zoo "ajz.dev/games/arimaa-zoo"
+	zoo "github.com/ajzaff/bot_zoo"
 )
 
 var (

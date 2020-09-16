@@ -2,7 +2,6 @@ package zoo
 
 import (
 	"sort"
-	"sync"
 )
 
 var (
@@ -16,49 +15,37 @@ type ExtStep struct {
 	Value
 }
 
+func makeExtStep(step Step) ExtStep {
+	return ExtStep{
+		Step:  step,
+		Value: -Inf,
+	}
+}
+
 // StepList implements an efficient data structure for storing scored steps from search lines.
 type StepList struct {
-	steps  []Step
-	scores []Value
-	p      int // start index for sorting a subset of moves
+	steps []ExtStep
+	begin int // begin index for Sort
 }
 
-func (l *StepList) Len() int           { return len(l.steps) - l.p }
-func (a *StepList) Less(i, j int) bool { return a.scores[a.p+i] > a.scores[a.p+j] }
+func (l *StepList) Len() int           { return len(l.steps) - l.begin }
+func (a *StepList) Less(i, j int) bool { return a.steps[a.begin+i].Value > a.steps[a.begin+j].Value }
 func (a *StepList) Swap(i, j int) {
-	a.steps[a.p+i], a.steps[a.p+j] = a.steps[a.p+j], a.steps[a.p+i]
-	a.scores[a.p+i], a.scores[a.p+j] = a.scores[a.p+j], a.scores[a.p+i]
-}
-
-var scorePool = sync.Pool{
-	New: func() interface{} {
-		scores := make([]Value, 0, 64)
-		return &scores
-	},
+	a.steps[a.begin+i], a.steps[a.begin+j] = a.steps[a.begin+j], a.steps[a.begin+i]
 }
 
 // Generate the steps and scores for position p and append the sorted steps to the move list.
 func (l *StepList) Generate(p *Pos) {
-	n := l.Len()
+	begin := l.Len()
 	p.generateSteps(&l.steps)
-	if v := l.Len(); v < cap(l.scores) { // Reslice
-		l.scores = l.scores[:v]
-	} else { // Get from pool
-		slice := scorePool.Get().(*[]Value)
-		if len(*slice) > v-n || v-n >= cap(*slice) {
-			*slice = (*slice)[:v-n]
-		} else { // Reallocate
-			newSlice := make([]Value, v-n)
-			*slice = newSlice
-		}
-		l.scores = append(l.scores, *slice...)
-	}
-	for i := n; i < l.Len(); i++ {
-		l.scores[i] = scoreStep(p, l.steps[i])
-	}
-	l.p = n
+	l.Sort(begin)
+}
+
+// Sorts all steps by value at begin to l.Len().
+func (l *StepList) Sort(begin int) {
+	l.begin = begin
 	sort.Stable(l)
-	l.p = 0
+	l.begin = 0
 }
 
 // Truncate truncates the list to the given length n.
@@ -66,12 +53,12 @@ func (l *StepList) Truncate(n int) {
 	l.steps = l.steps[:n]
 }
 
-func (l *StepList) AtScore(i int) (step Step, score Value) {
-	return l.steps[i], l.scores[i]
+func (l *StepList) At(i int) ExtStep {
+	return l.steps[i]
 }
 
-func (l *StepList) At(i int) Step {
-	return l.steps[i]
+func (l *StepList) SetValue(i int, v Value) {
+	l.steps[i].Value = v
 }
 
 func init() {
@@ -124,9 +111,9 @@ func (p *Pos) capture(presence Bitboard, src, dest Square) Piece {
 // pull step in which the Src, Dest, or Alt is occupied
 // and the Src piece is not frozen, and all captures
 // are completed.
-func (p *Pos) generateSteps(a *[]Step) {
+func (p *Pos) generateSteps(a *[]ExtStep) {
 	if p.stepsLeft < 4 {
-		*a = append(*a, Pass)
+		*a = append(*a, makeExtStep(Pass))
 	}
 	if p.stepsLeft == 0 {
 		return
@@ -154,7 +141,7 @@ func (p *Pos) generateSteps(a *[]Step) {
 		// Generate default step from src to dest with possible capture.
 		for b2 := emptyDB; b2 > 0; b2 &= b2 - 1 {
 			dest := b2.Square()
-			*a = append(*a, MakeDefaultCapture(src, dest, t, p.capture(presence, src, dest)))
+			*a = append(*a, makeExtStep(MakeDefaultCapture(src, dest, t, p.capture(presence, src, dest))))
 		}
 		// Pushing and pulling is not possible.
 		if p.stepsLeft < 2 || t.SameType(GRabbit) {
@@ -166,11 +153,11 @@ func (p *Pos) generateSteps(a *[]Step) {
 			for ab := stepsB[dest] & ^sb & empty; ab > 0; ab &= ab - 1 {
 				alt := ab.Square()
 				if cap := p.capture(presence, src, dest); cap.Valid() {
-					*a = append(*a, MakeAlternateCapture(src, dest, alt, t, p.At(dest), cap))
+					*a = append(*a, makeExtStep(MakeAlternateCapture(src, dest, alt, t, p.At(dest), cap)))
 				} else if cap := p.capture(enemyPresence, dest, alt); cap.Valid() {
-					*a = append(*a, MakeAlternateCapture(src, dest, alt, t, p.At(dest), cap))
+					*a = append(*a, makeExtStep(MakeAlternateCapture(src, dest, alt, t, p.At(dest), cap)))
 				} else {
-					*a = append(*a, MakeAlternate(src, dest, alt, t, p.At(dest)))
+					*a = append(*a, makeExtStep(MakeAlternate(src, dest, alt, t, p.At(dest))))
 				}
 			}
 		}
@@ -180,11 +167,11 @@ func (p *Pos) generateSteps(a *[]Step) {
 				dest := b2.Square()
 				alt := ab.Square()
 				if cap := p.capture(presence, src, dest); cap.Valid() {
-					*a = append(*a, MakeAlternateCapture(src, dest, alt, t, p.At(alt), cap))
+					*a = append(*a, makeExtStep(MakeAlternateCapture(src, dest, alt, t, p.At(alt), cap)))
 				} else if cap := p.capture(enemyPresence, alt, src); cap.Valid() {
-					*a = append(*a, MakeAlternateCapture(src, dest, alt, t, p.At(alt), cap))
+					*a = append(*a, makeExtStep(MakeAlternateCapture(src, dest, alt, t, p.At(alt), cap)))
 				} else {
-					*a = append(*a, MakeAlternate(src, dest, alt, t, p.At(alt)))
+					*a = append(*a, makeExtStep(MakeAlternate(src, dest, alt, t, p.At(alt))))
 				}
 			}
 		}
