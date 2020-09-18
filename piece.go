@@ -34,11 +34,7 @@ func ParsePiece(b byte) (Piece, error) {
 			return Piece(i), nil
 		}
 	}
-	return 0, fmt.Errorf("failed to parse piece: %c", b)
-}
-
-func (p Piece) colorMask() uint8 {
-	return uint8(p & 0b1000)
+	return 0, fmt.Errorf("not valid: %c", b)
 }
 
 // Color returns the color of this piece.
@@ -58,7 +54,7 @@ func (p Piece) SameType(piece Piece) bool {
 
 // SameColor returns true when p and piece have the same Color.
 func (p Piece) SameColor(piece Piece) bool {
-	return p.colorMask() == piece.colorMask()
+	return p&0b1000 == piece&0b1000
 }
 
 // WeakerThan returns true if p is strictly weaker than piece.

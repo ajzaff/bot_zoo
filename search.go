@@ -14,13 +14,7 @@ func (e *Engine) searchRoot() ExtStep {
 
 	defer e.Stop()
 
-	if p.moveNum == 1 {
-		move := e.randomSetup(r)
-		if !e.ponder {
-			e.writef("bestmove %s\n", MoveString(move))
-		}
-		return ExtStep{}
-	}
+	e.table.NewSearch()
 
 	var best []Step
 

@@ -1,7 +1,9 @@
 package zoo
 
+// Bitboard represents
 type Bitboard uint64
 
+// Useful masks.
 const (
 	AllBits  Bitboard = 0xFFFFFFFFFFFFFFFF
 	NotFileA Bitboard = 0xFEFEFEFEFEFEFEFE
@@ -10,21 +12,18 @@ const (
 	NotRank8 Bitboard = 0x00FFFFFFFFFFFFFF
 )
 
+// Trap masks.
 const (
-	TrapC3        = Bitboard(1) << 18
-	TrapF3        = Bitboard(1) << 21
-	TrapC6        = Bitboard(1) << 42
-	TrapF6        = Bitboard(1) << 45
-	Traps         = Bitboard(0x0000240000240000)
-	TrapNeighbors = Traps>>1 | Traps<<1 | Traps>>8 | Traps<<8
+	Traps         Bitboard = 0x0000240000240000
+	TrapNeighbors          = Traps>>1 | Traps<<1 | Traps>>8 | Traps<<8
 )
 
+// Neighbors computes the neighbors of the set bits in b.
 func (b Bitboard) Neighbors() Bitboard {
-	bb := (b & NotFileA) >> 1
-	bb |= (b & NotFileH) << 1
-	bb |= (b & NotRank1) >> 8
-	bb |= (b & NotRank8) << 8
-	return bb
+	return (b&NotFileA)>>1 |
+		(b&NotFileH)<<1 |
+		(b&NotRank1)>>8 |
+		(b&NotRank8)<<8
 }
 
 const debruijn64 Bitboard = 0x03f79d71b4cb0a89
@@ -40,23 +39,23 @@ var bsfIndex64 = [64]Square{
 	25, 14, 19, 9, 13, 8, 7, 6,
 }
 
-// Square returns the LSB Square in the bitboard.
+// Square returns the LSB Square in b.
+// It is an error to pass 0 for b.
 func (b Bitboard) Square() Square {
-	if b == 0 {
-		return invalidSquare
-	}
 	return bsfIndex64[((b&-b)*debruijn64)>>58]
 }
 
-var countTable [256]int16
+var countTable [256]uint8
 
 func init() {
-	for i := int16(1); i < 256; i++ {
+	for i := uint8(1); i < 255; i++ {
 		countTable[i] = countTable[i/2] + (i & 1)
 	}
+	countTable[255] = countTable[127] + 1
 }
 
-func (b Bitboard) Count() int16 {
+// Count returns a count of the number of set bits in b.
+func (b Bitboard) Count() uint8 {
 	return countTable[b&0xff] +
 		countTable[(b>>8)&0xff] +
 		countTable[(b>>16)&0xff] +

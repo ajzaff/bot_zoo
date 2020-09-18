@@ -1,14 +1,5 @@
 package zoo
 
-type Bound uint8
-
-const (
-	BoundNone Bound = iota
-	BoundUpper
-	BoundLower
-	BoundExact
-)
-
 // TableEntry is the transposition table entry.
 // The layout is made as compact as possible to save memory.
 type TableEntry struct {
@@ -16,54 +7,45 @@ type TableEntry struct {
 	Key16 uint16
 	// Value of the entry (16 bits).
 	Value Value
-	// Eval of the entry (16 bits).
-	Eval Value
-	// Depth of the entry (8 bits).
-	Depth uint8
-	// Gen8Bound packs the bound type, PV, and aging parameter (8 bits).
-	Gen8Bound uint8
-	// Step packed into a uint32 (32 bits).
+	// Runs of simulation for the entry divided by 16 (8 bits).
+	Runs uint8
+	// Gen8 packs the aging parameter and PV flag (8 bits).
+	Gen8 uint8
+	// Step packed into a uint16 (16 bits).
 	Step Step
 }
 
+// Clear zeroes the TableEntry and resets to its initial state.
 func (e *TableEntry) Clear() {
 	e.Key16 = 0
 	e.Value = 0
-	e.Eval = 0
-	e.Depth = 0
-	e.Gen8Bound = 0
+	e.Runs = 0
+	e.Gen8 = 0
 	e.Step = 0
 }
 
 // PV returns whether the entry is a PV entry.
 func (e *TableEntry) PV() bool {
-	return e.Gen8Bound&4 != 0
-}
-
-// Bound extracts the bound from this entry.
-func (e *TableEntry) Bound() Bound {
-	return Bound(e.Gen8Bound & 0x3)
+	return e.Gen8&4 != 0
 }
 
 // Save the information into the TableEntry if it is more valuable.
-func (e *TableEntry) Save(key uint64, v, ev Value, pv bool, b Bound, gen, depth uint8, step Step) {
+func (e *TableEntry) Save(key uint64, v Value, pv bool, gen, runs uint8, step Step) {
 	key16 := uint16(key >> 48)
-	if step.Kind() != KindInvalid || key16 != e.Key16 {
+	if step != 0 || key16 != e.Key16 {
 		// Preserve step information. Only reset step if valid
 		// and on key change (modulo Type 1 key errors).
 		e.Step = step
 	}
 	// Overwrite more valuable entries.
-	if b == BoundExact || key16 != e.Key16 || depth > e.Depth {
+	if key16 != e.Key16 || runs > e.Runs {
 		e.Key16 = key16
 		e.Value = v
-		e.Eval = ev
 		g := gen
 		if pv {
 			g |= 1 << 2
 		}
-		e.Gen8Bound = g | uint8(b)
-		e.Depth = depth
+		e.Gen8 = g
 	}
 }
 
@@ -120,6 +102,12 @@ func (t *Table) Resize(mbSize int) {
 	t.table = make([]tableCluster, t.clusterCount)
 }
 
+// GlobalAge returns the global cyclic age parameter of the table which affects how entries are evicted.
+func (t *Table) GlobalAge() uint8 {
+	return t.gen8
+}
+
+// NewSearch is called before a new search to increase the GlobalAge of the table.
 func (t *Table) NewSearch() {
 	t.gen8 += 8
 }
@@ -133,7 +121,7 @@ func (t *Table) Probe(key uint64) (e *TableEntry, found bool) {
 	for i := 0; i < clusterSize; i++ {
 		e := &cluster.entries[i]
 		if e.Key16 == key16 {
-			e.Gen8Bound = uint8(t.gen8 | (e.Gen8Bound & 0x7)) // Refresh
+			e.Gen8 = uint8(t.gen8 | (e.Gen8 & 0x7)) // Refresh
 			return e, true
 		}
 	}
@@ -144,8 +132,8 @@ func (t *Table) Probe(key uint64) (e *TableEntry, found bool) {
 		e := &cluster.entries[i]
 		// Pick least valuable entry whilst handling cyclic generation overflow.
 		// See stockfish/tt.cpp for explaination.
-		if e.Depth-((uint8(263+int(t.gen8))-e.Gen8Bound)&0xf8) >
-			e.Depth-((uint8(263+int(t.gen8))-e.Gen8Bound)&0xf8) {
+		if replace.Runs-((uint8(263+int(t.gen8))-e.Gen8)&0xf8) >
+			e.Runs-((uint8(263+int(t.gen8))-e.Gen8)&0xf8) {
 			replace = e
 		}
 	}
@@ -157,7 +145,7 @@ func (t *Table) Hashfull() int {
 	cnt := 0
 	for i := 0; i < 1000/clusterSize; i++ {
 		for j := 0; j < clusterSize; j++ {
-			if t.table[i].entries[j].Gen8Bound&0xf8 == t.gen8 {
+			if t.table[i].entries[j].Gen8&0xf8 == t.gen8 {
 				cnt++
 			}
 		}

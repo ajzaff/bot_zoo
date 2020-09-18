@@ -14,62 +14,59 @@ func TestParseMove(t *testing.T) {
 	}{{
 		input: "Da4n",
 		want: []Step{
-			MakeDefault(ParseSquare("a4"), ParseSquare("a5"), GDog),
-			Pass,
+			MakeStep(GDog, A4, A5),
 		},
 	}, {
 		input: "Da4n Da5e",
 		want: []Step{
-			MakeDefault(ParseSquare("a4"), ParseSquare("a5"), GDog),
-			MakeDefault(ParseSquare("a5"), ParseSquare("b5"), GDog),
-			Pass,
+			MakeStep(GDog, A4, A5),
+			MakeStep(GDog, A5, B5),
 		},
 	}, {
 		input: "Da4n Ra3n",
 		want: []Step{
-			MakeDefault(ParseSquare("a4"), ParseSquare("a5"), GDog),
-			MakeDefault(ParseSquare("a3"), ParseSquare("a4"), GRabbit),
-			Pass,
+			MakeStep(GDog, A4, A5),
+			MakeStep(GRabbit, A3, A4),
 		},
 	}, {
 		input: "Da4n ra3n",
 		want: []Step{
-			MakeAlternate(ParseSquare("a4"), ParseSquare("a5"), ParseSquare("a3"), GDog, SRabbit),
-			Pass,
+			MakeStep(GDog, A4, A5),
+			MakeStep(SRabbit, A3, A4),
 		},
 	}, {
 		input: "Dh3s Rh2n Rg1e Rf1e",
 		want: []Step{
-			MakeDefault(ParseSquare("h3"), ParseSquare("h2"), GDog),
-			MakeDefault(ParseSquare("h2"), ParseSquare("h3"), GRabbit),
-			MakeDefault(ParseSquare("g1"), ParseSquare("h1"), GRabbit),
-			MakeDefault(ParseSquare("f1"), ParseSquare("g1"), GRabbit),
-			Pass,
+			MakeStep(GDog, H3, H2),
+			MakeStep(GRabbit, H2, H3),
+			MakeStep(GRabbit, G1, H1),
+			MakeStep(GRabbit, F1, G1),
 		},
 	}, {
 		input: "Md2n Dh2n Md3n Md4s",
 		want: []Step{
-			MakeDefault(ParseSquare("d2"), ParseSquare("d3"), GCamel),
-			MakeDefault(ParseSquare("h2"), ParseSquare("h3"), GDog),
-			MakeDefault(ParseSquare("d3"), ParseSquare("d4"), GCamel),
-			MakeDefault(ParseSquare("d4"), ParseSquare("d3"), GCamel),
-			Pass,
+			MakeStep(GCamel, D2, D3),
+			MakeStep(GDog, H2, H3),
+			MakeStep(GCamel, D3, D4),
+			MakeStep(GCamel, D4, D3),
 		},
 	}, {
 		input: "Hc4s rc5s Hc3w rc4s rc3x",
 		want: []Step{
-			MakeAlternate(ParseSquare("c4"), ParseSquare("c3"), ParseSquare("c5"), GHorse, SRabbit),
-			MakeAlternateCapture(ParseSquare("c3"), ParseSquare("b3"), ParseSquare("c4"), GHorse, SRabbit, SRabbit),
-			Pass,
+			MakeStep(GHorse, C4, C3),
+			MakeStep(SRabbit, C5, C4),
+			MakeStep(GHorse, C3, B3),
+			MakeStep(SRabbit, C4, C3),
+			MakeCapture(SRabbit, C3),
 		},
 	}, {
 		input: "Rf1w Rg1w Hg2w Hb3w Cc3x",
 		want: []Step{
-			MakeDefault(ParseSquare("f1"), ParseSquare("e1"), GRabbit),
-			MakeDefault(ParseSquare("g1"), ParseSquare("f1"), GRabbit),
-			MakeDefault(ParseSquare("g2"), ParseSquare("f2"), GHorse),
-			MakeDefaultCapture(ParseSquare("b3"), ParseSquare("a3"), GHorse, GCat),
-			Pass,
+			MakeStep(GRabbit, F1, E1),
+			MakeStep(GRabbit, G1, F1),
+			MakeStep(GHorse, G2, F2),
+			MakeStep(GHorse, B3, A3),
+			MakeCapture(GCat, C3),
 		},
 	}} {
 		t.Run(tc.input, func(t *testing.T) {

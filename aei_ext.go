@@ -5,9 +5,9 @@ import (
 	"strings"
 )
 
-func (e *Engine) ExecuteExtendedCommand(text string) error {
+func (e *Engine) executeExtendedCommand(text string) error {
 	switch {
-	case text == "new", text == "newstandard":
+	case text == "new":
 		e.NewGame()
 		pos, err := ParseShortPosition(posStandard)
 		if err != nil {

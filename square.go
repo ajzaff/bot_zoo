@@ -90,17 +90,34 @@ func (i Square) Rank() uint8 {
 	return uint8(i >> 3)
 }
 
-// Rank returns the file of i assuming i is Valid.
+// File returns the file of i assuming i is Valid.
 func (i Square) File() uint8 {
-	return uint8(i % 8)
+	return uint8(i & 0b111)
 }
 
 // Add returns the Square at `i + d` if valid.
+// Adding DirNone results in an invalid Square.
 func (i Square) Add(d Direction) Square {
 	if i.Valid() {
-		// TODO(ajzaff): Implement Add.
+		if v := i + Square(d.Value()); v.Valid() && (i.Rank() == v.Rank()) != (i.File() == v.File()) {
+			return v
+		}
 	}
 	return 64
+}
+
+// Sub returns the result of `i - j` or DirNone.
+// It returns DirNone if either i or j is invalid.
+func (i Square) Sub(j Square) Direction {
+	if i.Valid() && j.Valid() {
+		v := int8(i) - int8(j)
+		for d, x := range dirValues {
+			if v == x {
+				return Direction(d)
+			}
+		}
+	}
+	return DirNone
 }
 
 // Valid returns true if i is a valid square on the board.
@@ -144,22 +161,23 @@ type Direction int8
 
 // Direction constants.
 const (
-	dirNone Direction = iota
-	north
-	east
-	south
-	west
+	DirNone Direction = iota
+	North
+	East
+	South
+	West
 )
 
 const dirBytes = "xnsew"
 
-func parseDir(b byte) Direction {
+// ParseDir parses the Direction from print representation or returns DirNone.
+func ParseDir(b byte) Direction {
 	for i, x := range []byte(dirBytes) {
 		if b == x {
 			return Direction(i)
 		}
 	}
-	return 0
+	return DirNone
 }
 
 // Valid returns true if d is a valid cardinal direction.
@@ -169,7 +187,7 @@ func (d Direction) Valid() bool {
 
 var dirValues = []int8{0, 8, 1, -8, -1}
 
-// Value returns the left-shift value of this direction.
+// Value returns the offset value of this direction.
 func (d Direction) Value() int8 {
 	if d.Valid() {
 		return dirValues[d]
