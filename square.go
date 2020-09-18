@@ -77,29 +77,10 @@ func (i Square) String() string {
 
 const invalidSquare Square = 255
 
-type Delta int8
+// SquareDelta represents a move direction.
+type SquareDelta int8
 
-const (
-	invalidDelta       = 0
-	invalidPackedDelta = 7
-)
-
-func MakeDeltaFromPacked(p uint8) Delta {
-	switch p {
-	case 0:
-		return +8
-	case 1:
-		return -8
-	case 2:
-		return +1
-	case 3:
-		return -1
-	default:
-		return invalidDelta
-	}
-}
-
-func MakeDeltaFromByte(b byte) Delta {
+func ParseSquareDeltaFromByte(b byte) SquareDelta {
 	switch b {
 	case 'n':
 		return +8
@@ -112,6 +93,33 @@ func MakeDeltaFromByte(b byte) Delta {
 	default:
 		return 0
 	}
+}
+
+// SquareDelta constants.
+const (
+	DeltaNone SquareDelta = 0
+	North     SquareDelta = 8
+	East      SquareDelta = 1
+	South                 = -North
+	West                  = -East
+)
+
+// packedSquareDelta is a 3-bit packed SquareDelta.
+type packedSquareDelta uint8
+
+var packedDeltaTable = []SquareDelta{
+	DeltaNone,
+	North,
+	East,
+	South,
+	West,
+}
+
+func (v packedSquareDelta) squareDelta() SquareDelta {
+	if v <= 4 {
+		return packedDeltaTable[v]
+	}
+	return 0
 }
 
 func (d Delta) Packed() uint8 {
