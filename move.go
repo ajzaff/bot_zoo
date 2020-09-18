@@ -55,8 +55,6 @@ func (m Move) String() string {
 	return sb.String()
 }
 
-var stepPattern = regexp.MustCompile(`([rcdhmeRCDHME])([a-f][1-8])([nsew])(?: ([rcdhmeRCDHME])([a-f][1-8])x)?`)
-
 // Step represents a compact step as used in the engine.
 // It uses the following 16-bit layout (little endian):
 //	piece           4 bits
@@ -76,6 +74,8 @@ func MakeStep(piece Piece, src Square, delta SquareDelta) Step {
 	return MakeCaptureStep(piece, src, delta, 7)
 }
 
+var stepPattern = regexp.MustCompile(`([rcdhmeRCDHME])([a-f][1-8])([nsew])(?: ([rcdhmeRCDHME])([a-f][1-8])x)?`)
+
 // ParseStep parses the step and possible capture.
 // It does not attempt to validate the legality of the step.
 func ParseStep(s string) (Step, error) {
@@ -91,6 +91,9 @@ func ParseStep(s string) (Step, error) {
 		return err
 	}
 	src, err := ParseSquare(s[matches[3]:matches[4]])
+	if err != nil {
+		return err
+	}
 }
 
 // appendString appends the Step string to the builder.
