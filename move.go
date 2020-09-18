@@ -13,11 +13,12 @@ type Move []Step
 // It does not attempt to validate the legality of the move.
 func ParseMove(s string) (Move, error) {
 	var move Move
-	for len(s) > 0 {
-		step, err := ParseStep(s)
+	for i := 0; i < len(s); {
+		step, err := ParseStep(s[i:])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to parse move %q: at %q: %v", s, s[i:], err)
 		}
+		i += step.strLen()
 		move = append(move, step)
 	}
 	return move, nil
@@ -66,7 +67,8 @@ func (m Move) String() string {
 // Src is always legal in the packed encoding.
 type Step uint16
 
-func MakeCaptureStep(piece Piece, src Square, delta, cap Delta) Step {
+func MakeCaptureStep(piece Piece, src Square, delta, cap SquareDelta) Step {
+	piece.Packed()
 	return 0
 }
 

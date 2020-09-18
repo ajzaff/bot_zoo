@@ -1,52 +1,119 @@
 package zoo
 
-import (
-	"fmt"
-	"strconv"
-)
+import "fmt"
 
-const (
-	ranks = "12345678"
-	files = "abcdefgh"
-)
-
+// Square represents a square on the Arimaa board as an ordinal index in the range 0-63.
 type Square uint8
 
-func parseSquare(s string) Square {
-	return Square(s[0] - 'a' + 8*(s[1]-'1'))
-}
+// Square constants.
+const (
+	A1 Square = iota
+	B1
+	C1
+	D1
+	E1
+	F1
+	G1
+	H1
+	A2
+	B2
+	C2
+	D2
+	E2
+	F2
+	G2
+	H2
+	A3
+	B3
+	C3
+	D3
+	E3
+	F3
+	G3
+	H3
+	A4
+	B4
+	C4
+	D4
+	E4
+	F4
+	G4
+	H4
+	A5
+	B5
+	C5
+	D5
+	E5
+	F5
+	G5
+	H5
+	A6
+	B6
+	C6
+	D6
+	E6
+	F6
+	G6
+	H6
+	A7
+	B7
+	C7
+	D7
+	E7
+	F7
+	G7
+	H7
+	A8
+	B8
+	C8
+	D8
+	E8
+	F8
+	G8
+	H8
+)
 
+// ParseSquare parses the 2-byte square string or returns an error.
 func ParseSquare(s string) (Square, error) {
-	return parseSquare(s), nil
+	if len(s) != 2 {
+		return 64, fmt.Errorf("wrong number of bytes: %v", s)
+	}
+	r, f := s[1]-'1', s[0]-'a'
+	if r < 0 || r > 7 || f < 0 || f > 7 {
+		return 64, fmt.Errorf("bad rank or file: %v", s)
+	}
+	return Square(8*r + f), nil
 }
 
+// Rank returns the rank of i assuming i is Valid.
+func (i Square) Rank() uint8 {
+	return uint8(i >> 3)
+}
+
+// Rank returns the file of i assuming i is Valid.
+func (i Square) File() uint8 {
+	return uint8(i % 8)
+}
+
+// Add returns the Square at `i + d` if valid.
+func (i Square) Add(d Direction) Square {
+	if i.Valid() {
+		// TODO(ajzaff): Implement Add.
+	}
+	return 64
+}
+
+// Valid returns true if i is a valid square on the board.
 func (i Square) Valid() bool {
 	return i < 64
 }
 
+// Bitboard returns a bitboard mask for i.
 func (i Square) Bitboard() Bitboard {
 	return Bitboard(1) << i
 }
 
-func (src Square) Delta(dest Square) Delta {
-	if src == dest {
-		return 0
-	}
-	sb, db := src.Bitboard(), dest.Bitboard()
-	switch {
-	case sb&NotFileA>>1 == db:
-		return -1
-	case sb&NotRank1>>8 == db:
-		return -8
-	case sb&NotFileH<<1 == db:
-		return 1
-	case sb&NotRank8<<8 == db:
-		return 8
-	default:
-		return 0
-	}
-}
-
+// AdjacentTrap returns the Trap Square adjacent to i if present.
 func (i Square) AdjacentTrap() Square {
 	if i.Valid() {
 		b := stepsB[i] & Traps
@@ -54,132 +121,66 @@ func (i Square) AdjacentTrap() Square {
 			return b.Square()
 		}
 	}
-	return invalidSquare
+	return 64
 }
 
+// Trap returns true if i is a trap Square.
 func (i Square) Trap() bool {
-	return i == 18 || i == 21 || i == 42 || i == 45
+	return i == C3 || i == F6 || i == C6 || i == F3
 }
 
-func (i Square) AdjacentTo(j Square) bool {
-	return i.Valid() && j.Valid() && i.Delta(j) != 0
-}
+const squareNames = "a1b1c1d1e1f1g1h1a2b2c2d2e2f2g2h2a3b3c3d3e3f3g3h3a4b4c4d4e4f4g4h4a5b5c5d5e5f5g5h5a6b6c6d6e6f6g6h6a7b7c7d7e7f7g7h7a8b8c8d8e8f8g8h8"
 
+// String returns the string representation of this square if valid.
 func (i Square) String() string {
 	if i.Valid() {
-		return string([]byte{
-			files[i%8],
-			ranks[i/8],
-		})
+		return squareNames[2*i : 2*i+2]
 	}
-	return strconv.Itoa(int(i))
+	return ""
 }
 
-const invalidSquare Square = 255
+// Direction represents a move direction in Arimaa.
+type Direction int8
 
-// SquareDelta represents a move direction.
-type SquareDelta int8
-
-func ParseSquareDeltaFromByte(b byte) SquareDelta {
-	switch b {
-	case 'n':
-		return +8
-	case 's':
-		return -8
-	case 'e':
-		return +1
-	case 'w':
-		return -1
-	default:
-		return 0
-	}
-}
-
-// SquareDelta constants.
+// Direction constants.
 const (
-	DeltaNone SquareDelta = 0
-	North     SquareDelta = 8
-	East      SquareDelta = 1
-	South                 = -North
-	West                  = -East
+	dirNone Direction = iota
+	north
+	east
+	south
+	west
 )
 
-// packedSquareDelta is a 3-bit packed SquareDelta.
-type packedSquareDelta uint8
+const dirBytes = "xnsew"
 
-var packedDeltaTable = []SquareDelta{
-	DeltaNone,
-	North,
-	East,
-	South,
-	West,
-}
-
-func (v packedSquareDelta) squareDelta() SquareDelta {
-	if v <= 4 {
-		return packedDeltaTable[v]
+func parseDir(b byte) Direction {
+	for i, x := range []byte(dirBytes) {
+		if b == x {
+			return Direction(i)
+		}
 	}
 	return 0
 }
 
-func (d Delta) Packed() uint8 {
-	switch d {
-	case +8:
-		return 0
-	case -8:
-		return 1
-	case 1:
-		return 2
-	case -1:
-		return 3
-	default:
-		return invalidPackedDelta
-	}
+// Valid returns true if d is a valid cardinal direction.
+func (d Direction) Valid() bool {
+	return d < 5 && d != 0
 }
 
-func (d Delta) String() string {
-	switch d {
-	case +8:
-		return "n"
-	case -8:
-		return "s"
-	case 1:
-		return "e"
-	case -1:
-		return "w"
-	default:
-		return fmt.Sprintf("?(%d)", d)
+var dirValues = []int8{0, 8, 1, -8, -1}
+
+// Value returns the left-shift value of this direction.
+func (d Direction) Value() int8 {
+	if d.Valid() {
+		return dirValues[d]
 	}
+	return 0
 }
 
-func (i Square) Translate(d Delta) Square {
-	if !i.Valid() {
-		return invalidSquare
+// Byte returns the printable byte for d.
+func (d Direction) Byte() byte {
+	if d.Valid() {
+		return dirBytes[d]
 	}
-	switch d {
-	case 0:
-		return i
-	case -1:
-		if i%8 == 0 {
-			return invalidSquare
-		}
-		return i - 1
-	case 1:
-		if i%8 == 7 {
-			return invalidSquare
-		}
-		return i + 1
-	case -8:
-		if i/8 == 0 {
-			return invalidSquare
-		}
-		return i - 8
-	case 8:
-		if i/8 == 7 {
-			return invalidSquare
-		}
-		return i + 8
-	default:
-		return invalidSquare
-	}
+	return 0
 }
