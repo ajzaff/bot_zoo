@@ -3,89 +3,16 @@ package zoo
 import (
 	"bufio"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
-func splitMove(data []byte, atEOF bool) (advance int, token []byte, err error) {
-	// A maximum of 2 split indices for a sequence with 2 steps and a capture.
-	// A third split corresponds to end of the advance return value.
-	var indices []int
+// Move represents a sequence of up to 4 steps comprising of a single turn.
+type Move []Step
 
-	for i, p := 0, 0; i < 3; i++ {
-		for ; p < len(data) && data[p] == ' '; p++ {
-		}
-		indices = append(indices, p)
-		if p == len(data) {
-			break
-		}
-		for ; p < len(data) && data[p] != ' '; p++ {
-		}
-		indices = append(indices, p)
-		if p == len(data) {
-			break
-		}
-	}
-	// Check if there's no step to return:
-	if len(indices) < 2 {
-		if atEOF {
-			return len(data), nil, nil
-		}
-		// We need more data:
-		return 0, nil, nil
-	}
-	// Check if first move is a setup move and if so return it:
-	if stepLen := indices[1] - indices[0]; stepLen <= 3 {
-		return indices[1], data[indices[0]:indices[1]], nil
-	}
-	// Handle a single step left:
-	if len(indices) < 4 {
-		if atEOF {
-			return indices[1], data[indices[0]:indices[1]], nil
-		}
-		// We need more data:
-		return 0, nil, nil
-	}
-	// Check the next steps to see if they go together.
-	// Steps go together if they are a related push, pull or capture.
-	// The following patterns are possible:
-	//	push PUSH
-	//	PULL pull
-	//	push PUSH CAP
-	//	PULL pull CAP
-	p1, _ := ParsePiece(data[indices[0]])
-	p2, _ := ParsePiece(data[indices[2]])
-	s1 := ParseSquare(string(data[indices[0]+1 : indices[0]+3]))
-	s2 := ParseSquare(string(data[indices[2]+1 : indices[2]+3]))
-	d1 := s1.Translate(MakeDeltaFromByte(data[indices[0]+3]))
-	d2 := s2.Translate(MakeDeltaFromByte(data[indices[2]+3]))
-	cap := data[indices[2]+3] == 'x'
-
-	// The do not match the pattern and should not go together:
-	if !cap && (p1.SameColor(p2) || p1.SameType(p2) || (p1.WeakerThan(p2) && s2 != d1) || (!p1.WeakerThan(p2) && s1 != d2)) {
-		return indices[1], data[indices[0]:indices[1]], nil
-	}
-
-	if len(indices) < 6 {
-		// There cannot be two captures in a row so we know the sequence ends.
-		if cap || atEOF {
-			return indices[3], data[indices[0]:indices[3]], nil
-		}
-		// The push/pull may lead to a capture and we need more data:
-		return 0, nil, nil
-	}
-
-	// The push/pull leads to a capture:
-	if cap2 := data[indices[4]+3] == 'x'; cap2 {
-		return indices[5], data[indices[0]:indices[5]], nil
-	}
-
-	// Return the push/pull sequence
-	return indices[3], data[indices[0]:indices[3]], nil
-}
-
-// ParseMove parses the move string into steps
-// and checks for validity but not legality.
-func ParseMove(s string) ([]Step, error) {
+// ParseMove parses the move and returns any errors.
+// It does not attempt to validate the legality of the move.
+func ParseMove(s string) (Move, error) {
 	var (
 		sc  = bufio.NewScanner(strings.NewReader(s))
 		res []Step
@@ -103,6 +30,79 @@ func ParseMove(s string) ([]Step, error) {
 	}
 	res = append(res, Pass)
 	return res, nil
+}
+
+// Len returns the length of the Move m in number of steps.
+func (m Move) Len() int {
+	return len(m)
+}
+
+// appendString appends the move to the builder.
+// This is useful for formatting PV lines.
+func (m Move) appendString(sb *strings.Builder) {
+	for i, step := range m {
+		if i > 0 {
+			sb.WriteByte(' ')
+		}
+		step.appendString(sb)
+	}
+}
+
+// String returns a string representation of the Move.
+func (m Move) String() string {
+	var sb strings.Builder
+	m.appendString(&sb)
+	return sb.String()
+}
+
+var stepPattern = regexp.MustCompile(`([rcdhmeRCDHME])([a-f][1-8])([nsew])(?: ([rcdhmeRCDHME])([a-f][1-8])x)?`)
+
+// Step represents a compact step as used in the engine.
+// It uses the following 16-bit layout (little endian):
+//	piece           4 bits
+//	src (packed)    6 bits
+//	dest delta      3 bits
+//	capture delta   3 bits
+// The zero value is the canonical invalid Step value.
+// Capture delta is relative to src.
+// Src is always legal in the packed encoding.
+type Step uint16
+
+func MakeCaptureStep(piece Piece, src Square, delta, cap Delta) Step {
+	return 0
+}
+
+func MakeStep(piece Piece, src Square, delta Delta) Step {
+	return MakeCaptureStep(piece, src, delta, 7)
+}
+
+// ParseStep parses the step and possible capture.
+// It does not attempt to validate the legality of the step.
+func ParseStep(s string) (Step, error) {
+	matches := stepPattern.FindStringSubmatchIndex(s)
+	if matches == nil {
+		return 0, fmt.Errorf("does not match /%s/")
+	}
+	if matches[0] != 0 {
+		return 0, fmt.Errorf("unexpected string at start: %q", s[:matches[0]])
+	}
+	piece, err := ParsePiece(s[matches[2]])
+	if err != nil {
+		return err
+	}
+	src, err := ParseSquare(s[matches[3]:matches[4]])
+}
+
+// appendString appends the Step string to the builder.
+func (s Step) appendString(sb *strings.Builder) {
+
+}
+
+// String returns the String representation of the Step and possible capture.
+func (s Step) String() string {
+	var sb strings.Builder
+	s.appendString(&sb)
+	return sb.String()
 }
 
 // MoveString outputs a legal move string.
@@ -141,19 +141,6 @@ func MoveEqual(a, b []Step) bool {
 	}
 	return true
 }
-
-// Step represents a compact step as used in the engine.
-// It uses the following layout (little endian):
-//	src (8 bits)
-//	dest delta (3 bits)
-//	alt (8 bits)
-//	piece1 (4 bits)
-//	piece2 (4 bits)
-//	capture piece (4 bits)
-// A Pass step has all the capture bits set, which would
-// correspond to an illegal piece. The canonical invalid
-// step has all bits set.
-type Step uint32
 
 // MakeStep makes a step with all given parameters.
 func MakeStep(src, dest, alt Square, p1, p2, cap Piece) Step {

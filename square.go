@@ -12,8 +12,12 @@ const (
 
 type Square uint8
 
-func ParseSquare(s string) Square {
+func parseSquare(s string) Square {
 	return Square(s[0] - 'a' + 8*(s[1]-'1'))
+}
+
+func ParseSquare(s string) (Square, error) {
+	return parseSquare(s), nil
 }
 
 func (i Square) Valid() bool {
