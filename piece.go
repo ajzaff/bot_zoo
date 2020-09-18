@@ -2,64 +2,11 @@ package zoo
 
 import "fmt"
 
-type Color int8
+// Piece represents a game piece as a byte.
+// Only 3 least-significant bits are used.
+type Piece uint8
 
-const (
-	Gold Color = iota
-	Silver
-)
-const (
-	colorMask   = 8
-	decolorMask = 7
-)
-
-func ParseColor(s string) Color {
-	switch s {
-	case "w", "g":
-		return Gold
-	case "b", "s":
-		return Silver
-	default:
-		return -1
-	}
-}
-
-func (c Color) Valid() bool {
-	return c == Gold || c == Silver
-}
-
-func (c Color) Opposite() Color {
-	return c ^ 1
-}
-
-func (c Color) PieceMask() Piece {
-	return Piece(c << 3)
-}
-
-func (c Color) Byte() byte {
-	if c == Gold {
-		return 'g'
-	}
-	return 's'
-}
-
-func (c Color) String() string {
-	return string(c.Byte())
-}
-
-type Piece int8
-
-const pchars = " RCDHMExxrcdhme"
-
-func ParsePiece(b byte) (Piece, error) {
-	for i, x := range []byte(pchars) {
-		if b == x {
-			return Piece(i), nil
-		}
-	}
-	return Empty, fmt.Errorf("input does not match /^[%s]$/", pchars)
-}
-
+// Piece constants.
 const (
 	Empty Piece = iota
 	GRabbit
@@ -68,10 +15,9 @@ const (
 	GHorse
 	GCamel
 	GElephant
-)
-
-const (
-	SRabbit Piece = iota + 9
+	_
+	_
+	SRabbit
 	SCat
 	SDog
 	SHorse
@@ -79,58 +25,97 @@ const (
 	SElephant
 )
 
+const pieceBytes = " RCDHMExxrcdhme"
+
+// ParsePiece parses the byte to a Piece or returns an error.
+func ParsePiece(b byte) (Piece, error) {
+	for i, x := range []byte(pieceBytes) {
+		if b == x {
+			return Piece(i), nil
+		}
+	}
+	return 0, fmt.Errorf("failed to parse piece: %c", b)
+}
+
+func (p Piece) colorMask() uint8 {
+	return uint8(p & 0b1000)
+}
+
+// Color returns the color of this piece.
 func (p Piece) Color() Color {
-	if int8(p)&colorMask == 0 {
-		return Gold
-	}
-	return Silver
+	return Color((p & 0b1000) >> 3)
 }
 
-func (p Piece) Decolor() Piece {
-	return p & Piece(decolorMask)
+// RemoveColor returns the Piece p if it were Gold.
+func (p Piece) RemoveColor() Piece {
+	return p & 0b0111
 }
 
-func (p Piece) MakeColor(c Color) Piece {
-	return p&Piece(decolorMask) | c.PieceMask()
-}
-
+// SameType returns true when p and piece have the same Piece type.
 func (p Piece) SameType(piece Piece) bool {
-	return int8(p)&decolorMask == int8(piece)&decolorMask
+	return p.RemoveColor() == piece.RemoveColor()
 }
 
-func (p Piece) HasColor() bool {
-	return p > 0 && p < 15 && p != 7 && p != 8
-}
-
+// SameColor returns true when p and piece have the same Color.
 func (p Piece) SameColor(piece Piece) bool {
-	return p.HasColor() && piece.HasColor() && int8(p)&colorMask == int8(piece)&colorMask
+	return p.colorMask() == piece.colorMask()
 }
 
+// WeakerThan returns true if p is strictly weaker than piece.
 func (p Piece) WeakerThan(piece Piece) bool {
-	return int8(p)&decolorMask < int8(piece)&decolorMask
+	return p.RemoveColor() < piece.RemoveColor()
 }
 
+// Valid returns whether p is a valid piece.
 func (p Piece) Valid() bool {
-	return p >= 0 && p < 15 && p != 7 && p != 8
+	return p < 15 && p != 0 && p != 7 && p != 8
 }
 
-func (p Piece) validForPrint() bool {
-	return p >= 0 && p < 15
-}
-
+// Byte returns the printable representation of the Piece.
 func (p Piece) Byte() byte {
-	if p.validForPrint() {
-		return pchars[p]
+	if p < 15 {
+		return pieceBytes[p]
 	}
-	if p < 0 {
-		return ' '
-	}
-	return '?'
+	return 0
 }
 
-func (p Piece) String() string {
-	if p.validForPrint() {
-		return string(p.Byte())
+// Color defines the piece color enum.
+type Color uint8
+
+// Color constants.
+const (
+	Gold Color = iota
+	Silver
+)
+
+// ParseColor parses a color byte or returns an error.
+// It supports the legacy white and black colors.
+func ParseColor(s byte) (Color, error) {
+	switch s {
+	case 'w', 'g':
+		return Gold, nil
+	case 'b', 's':
+		return Silver, nil
+	default:
+		return 0, fmt.Errorf("failed to parse color: %c", s)
 	}
-	return fmt.Sprintf("Piece(%d)", p)
+}
+
+// Valid returns true if c is either Gold or Silver.
+func (c Color) Valid() bool {
+	return c <= Silver
+}
+
+// Opposite returns the opposite color of c.
+// This method assumes c is a Valid Color.
+func (c Color) Opposite() Color {
+	return c ^ 1
+}
+
+// Byte returns the byte for this Color assuming c is Valid.
+func (c Color) Byte() byte {
+	if c.Valid() {
+		return "gs"[c]
+	}
+	return 0
 }
