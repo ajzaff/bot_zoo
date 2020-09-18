@@ -1,119 +1,63 @@
 package zoo
 
 import (
+	"fmt"
 	"regexp"
+	"strconv"
+	"strings"
 )
 
-type Options struct {
-	Verbose    bool
-	Extensions bool
-}
+// Options is a map that stores the parsed results of `setoption` AEI commands.
+type Options map[string]interface{}
 
-func (o *Options) SetVerbose(verbose bool) {
-	o.Verbose = verbose
-}
+var setOptionPattern = regexp.MustCompile(`^name (\S+) value (\S+)$`)
 
-func (o *Options) EnableExtensions(extensions bool) {
-	o.Extensions = extensions
-}
-
-func (o *Options) SetOption(name, value interface{}) error {
+// ExecuteSetOption parses the setoption arguments and attempts to call the setoption handler or returns an error.
+func (o *Options) ExecuteSetOption(s string) error {
+	matches := setOptionPattern.FindStringSubmatch(strings.TrimSpace(s))
+	if len(matches) != 3 {
+		return fmt.Errorf("setoption does not match /%s/", setOptionPattern.String())
+	}
+	name, strVal := matches[1], matches[2]
+	handler := globalSetOptions[name]
+	if handler == nil {
+		return fmt.Errorf("unrecognized option: %s", name)
+	}
+	value, err := handler(strVal)
+	if err != nil {
+		return err
+	}
+	(*o)[name] = value
 	return nil
 }
 
-var optionPattern = regexp.MustCompile(`^setoption name (\S+) value (\S+)$`)
+var globalSetOptions = make(map[string]func(strVal string) (value interface{}, err error))
 
-func (e *Engine) ParseSetOption(text string) (name string, value interface{}, err error) {
-	/*matches := optionPattern.FindStringSubmatch(strings.TrimSpace(text))
-	if len(matches) != 3 {
-		return "", "", fmt.Errorf("setoption does not match /%s/", optionPattern.String())
+// RegisterSetOption registers the handler function to be called on setoption commands matching the given option name.
+func RegisterSetOption(name string, handler func(s string) (value interface{}, err error)) {
+	globalSetOptions[name] = handler
+}
+
+func setIntOptionFunc() func(s string) (value interface{}, err error) {
+	return func(s string) (value interface{}, err error) {
+		v, err := strconv.Atoi(s)
+		if err != nil {
+			return nil, err
+		}
+		return v, nil
 	}
-	switch option, value := matches[1], matches[2]; option {
-	case "tcmove":
-		v, err := strconv.Atoi(value)
-		if err != nil {
-			return err
-		}
-		a.engine.timeControl.Move = time.Duration(v) * time.Second
-	case "tcreserve":
-		v, err := strconv.Atoi(value)
-		if err != nil {
-			return err
-		}
-		a.engine.timeControl.Reserve = time.Duration(v) * time.Second
-	case "tcpercent":
-		v, err := strconv.Atoi(value)
-		if err != nil {
-			return err
-		}
-		if v < 0 || v > 100 {
-			return fmt.Errorf("percentage out of range [0-100%%]: %d", v)
-		}
-		a.engine.timeControl.MoveReservePercent = v
-	case "tcmax":
-		v, err := strconv.Atoi(value)
-		if err != nil {
-			return err
-		}
-		a.engine.timeControl.MaxReserve = time.Duration(v) * time.Second
-	case "tctotal":
-		v, err := strconv.Atoi(value)
-		if err != nil {
-			return err
-		}
-		a.engine.timeControl.GameTotal = time.Duration(v) * time.Second
-	case "tcturns":
-		v, err := strconv.Atoi(value)
-		if err != nil {
-			return err
-		}
-		a.engine.timeControl.Turns = v
-	case "tcturntime":
-		v, err := strconv.Atoi(value)
-		if err != nil {
-			return err
-		}
-		a.engine.timeControl.MaxTurn = time.Duration(v) * time.Second
-	case "greserve":
-		v, err := strconv.Atoi(value)
-		if err != nil {
-			return err
-		}
-		a.engine.timeInfo.Reserve[Gold] = time.Duration(v) * time.Second
-	case "sreserve":
-		v, err := strconv.Atoi(value)
-		if err != nil {
-			return err
-		}
-		a.engine.timeInfo.Reserve[Silver] = time.Duration(v) * time.Second
-	case "hash":
-		v, err := strconv.Atoi(value)
-		if err != nil {
-			return err
-		}
-		a.Logf("setting hash table size to %d MB", v)
-		a.engine.table.Resize(v)
+}
 
-	// Unsupported for now:
-	// 	"gused":
-	// 	"sused":
-	// 	"moveused":
-	// 	"lastmoveused":
-	// 	"depth":
-
-	// Custom Zoo engine options:
-	case "goroutines":
-		v, err := strconv.Atoi(value)
-		if err != nil {
-			return err
-		}
-		if v < 0 {
-			return fmt.Errorf("goroutines <= 0")
-		}
-		a.engine.concurrency = v
-
-	default:
-		return fmt.Errorf("unsupported option: %q", option)
-	}*/
-	return "", nil, nil
+func init() {
+	RegisterSetOption("tcmove", setIntOptionFunc())
+	RegisterSetOption("tcreserve", setIntOptionFunc())
+	RegisterSetOption("tcpercent", setIntOptionFunc())
+	RegisterSetOption("tcmax", setIntOptionFunc())
+	RegisterSetOption("tctotal", setIntOptionFunc())
+	RegisterSetOption("tcturns", setIntOptionFunc())
+	RegisterSetOption("tcturntime", setIntOptionFunc())
+	RegisterSetOption("greserve", setIntOptionFunc())
+	RegisterSetOption("sreserve", setIntOptionFunc())
+	RegisterSetOption("hash", setIntOptionFunc())
+	RegisterSetOption("goroutines", setIntOptionFunc())
 }

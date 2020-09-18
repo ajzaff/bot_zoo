@@ -2,15 +2,15 @@ package zoo
 
 import (
 	"fmt"
-	"os"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
 type Engine struct {
-	aei  *aei
 	opts *Options
+	aei  *AEISettings
+	AEI
 
 	timeControl TimeControl
 	timeInfo    *TimeInfo
@@ -44,13 +44,14 @@ type Engine struct {
 
 func NewEngine(seed int64) *Engine {
 	e := &Engine{
-		aei:         newV1AEI(nil, os.Stdout),
 		timeControl: makeTimeControl(),
 		p:           NewEmptyPosition(),
 		concurrency: 4,
 		table:       NewTable(),
 		useTable:    true,
 	}
+	var opts Options
+	e.opts = &opts
 	return e
 }
 

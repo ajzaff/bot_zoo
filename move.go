@@ -81,7 +81,7 @@ func MakeStep(piece Piece, src, dest Square) Step {
 		uint8(dest&0b111111)<<10)
 }
 
-// MakeCaptureStep creates a step with a src, dest and capture Square.
+// MakeCapture creates a step with a src, dest and capture Square.
 func MakeCapture(piece Piece, cap Square) Step {
 	return MakeStep(piece, cap, E4)
 }
