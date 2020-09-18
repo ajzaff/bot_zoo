@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	zoo "github.com/ajzaff/bot_zoo"
@@ -29,7 +31,7 @@ func main() {
 	log.SetOutput(os.Stderr)
 	log.SetFlags(0)
 	log.SetPrefix("")
-	log.Println("bot_zoo v0 by Alan Zaffetti")
+	log.Println("bot_alpha_zoo by Alan Zaffetti")
 	log.Println("For operation instructions: <http://arimaa.janzert.com/aei/aei-protocol.html>")
 	log.Println(`To quit: type "quit"`)
 	if *movelist != "" {
@@ -43,8 +45,16 @@ func main() {
 		}
 		f.Close()
 	}
-	if err := engine.RunAEI(os.Stdin); err != nil {
-		log.Fatal(err)
+	// Execute AEI loop:
+	sc := bufio.NewScanner(os.Stdin)
+	for sc.Scan() {
+		text := strings.TrimSpace(sc.Text())
+		if err := engine.ExecuteCommand(text); err != nil {
+			if zoo.IsQuit(err) {
+				break
+			}
+			log.Println(err)
+		}
 	}
 	log.Println("Goodbye!")
 }

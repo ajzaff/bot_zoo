@@ -1,18 +1,32 @@
 package zoo
 
 import (
-	"fmt"
 	"regexp"
-	"strconv"
-	"time"
 )
+
+type Options struct {
+	Verbose    bool
+	Extensions bool
+}
+
+func (o *Options) SetVerbose(verbose bool) {
+	o.Verbose = verbose
+}
+
+func (o *Options) EnableExtensions(extensions bool) {
+	o.Extensions = extensions
+}
+
+func (o *Options) SetOption(name, value interface{}) error {
+	return nil
+}
 
 var optionPattern = regexp.MustCompile(`^setoption name (\S+) value (\S+)$`)
 
-func (a *AEI) handleOption(text string) error {
-	matches := optionPattern.FindStringSubmatch(text)
+func (e *Engine) ParseSetOption(text string) (name string, value interface{}, err error) {
+	/*matches := optionPattern.FindStringSubmatch(strings.TrimSpace(text))
 	if len(matches) != 3 {
-		return fmt.Errorf("setoption does not match /%s/", optionPattern.String())
+		return "", "", fmt.Errorf("setoption does not match /%s/", optionPattern.String())
 	}
 	switch option, value := matches[1], matches[2]; option {
 	case "tcmove":
@@ -100,6 +114,6 @@ func (a *AEI) handleOption(text string) error {
 
 	default:
 		return fmt.Errorf("unsupported option: %q", option)
-	}
-	return nil
+	}*/
+	return "", nil, nil
 }

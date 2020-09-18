@@ -146,10 +146,6 @@ func (p *Pos) Side() Color {
 	return p.side
 }
 
-func (p *Pos) Terminal() bool {
-	return p.terminalGoalValue() != 0 || p.terminalEliminationValue() != 0 || p.terminalImmobilizedValue() != 0
-}
-
 func (p *Pos) updateFrozen() {
 	p.frozen[Gold] = p.dominating[Silver] & ^p.touching[Gold]
 	p.frozen[Silver] = p.dominating[Gold] & ^p.touching[Silver]

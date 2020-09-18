@@ -1,7 +1,6 @@
 package zoo
 
 import (
-	"bufio"
 	"fmt"
 	"regexp"
 	"strings"
@@ -13,28 +12,29 @@ type Move []Step
 // ParseMove parses the move and returns any errors.
 // It does not attempt to validate the legality of the move.
 func ParseMove(s string) (Move, error) {
-	var (
-		sc  = bufio.NewScanner(strings.NewReader(s))
-		res []Step
-	)
-	sc.Split(splitMove)
-	for sc.Scan() {
-		step, err := ParseStep(sc.Text())
+	var move Move
+	for len(s) > 0 {
+		step, err := ParseStep(s)
 		if err != nil {
-			return nil, fmt.Errorf("%s: %v", sc.Text(), err)
+			return nil, err
 		}
-		res = append(res, step)
+		move = append(move, step)
 	}
-	if err := sc.Err(); err != nil {
-		return nil, fmt.Errorf("%s: %v", s, err)
-	}
-	res = append(res, Pass)
-	return res, nil
+	return move, nil
 }
 
 // Len returns the length of the Move m in number of steps.
 func (m Move) Len() int {
 	return len(m)
+}
+
+// strLen returns the length of the String representation of the Move.
+func (m Move) strLen() int {
+	var l int
+	for _, step := range m {
+		l += step.strLen()
+	}
+	return l
 }
 
 // appendString appends the move to the builder.
@@ -72,7 +72,7 @@ func MakeCaptureStep(piece Piece, src Square, delta, cap Delta) Step {
 	return 0
 }
 
-func MakeStep(piece Piece, src Square, delta Delta) Step {
+func MakeStep(piece Piece, src Square, delta SquareDelta) Step {
 	return MakeCaptureStep(piece, src, delta, 7)
 }
 
@@ -96,6 +96,14 @@ func ParseStep(s string) (Step, error) {
 // appendString appends the Step string to the builder.
 func (s Step) appendString(sb *strings.Builder) {
 
+}
+
+// strLen returns the length of the String representation of the Step.
+func (s Step) strLen() int {
+	if s.Capture() {
+		return 9
+	}
+	return 3
 }
 
 // String returns the String representation of the Step and possible capture.
@@ -157,26 +165,6 @@ func MakeSetup(piece Piece, alt Square) Step {
 	v := MakeStep(0xff, 0xff, alt, piece, 0xf, 0xf)
 	v |= Step(piece)
 	return v
-}
-
-// MakeDefaultCapture makes a default step with a capture.
-func MakeDefaultCapture(src, dest Square, p1, cap Piece) Step {
-	return MakeStep(src, dest, 0xff, p1, 0xf, cap)
-}
-
-// MakeDefault makes a default step.
-func MakeDefault(src, dest Square, p1 Piece) Step {
-	return MakeDefaultCapture(src, dest, p1, 0xf)
-}
-
-// MakeAlternateCapture makes a push/pull step with a capture.
-func MakeAlternateCapture(src, dest, alt Square, p1, p2, cap Piece) Step {
-	return MakeStep(src, dest, alt, p1, p2, cap)
-}
-
-// MakeAlternate makes a push/pull step.
-func MakeAlternate(src, dest, alt Square, p1, p2 Piece) Step {
-	return MakeAlternateCapture(src, dest, alt, p1, p2, 0xf)
 }
 
 // Pass is a Step representing the pas step which delimits all moves.

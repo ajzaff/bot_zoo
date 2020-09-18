@@ -9,10 +9,11 @@ import (
 )
 
 type Engine struct {
+	aei  *aei
+	opts *Options
+
 	timeControl TimeControl
 	timeInfo    *TimeInfo
-
-	*AEI
 
 	// Search result from the last search.
 	best       []ExtStep
@@ -43,13 +44,13 @@ type Engine struct {
 
 func NewEngine(seed int64) *Engine {
 	e := &Engine{
+		aei:         newV1AEI(nil, os.Stdout),
 		timeControl: makeTimeControl(),
 		p:           NewEmptyPosition(),
 		concurrency: 4,
 		table:       NewTable(),
 		useTable:    true,
 	}
-	e.AEI = NewAEI(e, nil, os.Stdout)
 	return e
 }
 

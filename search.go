@@ -103,10 +103,10 @@ func (e *Engine) search(p *Pos, r *rand.Rand, steps *StepList, depth uint8) Valu
 
 	for {
 		// Is this a terminal node? Return the value immediately.
-		eval := p.Value()
-		if eval.Terminal() {
-			return m * eval
-		}
+		// eval := 0 //p.Value()
+		// if eval.Terminal() {
+		// 	return m * eval
+		// }
 
 		// Generate the steps for the next node.
 		ls = append(ls, steps.Len())

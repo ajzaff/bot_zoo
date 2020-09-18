@@ -9,56 +9,55 @@ import (
 	"strings"
 )
 
-var errAEIQuit = errors.New("quit")
-
-type AEI struct {
-	engine       *Engine
+type aei struct {
 	id           []string
 	protoVersion string
 	log          io.Writer
 	w            io.Writer
-	verbose      bool
 }
 
-func NewAEI(engine *Engine, log, w io.Writer) *AEI {
-	return &AEI{
-		engine: engine,
-		log:    log,
-		w:      w,
+func newV1AEI(log, w io.Writer) *aei {
+	return &aei{
+		log:          log,
+		w:            w,
+		protoVersion: "1",
 		id: []string{
 			"name zoo",
 			"author Alan Zaffetti",
 			"version 0",
 		},
-		protoVersion: "1",
 	}
 }
 
-func (a *AEI) SetLog(w io.Writer) {
-	a.log = w
+func (e *Engine) SetLog(w io.Writer) {
+	e.aei.log = w
 }
 
-func (a *AEI) SetOutput(w io.Writer) {
-	a.w = w
+func (e *Engine) SetOutput(w io.Writer) {
+	e.aei.w = w
 }
 
-func (a *AEI) SetVerbose(verbose bool) {
-	a.verbose = verbose
+var errAEIQuit = errors.New("quit")
+
+// IsQuit tests whether the error message matches the AEI "quit" flag error value.
+// The error is returned by ExecuteCommand after receiving the "quit" AEI command.
+func IsQuit(err error) bool {
+	return err == errAEIQuit
 }
 
-func (a *AEI) handle(text string) error {
+func (e *Engine) ExecuteCommand(text string) error {
 	switch {
 	case text == "aei":
-		a.writePreamble()
+		e.writePreamble()
 		return nil
 	case text == "isready":
-		a.writef("readyok\n")
+		e.writef("readyok\n")
 		return nil
 	case text == "newgame":
-		a.engine.NewGame()
+		e.NewGame()
 		return nil
 	case text == "stop":
-		a.engine.Stop()
+		e.Stop()
 	case text == "quit":
 		return errAEIQuit
 	case strings.HasPrefix(text, "setposition "):
@@ -71,49 +70,49 @@ func (a *AEI) handle(text string) error {
 			return err
 		}
 		pos.moveNum = 2
-		a.engine.SetPos(pos)
+		e.SetPos(pos)
 		return nil
 	case strings.HasPrefix(text, "setoption "):
-		return a.handleOption(text)
+		// name, value, err := ParseSetOption()
 	case strings.HasPrefix(text, "makemove "):
 		parts := strings.SplitN(text, " ", 2)
 		if len(parts) < 2 {
 			return fmt.Errorf("expected steps")
 		}
-		a.engine.Stop()
+		e.Stop()
 		parts[1] = strings.TrimSpace(parts[1])
 		move, err := ParseMove(parts[1])
 		if err != nil {
 			return err
 		}
-		if err := a.engine.Pos().Move(move); err != nil {
+		if err := e.Pos().Move(move); err != nil {
 			return err
 		}
-		if a.verbose {
-			a.verbosePos()
+		if e.opts.Verbose {
+			e.verbosePos()
 		}
 		return nil
 	case text == "go":
-		a.engine.Go()
+		e.Go()
 		return nil
 	case strings.HasPrefix(text, "go "):
 		parts := strings.SplitN(text, " ", 2)
 		switch cmd := strings.TrimSpace(parts[1]); cmd {
 		case "ponder":
-			a.engine.GoPonder()
+			e.GoPonder()
 		case "infinite":
-			a.engine.GoInfinite()
+			e.GoInfinite()
 		default:
 			return fmt.Errorf("unsupported go command: %q", cmd)
 		}
 	default:
-		return a.handleExt(text)
+		return e.ExecuteExtendedCommand(text)
 	}
 	return nil
 }
 
-func (a *AEI) verboseLog(send bool, s string) {
-	if !a.verbose {
+func (e *Engine) verboseLog(send bool, s string) {
+	if !e.opts.Verbose {
 		return
 	}
 	sc := bufio.NewScanner(strings.NewReader(s))
@@ -126,49 +125,40 @@ func (a *AEI) verboseLog(send bool, s string) {
 	}
 }
 
-func (a *AEI) writef(format string, as ...interface{}) {
+func (e *Engine) writef(format string, as ...interface{}) {
 	s := fmt.Sprintf(format, as...)
-	a.w.Write([]byte(s))
-	a.verboseLog(true, s)
+	e.aei.w.Write([]byte(s))
+	e.verboseLog(true, s)
 }
 
-func (a *AEI) writePreamble() {
-	a.writef("protocol-version %s\n", a.protoVersion)
-	for _, id := range a.id {
-		a.writef("id %s\n", id)
+func (e *Engine) writePreamble() {
+	e.writef("protocol-version %s\n", e.aei.protoVersion)
+	for _, id := range e.aei.id {
+		e.writef("id %s\n", id)
 	}
-	a.writef("aeiok\n")
+	e.writef("aeiok\n")
 }
 
-func (a *AEI) Logf(format string, as ...interface{}) {
+func (e *Engine) Logf(format string, as ...interface{}) {
 	if !strings.HasSuffix(format, "\n") {
 		format = fmt.Sprint(format, "\n")
 	}
 	s := fmt.Sprintf(format, as...)
 	sc := bufio.NewScanner(strings.NewReader(s))
 	for sc.Scan() {
-		if a.log != nil {
+		if e.aei.log != nil {
 			s := fmt.Sprintf(format, as...)
-			a.log.Write([]byte(s))
+			e.aei.log.Write([]byte(s))
 		}
-		a.writef("log %s\n", sc.Text())
+		e.writef("log %s\n", sc.Text())
 	}
 }
 
-func (a *AEI) RunAEI(r io.Reader) error {
-	sc := bufio.NewScanner(r)
-	for sc.Scan() {
-		text := strings.TrimSpace(sc.Text())
-		a.verboseLog(false, text)
-		if err := a.handle(text); err != nil {
-			if err == errAEIQuit {
-				return nil
-			}
-			a.Logf("ERROR: %v", err)
-		}
-	}
-	if err := sc.Err(); err != nil {
-		return err
-	}
-	return nil
+func (e *Engine) logEval() {
+	// e.Logf("eval: %d", e.Pos().Value())
+}
+
+func (e *Engine) verbosePos() {
+	e.Logf(e.Pos().String())
+	e.logEval()
 }

@@ -17,12 +17,12 @@ func NewThreefold() *Threefold {
 }
 
 func (t *Threefold) Clone() *Threefold {
-	var m sync.Map
+	tf := &Threefold{}
 	t.m.Range(func(key, value interface{}) bool {
-		m.Store(key, value)
+		tf.m.Store(key, value)
 		return true
 	})
-	return &Threefold{m}
+	return tf
 }
 
 // Clear reinitializes the repetition map removing all stored positions.
