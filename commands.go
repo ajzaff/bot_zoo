@@ -6,15 +6,14 @@ import (
 	"strings"
 )
 
-// AEI implements a struct to handle Arimaa Engine Interface commands.
-type AEI struct{}
-
-// ExecuteCommand parses and executes AEI command handler or returns an error.
-func (a *AEI) ExecuteCommand(e *Engine, s string) error {
+// ExecuteCommand parses AEI command and executes the handler or returns an error.
+func (e *Engine) ExecuteCommand(s string) error {
 	s = strings.TrimSpace(s)
-	if e.aei.LogProtocolTraffic {
+
+	if e.LogProtocolTraffic {
 		e.Logf("> %s", s)
 	}
+
 	i := strings.IndexByte(s, ' ')
 	if i == -1 {
 		i = len(s)
@@ -23,6 +22,7 @@ func (a *AEI) ExecuteCommand(e *Engine, s string) error {
 		return nil
 	}
 	command := s[:i]
+
 	handler := globalAEIHandlers[command]
 	if handler == nil {
 		return fmt.Errorf("unrecognized command: %s", command)
@@ -55,10 +55,10 @@ func extendedHandler(handler func(e *Engine, args string) error) func(e *Engine,
 
 func init() {
 	RegisterAEIHandler("aei", func(e *Engine, args string) error {
-		e.Outputf("protocol-version %s", e.aei.ProtoVersion)
-		e.Outputf("id name %s", e.aei.BotName)
-		e.Outputf("id version %s", e.aei.BotVersion)
-		e.Outputf("id author %s", e.aei.BotAuthor)
+		e.Outputf("protocol-version %s", e.ProtoVersion)
+		e.Outputf("id name %s", e.BotName)
+		e.Outputf("id version %s", e.BotVersion)
+		e.Outputf("id author %s", e.BotAuthor)
 		e.Outputf("aeiok")
 		return nil
 	})
@@ -91,7 +91,7 @@ func init() {
 		return nil
 	})
 	RegisterAEIHandler("setoption", func(e *Engine, args string) error {
-		return e.opts.ExecuteSetOption(args)
+		return e.ExecuteSetOption(args)
 	})
 	RegisterAEIHandler("makemove", func(e *Engine, args string) error {
 		parts := strings.SplitN(args, " ", 2)
@@ -154,7 +154,7 @@ func init() {
 			stepList.Generate(e.Pos())
 			for i := 0; i < stepList.Len(); i++ {
 				step := stepList.At(i)
-				e.Logf("[%d] %s", step.Value, step.Step)
+				e.Logf("[%f] %s", step.Value, step.Step)
 			}
 			return nil
 		}

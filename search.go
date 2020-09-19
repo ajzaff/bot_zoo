@@ -3,18 +3,32 @@ package zoo
 import (
 	"fmt"
 	"math/rand"
+	"sync"
 	"time"
 )
 
 const trials = 2000
 
-func (e *Engine) searchRoot() ExtStep {
+type searchState struct {
+	tt TranspositionTable
+
+	wg         sync.WaitGroup
+	resultChan chan Move
+
+	// semi-atomic
+	stopping int32
+	running  int32
+}
+
+func (e *Engine) searchRoot(ponder bool) {
 	p := e.Pos()
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	defer e.Stop()
 
-	e.table.NewSearch()
+	if e.UseTranspositionTable {
+		e.tt.NewSearch()
+	}
 
 	var bestMove Move
 
@@ -68,10 +82,9 @@ func (e *Engine) searchRoot() ExtStep {
 			}
 		}()
 	}
-	if !e.ponder {
+	if !ponder {
 		e.Outputf("bestmove %s", bestMove.String())
 	}
-	return ExtStep{}
 }
 
 // search performs a Monte Carlo Tree Search from the position p.
@@ -125,4 +138,17 @@ func (e *Engine) search(p *Pos, r *rand.Rand, steps *StepList) Value {
 			}
 		}(i)
 	}
+}
+
+func searchRateKNps(nodes int, start time.Time) int64 {
+	return int64(float64(nodes) / (float64(time.Now().Sub(start)) / float64(time.Second)) / 1000)
+}
+
+func printSearchInfo(e *Engine, nodes int, depth uint8, start time.Time, best ExtStep) {
+	e.Outputf("info depth %d", depth)
+	e.Outputf("info time %d", int(time.Now().Sub(start).Seconds()))
+	e.Outputf("info score %f", best.Value)
+	e.Outputf("info nodes %d", nodes)
+	e.Logf("rate %d kN/s", searchRateKNps(nodes, start))
+	e.Logf("hashfull %d", e.tt.Hashfull())
 }

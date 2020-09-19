@@ -4,67 +4,43 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"sync"
 	"sync/atomic"
-	"time"
 )
 
+// Engine implements game control structures around Pos and keeps track of game state.
 type Engine struct {
-	opts *Options
-	aei  *AEISettings
-	AEI
+	*EngineSettings
+	*AEISettings
+
+	*Options
 
 	log *log.Logger
 	out *log.Logger
 
+	p *Pos
+
 	timeControl TimeControl
 	timeInfo    *TimeInfo
 
-	// Search result from the last search.
-	best       []ExtStep
-	resultChan chan ExtStep
-
-	p *Pos
-
-	// ponder implies we will search until we're asked explicitly to stop.
-	// We don't set the best move after a ponder.
-	// We don't clear the transposition table when we're done.
-	// Ponder will stop terminal score is achieved.
-	ponder bool
-
-	// concurrency setting of Lazy-SMP search in number of goroutines.
-	concurrency int
-	wg          sync.WaitGroup
-
-	table    *Table
-	useTable bool
-
-	// controls whether to pick the best move or sample.
-	pickBest bool
-
-	// semi-atomic
-	stopping int32
-	running  int32
+	searchState
 }
 
-func NewEngine(seed int64) *Engine {
+func NewEngine() *Engine {
 	e := &Engine{
-		opts:        newOptions(),
+		Options:     newOptions(),
 		timeControl: makeTimeControl(),
 		p:           NewEmptyPosition(),
 		log:         log.New(os.Stdout, "log", 0),
 		out:         log.New(os.Stdout, "", 0),
-		concurrency: 4,
-		table:       NewTable(),
-		useTable:    true,
 	}
+	e.searchState.tt.Resize(50)
 	return e
 }
 
 func (e *Engine) NewGame() {
 	pos := NewEmptyPosition()
 	e.SetPos(pos)
-	e.table.Clear()
+	e.tt.Clear()
 	e.timeInfo = e.timeControl.newTimeInfo()
 }
 
@@ -76,28 +52,26 @@ func (e *Engine) SetPos(p *Pos) {
 	*e.p = *p
 }
 
-func (e *Engine) startNow() {
+func (e *Engine) startNow(ponder bool) {
 	defer func() {
 		if r := recover(); r != nil {
 			panic(fmt.Sprintf("SEARCH_ERROR recovered: %v", r))
 		}
 	}()
-	go e.searchRoot()
+	go e.searchRoot(ponder)
 }
 
 // Go starts the search routine in a new goroutine.
 func (e *Engine) Go() {
 	if atomic.CompareAndSwapInt32(&e.running, 0, 1) {
-		e.ponder = false
-		e.startNow()
+		e.startNow(false)
 	}
 }
 
 // GoPonder starts the ponder search in a new goroutine.
 func (e *Engine) GoPonder() {
 	if atomic.CompareAndSwapInt32(&e.running, 0, 1) {
-		e.ponder = true
-		e.startNow()
+		e.startNow(true)
 	}
 }
 
@@ -121,22 +95,6 @@ func (e *Engine) Stop() {
 		e.running = 0
 		e.stopping = 0
 	}
-}
-
-func searchRateKNps(nodes int, start time.Time) int64 {
-	return int64(float64(nodes) / (float64(time.Now().Sub(start)) / float64(time.Second)) / 1000)
-}
-
-func (e *Engine) printSearchInfo(nodes int, depth uint8, start time.Time, best ExtStep) {
-	if e.ponder {
-		e.Logf("ponder")
-	}
-	e.Outputf("info depth %d", depth)
-	e.Outputf("info time %d", int(time.Now().Sub(start).Seconds()))
-	e.Outputf("info score %d", best.Value)
-	e.Outputf("info nodes %d", nodes)
-	e.Logf("rate %d kN/s", searchRateKNps(nodes, start))
-	e.Logf("hashfull %d", e.table.Hashfull())
 }
 
 // Logf logs the formatted message to the configured log writer.

@@ -5,7 +5,8 @@ import (
 	"math/rand"
 )
 
-const zseed = 1337
+// Hash implements a Zobrist hash on Arimaa positions.
+type Hash uint64
 
 var zkeys [1 + 5 + 15*64]uint64
 
@@ -17,6 +18,8 @@ func newZKey(r *rand.Rand, usedKeys map[uint64]bool) uint64 {
 	usedKeys[candidate] = true
 	return candidate
 }
+
+const zseed = 1337
 
 func init() {
 	r := rand.New(rand.NewSource(zseed))

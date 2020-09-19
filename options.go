@@ -18,15 +18,15 @@ func newOptions() *Options {
 	return &Options{data: make(map[string]interface{})}
 }
 
-// Get returns the value of the named option.
-func (o *Options) Get(name string) interface{} {
+// GetOption returns the value of the named option.
+func (o *Options) GetOption(name string) interface{} {
 	o.m.RLock()
 	defer o.m.RUnlock()
 	return o.data[name]
 }
 
-// Lookup returns the value of the named option and a bool indicating whether it existed.
-func (o *Options) Lookup(name string) (value interface{}, ok bool) {
+// LookupOption returns the value of the named option and a bool indicating whether it existed.
+func (o *Options) LookupOption(name string) (value interface{}, ok bool) {
 	o.m.RLock()
 	defer o.m.RUnlock()
 	v, ok := o.data[name]
