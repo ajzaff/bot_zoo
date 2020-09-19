@@ -115,6 +115,10 @@ func (p *Pos) generateSteps(a *[]ExtStep) {
 	if p.stepsLeft == 0 {
 		return
 	}
+	if p.moveNum == 1 {
+		p.generateSetupSteps(a)
+		return
+	}
 	c := p.Side()
 	presence := p.Presence(c)
 	empty := p.Empty()
@@ -137,7 +141,46 @@ func (p *Pos) generateSteps(a *[]ExtStep) {
 		// Generate step from src to dest.
 		for b2 := emptyDB; b2 > 0; b2 &= b2 - 1 {
 			dest := b2.Square()
-			*a = append(*a, makeExtStep(MakeCapture(t, p.capture(presence, src, dest))))
+			*a = append(*a, makeExtStep(MakeStep(t, src, dest)))
 		}
+	}
+}
+
+func (p *Pos) generateSetupSteps(a *[]ExtStep) {
+	setupPieces := map[Piece]int{
+		GRabbit:   8,
+		GCat:      2,
+		GDog:      2,
+		GHorse:    2,
+		GCamel:    1,
+		GElephant: 1,
+	}
+	i, end := A1, H2
+	c := p.Side()
+	if c == Silver {
+		i = A8
+		end = H7
+	}
+	for i != end {
+		t := p.At(i)
+		if t == Empty {
+			break
+		}
+		setupPieces[t.RemoveColor()]--
+		if i.File() == 7 && c == Silver {
+			i -= 15
+		} else {
+			i++
+		}
+	}
+	var piecesInt []int
+	for t := range setupPieces {
+		if t != Empty && setupPieces[t] > 0 {
+			piecesInt = append(piecesInt, int(t))
+		}
+	}
+	sort.Ints(piecesInt)
+	for _, t := range piecesInt {
+		*a = append(*a, makeExtStep(MakeSetup(Piece(t).WithColor(c), i)))
 	}
 }

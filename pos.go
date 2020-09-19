@@ -3,6 +3,8 @@ package zoo
 import (
 	"errors"
 	"fmt"
+	"regexp"
+	"strings"
 )
 
 type Pos struct {
@@ -18,8 +20,7 @@ type Pos struct {
 	side       Color      // side to play
 	depth      int        // number of steps to arrive at the position
 	moveNum    int        // number of moves left for this turn
-	moves      [][]Step   // moves to arrive at this position after appending steps
-	steps      []Step     // steps of the current move
+	moves      []Move     // moves to arrive at this position after appending steps
 	stepsLeft  int        // steps remaining in the current move
 	zhash      uint64     // zhash of the current position
 }
@@ -37,8 +38,7 @@ func newPos(
 	side Color,
 	depth int,
 	moveNum int,
-	moves [][]Step,
-	steps []Step,
+	moves []Move,
 	stepsLeft int,
 	zhash uint64,
 ) *Pos {
@@ -82,7 +82,10 @@ func newPos(
 		threefold = NewThreefold()
 	}
 	if zhash == 0 {
-		zhash = ZHash(bitboards, side, len(steps))
+		zhash = ZHash(bitboards, side, stepsLeft)
+	}
+	if len(moves) == 0 {
+		moves = append(moves, nil)
 	}
 	return &Pos{
 		board:      board,
@@ -98,9 +101,48 @@ func newPos(
 		stepsLeft:  stepsLeft,
 		depth:      depth,
 		moveNum:    moveNum,
-		steps:      steps,
+		moves:      moves,
 		zhash:      zhash,
 	}
+}
+
+var shortPosPattern = regexp.MustCompile(`^([wbgs]) \[([ RCDHMErcdhme]{64})\]$`)
+
+func ParseShortPosition(s string) (*Pos, error) {
+	matches := shortPosPattern.FindStringSubmatch(s)
+	if matches == nil {
+		return nil, fmt.Errorf("input does not match /%s/", shortPosPattern)
+	}
+	side, err := ParseColor(matches[1][0])
+	if err != nil {
+		return nil, err
+	}
+	pos := newPos(nil, nil, nil, nil, nil, nil, nil, nil, nil, side, 34, 2, nil, 4, 0)
+	for i, b := range []byte(matches[2]) {
+		square := Square(8*(7-i/8) + i%8)
+		piece, err := ParsePiece(b)
+		if err != nil {
+			return nil, fmt.Errorf("at %s: %v", square.String(), err)
+		}
+		if piece == Empty {
+			continue
+		}
+		if err := pos.Place(piece, square); err != nil {
+			return nil, fmt.Errorf("at %s: %v", square.String(), err)
+		}
+	}
+	return pos, nil
+}
+
+func NewEmptyPosition() *Pos {
+	pos, err := ParseShortPosition(posEmpty)
+	if err != nil {
+		panic(err)
+	}
+	pos.stepsLeft = 16
+	pos.moveNum = 1
+	pos.depth = 0
+	return pos
 }
 
 func (p *Pos) Clone() *Pos {
@@ -113,8 +155,7 @@ func (p *Pos) Clone() *Pos {
 	db := make([]Bitboard, 2)
 	fb := make([]Bitboard, 2)
 	threefold := p.threefold.Clone()
-	steps := make([]Step, len(p.steps))
-	moves := make([][]Step, len(p.moves))
+	moves := make([]Move, len(p.moves))
 	copy(board, p.board)
 	copy(bs, p.bitboards)
 	copy(ps, p.presence)
@@ -123,15 +164,21 @@ func (p *Pos) Clone() *Pos {
 	copy(tb, p.touching)
 	copy(db, p.dominating)
 	copy(fb, p.frozen)
-	copy(steps, p.steps)
 	for i := range moves {
-		moves[i] = make([]Step, len(p.moves[i]))
+		moves[i] = make(Move, len(p.moves[i]))
 		copy(moves[i], p.moves[i])
 	}
 	return newPos(
 		board, bs, ps, sb, wb, tb, db, fb, threefold,
-		p.side, p.depth, p.moveNum, moves, steps, p.stepsLeft, p.zhash,
+		p.side, p.depth, p.moveNum, moves, p.stepsLeft, p.zhash,
 	)
+}
+
+func (p *Pos) CurrentMove() Move {
+	if len(p.moves) > 0 {
+		return p.moves[len(p.moves)-1]
+	}
+	return nil
 }
 
 func (p *Pos) ZHash() uint64 {
@@ -192,7 +239,7 @@ func (p *Pos) Place(piece Piece, i Square) error {
 		return p.Remove(piece, i)
 	}
 	if !piece.Valid() {
-		return fmt.Errorf("invalid piece: %s", piece)
+		return fmt.Errorf("invalid piece: %c", piece.Byte())
 	}
 	b := i.Bitboard()
 	if p.bitboards[Empty]&b == 0 {
@@ -242,8 +289,7 @@ func (p *Pos) Remove(piece Piece, i Square) error {
 
 func (p *Pos) Pass() {
 	p.depth++
-	p.moves = append(p.moves, p.steps)
-	p.steps = nil
+	p.moves = append(p.moves, nil)
 	p.zhash ^= ZSilverKey()
 	if p.side = p.side.Opposite(); p.side == Gold {
 		p.moveNum++
@@ -255,20 +301,16 @@ func (p *Pos) Pass() {
 }
 
 func (p *Pos) Unpass() error {
-	if len(p.moves) == 0 {
+	if len(p.moves) < 2 {
 		return fmt.Errorf("no move to unpass")
 	}
-	if len(p.steps) != 0 {
-		return fmt.Errorf("steps were made since passing")
-	}
 	p.depth--
-	p.steps = p.moves[len(p.moves)-1]
 	p.moves = p.moves[:len(p.moves)-1]
 	p.zhash ^= ZSilverKey()
 	if p.side = p.side.Opposite(); p.side == Silver {
 		p.moveNum--
 	}
-	p.stepsLeft = 4 - Move(p.steps).Len()
+	p.stepsLeft = 4 - p.moves[len(p.moves)-1].Len()
 	if p.moveNum == 1 {
 		p.stepsLeft = 16
 	}
@@ -299,16 +341,17 @@ func (p *Pos) Step(step Step) error {
 	}
 	p.depth += n
 	p.stepsLeft -= n
-	p.steps = append(p.steps, step)
+	p.moves[len(p.moves)-1] = append(p.moves[len(p.moves)-1], step)
 	return nil
 }
 
 func (p *Pos) Unstep() error {
-	if len(p.steps) == 0 {
+	if p.CurrentMove().Len() == 0 {
 		return p.Unpass()
 	}
-	step := p.steps[len(p.steps)-1]
-	p.steps = p.steps[:len(p.steps)-1]
+	move := p.moves[len(p.moves)-1]
+	step := move[len(move)-1]
+	p.moves[len(p.moves)-1] = p.moves[len(p.moves)-1][:len(move)-1]
 	n := 1
 	p.depth -= n
 	p.stepsLeft += n
@@ -356,14 +399,68 @@ func (p *Pos) Move(m Move) error {
 }
 
 func (p *Pos) Unmove() error {
+	move := p.CurrentMove()
 	if err := p.Unpass(); err != nil {
-		return fmt.Errorf("unmove %s: unpass: %v", err)
+		return fmt.Errorf("unmove %s: unpass: %v", move, err)
 	}
-	for i := len(p.steps) - 1; i >= 0; i-- {
-		step := p.steps[i]
+	for i := len(move) - 1; i >= 0; i-- {
+		step := move[i]
 		if err := p.Unstep(); err != nil {
-			return fmt.Errorf("unmove %s: unstep %s: %v", Move(p.steps).String(), step.String(), err)
+			return fmt.Errorf("unmove %s: unstep %s: %v", move.String(), step.String(), err)
 		}
 	}
 	return nil
+}
+
+const (
+	posEmpty     = `g [                                                                ]`
+	posStandard  = `g [rrrrrrrrhdcemcdh                                HDCMECDHRRRRRRRR]`
+	posStandardG = `s [rrrrrrrrhdcemcdh                                                ]`
+)
+
+func (p *Pos) ShortString() string {
+	if p == nil {
+		return ""
+	}
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "%c [", p.side.Byte())
+	for i := 7; i >= 0; i-- {
+		for j := 0; j < 8; j++ {
+			at := Square(8*i + j)
+			sb.WriteByte(p.board[at].Byte())
+		}
+	}
+	sb.WriteByte(']')
+	return sb.String()
+}
+
+func (p *Pos) String() string {
+	if p == nil {
+		return ""
+	}
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "%d%c", p.moveNum, p.side.Byte())
+	if move := p.CurrentMove(); move != nil {
+		fmt.Fprintf(&sb, " %s", move.String())
+	}
+	sb.WriteString("\n +-----------------+\n")
+	for i := 7; i >= 0; i-- {
+		fmt.Fprintf(&sb, "%d| ", i+1)
+		for j := 0; j < 8; j++ {
+			at := Square(8*i + j)
+			if piece := p.board[at]; piece == Empty {
+				if at.Bitboard()&Traps != 0 {
+					sb.WriteByte('x')
+				} else {
+					sb.WriteByte('.')
+				}
+			} else {
+				sb.WriteByte(piece.Byte())
+			}
+			sb.WriteByte(' ')
+		}
+		sb.WriteString("|\n")
+	}
+	sb.WriteString(" +-----------------+\n   a b c d e f g h")
+	return sb.String()
 }

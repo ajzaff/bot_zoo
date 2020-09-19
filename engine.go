@@ -1,9 +1,11 @@
 package zoo
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"sync/atomic"
 )
 
@@ -30,7 +32,7 @@ func NewEngine() *Engine {
 		Options:     newOptions(),
 		timeControl: makeTimeControl(),
 		p:           NewEmptyPosition(),
-		log:         log.New(os.Stdout, "log", 0),
+		log:         log.New(os.Stdout, "log ", 0),
 		out:         log.New(os.Stdout, "", 0),
 	}
 	e.searchState.tt.Resize(50)
@@ -99,9 +101,13 @@ func (e *Engine) Stop() {
 
 // Logf logs the formatted message to the configured log writer.
 // This is used for all logging as well as AEI protocol logging
-// which requires the prefix be set to "log".
+// which requires the prefix be set to "log" on each line.
 func (e *Engine) Logf(format string, a ...interface{}) {
-	e.log.Printf(format, a...)
+	s := fmt.Sprintf(format, a...)
+	sc := bufio.NewScanner(strings.NewReader(s))
+	for sc.Scan() {
+		e.log.Println(sc.Text())
+	}
 }
 
 // Outputf outputs the formatted message to the configured output log.

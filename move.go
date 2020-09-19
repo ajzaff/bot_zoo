@@ -14,11 +14,17 @@ type Move []Step
 func ParseMove(s string) (Move, error) {
 	var move Move
 	for i := 0; i < len(s); {
+		for ; i < len(s) && s[i] == ' '; i++ {
+		}
 		step, err := ParseStep(s[i:])
 		if err != nil {
 			return nil, fmt.Errorf("invalid step at %q: %v", s[i:], err)
 		}
 		move = append(move, step)
+		if !step.Setup() {
+			i++
+		}
+		i += 3
 	}
 	return move, nil
 }
@@ -76,9 +82,9 @@ type Step uint16
 
 // MakeStep creates a step with a src and dest but no capture Square.
 func MakeStep(piece Piece, src, dest Square) Step {
-	return Step(uint8(piece)&0b1111 |
-		uint8(src&0b111111)<<4 |
-		uint8(dest&0b111111)<<10)
+	return Step(uint16(piece)&0b1111 |
+		uint16(src&0b111111)<<4 |
+		uint16(dest&0b111111)<<10)
 }
 
 // MakeCapture creates a step with a src, dest and capture Square.
@@ -91,7 +97,7 @@ func MakeSetup(piece Piece, setup Square) Step {
 	return MakeStep(piece, E4, setup)
 }
 
-var stepPattern = regexp.MustCompile(`([rcdhmeRCDHME])([a-f][1-8])([xnsew])?`)
+var stepPattern = regexp.MustCompile(`^([rcdhmeRCDHME])([a-h][1-8])([xnsew])?`)
 
 // ParseStep parses the Arimaa step.
 // It handles steps of the form:
@@ -102,29 +108,26 @@ var stepPattern = regexp.MustCompile(`([rcdhmeRCDHME])([a-f][1-8])([xnsew])?`)
 func ParseStep(s string) (Step, error) {
 	matches := stepPattern.FindStringSubmatchIndex(s)
 	if matches == nil {
-		return 0, fmt.Errorf("does not match /%s/")
-	}
-	if matches[0] != 0 {
-		return 0, fmt.Errorf("unexpected string at start: %q", s[:matches[0]])
+		return 0, fmt.Errorf("does not match /%s/", stepPattern.String())
 	}
 	piece, err := ParsePiece(s[matches[2]])
 	if err != nil {
 		return 0, fmt.Errorf("bad piece: %v", err)
 	}
-	src, err := ParseSquare(s[matches[3]:matches[4]])
+	src, err := ParseSquare(s[matches[4]:matches[5]])
 	if err != nil {
 		return 0, err
 	}
-	if len(matches) < 6 {
+	if matches[6] == -1 {
 		return MakeSetup(piece, src), nil
 	}
-	d := s[matches[5]]
+	d := s[matches[6]]
 	if d == 'x' {
 		return MakeCapture(piece, src), nil
 	}
-	dest := ParseDir(s[matches[5]])
+	dest := ParseDir(d)
 	if dest == DirNone {
-		return 0, fmt.Errorf("bad step direction: %c", s[matches[5]])
+		return 0, fmt.Errorf("bad step direction: %c", d)
 	}
 	return MakeStep(piece, src, src.Add(dest)), nil
 }
@@ -165,15 +168,17 @@ func (s Step) Setup() bool {
 // appendString appends the Step string to the builder.
 func (s Step) appendString(sb *strings.Builder) {
 	sb.WriteByte(s.Piece().Byte())
+	if s.Setup() {
+		sb.WriteString(s.Dest().String())
+		return
+	}
 	src := s.Src()
 	sb.WriteString(src.String())
-	if !s.Setup() {
-		if s.Capture() {
-			sb.WriteByte('x')
-			return
-		}
-		sb.WriteByte(s.Dest().Sub(src).Byte())
+	if s.Capture() {
+		sb.WriteByte('x')
+		return
 	}
+	sb.WriteByte(s.Dest().Sub(src).Byte())
 }
 
 // String returns the String representation of the Step and possible capture.
@@ -185,5 +190,5 @@ func (s Step) String() string {
 
 // GoString returns the formatted GoString for this step.
 func (s Step) GoString() string {
-	return fmt.Sprintf("Step(piece=%s src=%s, dest=%s)", s.Piece(), s.Src(), s.Dest())
+	return fmt.Sprintf("Step(piece=%c src=%s, dest=%s)", s.Piece().Byte(), s.Src(), s.Dest())
 }

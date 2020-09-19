@@ -168,7 +168,7 @@ const (
 	West
 )
 
-const dirBytes = "xnsew"
+const dirBytes = "xnesw"
 
 // ParseDir parses the Direction from print representation or returns DirNone.
 func ParseDir(b byte) Direction {

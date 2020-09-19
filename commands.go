@@ -78,11 +78,7 @@ func init() {
 		return errAEIQuit
 	})
 	RegisterAEIHandler("setposition", func(e *Engine, args string) error {
-		parts := strings.SplitN(args, " ", 2)
-		if len(parts) < 2 {
-			return fmt.Errorf("expected position matching /%s/", shortPosPattern)
-		}
-		pos, err := ParseShortPosition(parts[1])
+		pos, err := ParseShortPosition(args)
 		if err != nil {
 			return err
 		}
@@ -94,13 +90,8 @@ func init() {
 		return e.ExecuteSetOption(args)
 	})
 	RegisterAEIHandler("makemove", func(e *Engine, args string) error {
-		parts := strings.SplitN(args, " ", 2)
-		if len(parts) < 2 {
-			return fmt.Errorf("expected steps")
-		}
 		e.Stop()
-		parts[1] = strings.TrimSpace(parts[1])
-		move, err := ParseMove(parts[1])
+		move, err := ParseMove(args)
 		if err != nil {
 			return err
 		}
@@ -147,18 +138,20 @@ func init() {
 		e.Logf("%d", e.Pos().Depth())
 		return nil
 	}))
-	RegisterAEIHandler("step", extendedHandler(func(e *Engine, args string) error {
-		parts := strings.SplitN(args, " ", 2)
-		if len(parts) < 2 {
-			var stepList StepList
-			stepList.Generate(e.Pos())
-			for i := 0; i < stepList.Len(); i++ {
-				step := stepList.At(i)
-				e.Logf("[%f] %s", step.Value, step.Step)
-			}
-			return nil
+	RegisterAEIHandler("steps", extendedHandler(func(e *Engine, args string) error {
+		var stepList StepList
+		stepList.Generate(e.Pos())
+		for i := 0; i < stepList.Len(); i++ {
+			step := stepList.At(i)
+			e.Logf("[%f] %s", step.Value, step.Step.String())
 		}
-		step, err := ParseStep(parts[1])
+		return nil
+	}))
+	RegisterAEIHandler("step", extendedHandler(func(e *Engine, args string) error {
+		if len(args) == 0 {
+			return fmt.Errorf("missing step")
+		}
+		step, err := ParseStep(args)
 		if err != nil {
 			return err
 		}
