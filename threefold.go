@@ -16,6 +16,7 @@ func NewThreefold() *Threefold {
 	return &Threefold{}
 }
 
+// Clone returns a deep copy of t.
 func (t *Threefold) Clone() *Threefold {
 	tf := &Threefold{}
 	t.m.Range(func(key, value interface{}) bool {
@@ -31,7 +32,7 @@ func (t *Threefold) Clear() {
 }
 
 // Lookup the repetition count for the given position key.
-func (t *Threefold) Lookup(key uint64) int {
+func (t *Threefold) Lookup(key Hash) int {
 	v, ok := t.m.Load(key)
 	if !ok {
 		return 0
@@ -40,7 +41,7 @@ func (t *Threefold) Lookup(key uint64) int {
 }
 
 // Increment the position key and return the number of repetitions.
-func (t *Threefold) Increment(key uint64) int {
+func (t *Threefold) Increment(key Hash) int {
 	v, ok := t.m.LoadOrStore(key, 1)
 	if !ok {
 		return 1
@@ -51,7 +52,7 @@ func (t *Threefold) Increment(key uint64) int {
 }
 
 // Decrement the position key and return the number of repetitions.
-func (t *Threefold) Decrement(key uint64) int {
+func (t *Threefold) Decrement(key Hash) int {
 	v, ok := t.m.LoadOrStore(key, 0)
 	if !ok {
 		return 0

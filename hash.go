@@ -8,46 +8,46 @@ import (
 // Hash implements a Zobrist hash on Arimaa positions.
 type Hash uint64
 
-var zkeys [1 + 5 + 15*64]uint64
+var hashKeys [1 + 17 + 15*64]Hash
 
-func newZKey(r *rand.Rand, usedKeys map[uint64]bool) uint64 {
-	candidate := uint64(0)
+func newHashKey(r *rand.Rand, usedKeys map[Hash]bool) Hash {
+	var candidate Hash
 	for usedKeys[candidate] {
-		candidate = r.Uint64()
+		candidate = Hash(r.Uint64())
 	}
 	usedKeys[candidate] = true
 	return candidate
 }
 
-const zseed = 1337
+const hashSeed = 1337
 
 func init() {
-	r := rand.New(rand.NewSource(zseed))
-	usedKeys := map[uint64]bool{0: true}
-	for i := range zkeys {
-		zkeys[i] = newZKey(r, usedKeys)
+	r := rand.New(rand.NewSource(hashSeed))
+	usedKeys := map[Hash]bool{0: true}
+	for i := range hashKeys {
+		hashKeys[i] = newHashKey(r, usedKeys)
 	}
 }
 
-func ZSilverKey() uint64 {
-	return zkeys[0]
+func silverHashKey() Hash {
+	return hashKeys[0]
 }
 
-func ZStepsKey(steps int) uint64 {
-	if steps < 0 || steps > 4 {
+func stepsHashKey(steps int) Hash {
+	if steps < 0 || steps > 16 {
 		panic(fmt.Sprintf("invalid steps: %d", steps))
 	}
-	return zkeys[1+steps]
+	return hashKeys[1+steps]
 }
 
-func ZPieceKey(p Piece, i Square) uint64 {
-	return zkeys[1+5+int(p)*64+int(i)]
+func pieceHashKey(p Piece, i Square) Hash {
+	return hashKeys[1+17+int(p)*64+int(i)]
 }
 
-func ZHash(bitboards []Bitboard, side Color, steps int) uint64 {
-	zhash := ZStepsKey(steps)
+func computeHash(bitboards []Bitboard, side Color, steps int) Hash {
+	zhash := stepsHashKey(steps)
 	if side != Gold {
-		zhash ^= ZSilverKey()
+		zhash ^= silverHashKey()
 	}
 	for _, p := range []Piece{
 		GRabbit,
@@ -67,7 +67,7 @@ func ZHash(bitboards []Bitboard, side Color, steps int) uint64 {
 		for pieces > 0 {
 			b := pieces & -pieces
 			pieces ^= b
-			zhash ^= ZPieceKey(p, b.Square())
+			zhash ^= pieceHashKey(p, b.Square())
 		}
 	}
 	return zhash

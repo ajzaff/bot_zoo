@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const trials = 2000
+const trials = 800
 
 type searchState struct {
 	tt TranspositionTable
@@ -21,7 +21,7 @@ type searchState struct {
 }
 
 func (e *Engine) searchRoot(ponder bool) {
-	p := e.Pos()
+	p := e.Pos
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	defer e.Stop()
@@ -42,23 +42,19 @@ func (e *Engine) searchRoot(ponder bool) {
 		for j := 0; j < stepList.Len(); j++ {
 			step := stepList.At(j)
 
-			var stepValue Value
-			for k := 0; k < trials; k++ {
-				if err := p.Step(step.Step); err != nil {
-					ppanic(p, err)
-				}
-				value := e.search(p, r, &stepList)
-				if err := p.Unstep(); err != nil {
-					ppanic(p, err)
-				}
-				stepValue += value
+			if err := p.Step(step.Step); err != nil {
+				ppanic(p, err)
+			}
+			value := e.search(p, r, &stepList)
+			if err := p.Unstep(); err != nil {
+				ppanic(p, err)
 			}
 
-			if stepValue > bestValue {
-				bestValue = stepValue
+			stepList.SetValue(j, value)
+			if value > bestValue {
+				bestValue = value
 				bestStep = step.Step
 			}
-			stepList.SetValue(j, stepValue/trials)
 		}
 
 		stepList.Sort(0)

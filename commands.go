@@ -78,12 +78,11 @@ func init() {
 		return errAEIQuit
 	})
 	RegisterAEIHandler("setposition", func(e *Engine, args string) error {
-		pos, err := ParseShortPosition(args)
+		p, err := ParseShortPosition(args)
 		if err != nil {
 			return err
 		}
-		pos.moveNum = 2
-		e.SetPos(pos)
+		e.Pos = p
 		return nil
 	})
 	RegisterAEIHandler("setoption", func(e *Engine, args string) error {
@@ -95,13 +94,15 @@ func init() {
 		if err != nil {
 			return err
 		}
-		if err := e.Pos().Move(move); err != nil {
+		if err := e.Move(move); err != nil {
 			return err
 		}
 		return nil
 	})
 	RegisterAEIHandler("go", func(e *Engine, args string) error {
 		switch args {
+		case "":
+			e.Go()
 		case "ponder":
 			e.GoPonder()
 		case "infinite":
@@ -116,31 +117,26 @@ func init() {
 
 	RegisterAEIHandler("new", extendedHandler(func(e *Engine, args string) error {
 		e.NewGame()
-		pos, err := ParseShortPosition(posStandard)
+		p, err := ParseShortPosition(posStandard)
 		if err != nil {
-			panic(err)
+			return err
 		}
-		pos.moveNum = 2
-		e.SetPos(pos)
+		e.Pos = p
 		return nil
 	}))
 	RegisterAEIHandler("unmove", extendedHandler(func(e *Engine, args string) error {
-		if err := e.Pos().Unmove(); err != nil {
+		if err := e.Unmove(); err != nil {
 			return err
 		}
 		return nil
 	}))
 	RegisterAEIHandler("hash", extendedHandler(func(e *Engine, args string) error {
-		e.Logf("%d", e.Pos().zhash)
-		return nil
-	}))
-	RegisterAEIHandler("depth", extendedHandler(func(e *Engine, args string) error {
-		e.Logf("%d", e.Pos().Depth())
+		e.Logf("%d", e.Hash())
 		return nil
 	}))
 	RegisterAEIHandler("steps", extendedHandler(func(e *Engine, args string) error {
 		var stepList StepList
-		stepList.Generate(e.Pos())
+		stepList.Generate(e.Pos)
 		for i := 0; i < stepList.Len(); i++ {
 			step := stepList.At(i)
 			e.Logf("[%f] %s", step.Value, step.Step.String())
@@ -155,23 +151,23 @@ func init() {
 		if err != nil {
 			return err
 		}
-		if err := e.Pos().Step(step); err != nil {
+		if err := e.Step(step); err != nil {
 			return err
 		}
 		return nil
 	}))
 	RegisterAEIHandler("unstep", extendedHandler(func(e *Engine, args string) error {
-		if err := e.Pos().Unstep(); err != nil {
+		if err := e.Unstep(); err != nil {
 			return err
 		}
 		return nil
 	}))
 	RegisterAEIHandler("pass", extendedHandler(func(e *Engine, args string) error {
-		e.Pos().Pass()
+		e.Pass()
 		return nil
 	}))
 	RegisterAEIHandler("unpass", extendedHandler(func(e *Engine, args string) error {
-		if err := e.Pos().Unpass(); err != nil {
+		if err := e.Unpass(); err != nil {
 			return err
 		}
 		return nil
@@ -184,51 +180,51 @@ func init() {
 	RegisterAEIHandler("print", extendedHandler(func(e *Engine, args string) error {
 		parts := strings.SplitN(args, " ", 2)
 		if len(parts) < 2 {
-			e.Logf(e.Pos().String())
+			e.Logf(e.Pos.String())
 			return nil
 		}
 		var b Bitboard
 		switch parts[1] {
 		case "weaker":
-			b = e.Pos().touching[Gold]
+			b = e.touching[Gold]
 			for t := GRabbit; t <= GElephant; t++ {
-				b = e.Pos().weaker[t]
+				b = e.weaker[t]
 				e.Logf(string(t.Byte()))
 				e.Logf(b.String())
 			}
 			return nil
 		case "stronger":
 			for t := GRabbit; t <= GElephant; t++ {
-				b = e.Pos().stronger[t]
+				b = e.stronger[t]
 				e.Logf(string(t.Byte()))
 				e.Logf(b.String())
 			}
 			return nil
 		case "tg":
-			b = e.Pos().touching[Gold]
+			b = e.touching[Gold]
 		case "ts":
-			b = e.Pos().touching[Silver]
+			b = e.touching[Silver]
 		case "dg":
-			b = e.Pos().dominating[Gold]
+			b = e.dominating[Gold]
 		case "ds":
-			b = e.Pos().dominating[Silver]
+			b = e.dominating[Silver]
 		case "fg":
-			b = e.Pos().frozen[Gold]
+			b = e.frozen[Gold]
 		case "fs":
-			b = e.Pos().frozen[Silver]
+			b = e.frozen[Silver]
 		case "g":
-			b = e.Pos().presence[Gold]
+			b = e.presence[Gold]
 		case "s":
-			b = e.Pos().presence[Silver]
+			b = e.presence[Silver]
 		case "short":
-			e.Logf(e.Pos().ShortString())
+			e.Logf(e.ShortString())
 			return nil
 		default:
 			p, err := ParsePiece(parts[1][0])
 			if err != nil {
 				return fmt.Errorf("printing piece bitboard: %v", err)
 			}
-			b = e.Pos().bitboards[p]
+			b = e.bitboards[p]
 		}
 		return nil
 	}))

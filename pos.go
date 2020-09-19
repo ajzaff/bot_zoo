@@ -7,6 +7,7 @@ import (
 	"strings"
 )
 
+// Pos represents an Arimaa position.
 type Pos struct {
 	board      []Piece    // board information; captures are negated such that they can be undone later
 	bitboards  []Bitboard // bitboard data
@@ -15,99 +16,43 @@ type Pos struct {
 	weaker     []Bitboard // weaker pieces by piece&decolorMask
 	touching   []Bitboard // squares touched for each side
 	dominating []Bitboard // squares dominated by each side (touched by a nonrabbit)
-	threefold  *Threefold // threefold repetition store
 	frozen     []Bitboard // frozen squares for each (dominating) side
+	threefold  *Threefold // threefold repetition store
 	side       Color      // side to play
-	depth      int        // number of steps to arrive at the position
 	moveNum    int        // number of moves left for this turn
-	moves      []Move     // moves to arrive at this position after appending steps
+	moves      MoveList   // moves to arrive at this position including the current in progress move
+	lastSrc    Square     // last source square or an invalid square used for validating pulls
 	stepsLeft  int        // steps remaining in the current move
-	zhash      uint64     // zhash of the current position
+	hash       Hash       // hash of the current position
 }
 
-func newPos(
-	board []Piece,
-	bitboards,
-	presence,
-	stronger,
-	weaker,
-	touching,
-	dominating,
-	frozen []Bitboard,
-	threefold *Threefold,
-	side Color,
-	depth int,
-	moveNum int,
-	moves []Move,
-	stepsLeft int,
-	zhash uint64,
-) *Pos {
-	if board == nil {
-		board = make([]Piece, 64)
+// NewEmptyPosition creates a new initial position with no pieces and turn number 1g.
+func NewEmptyPosition() *Pos {
+	p := &Pos{
+		board:      make([]Piece, 64),
+		bitboards:  []Bitboard{AllBits, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		presence:   make([]Bitboard, 2),
+		stronger:   make([]Bitboard, 8),
+		weaker:     make([]Bitboard, 8),
+		touching:   make([]Bitboard, 2),
+		dominating: make([]Bitboard, 2),
+		frozen:     make([]Bitboard, 2),
+		threefold:  NewThreefold(),
+		side:       Gold,
+		moveNum:    1,
+		moves:      []Move{nil},
+		lastSrc:    64,
+		stepsLeft:  16,
 	}
-	if bitboards == nil {
-		bitboards = make([]Bitboard, 15)
-		bitboards[Empty] = AllBits
-	}
-	if presence == nil {
-		presence = make([]Bitboard, 2)
-		for _, p := range []Piece{
-			GRabbit,
-			GCat,
-			GDog,
-			GHorse,
-			GCamel,
-			GElephant,
-		} {
-			presence[Gold] |= bitboards[p]
-			presence[Silver] |= bitboards[p.WithColor(Silver)]
-		}
-	}
-	if stronger == nil {
-		stronger = make([]Bitboard, 8)
-	}
-	if weaker == nil {
-		weaker = make([]Bitboard, 8)
-	}
-	if touching == nil {
-		touching = make([]Bitboard, 2)
-	}
-	if dominating == nil {
-		dominating = make([]Bitboard, 2)
-	}
-	if frozen == nil {
-		frozen = make([]Bitboard, 2)
-	}
-	if threefold == nil {
-		threefold = NewThreefold()
-	}
-	if zhash == 0 {
-		zhash = ZHash(bitboards, side, stepsLeft)
-	}
-	if len(moves) == 0 {
-		moves = append(moves, nil)
-	}
-	return &Pos{
-		board:      board,
-		bitboards:  bitboards,
-		presence:   presence,
-		stronger:   stronger,
-		weaker:     weaker,
-		touching:   touching,
-		dominating: dominating,
-		frozen:     frozen,
-		threefold:  threefold,
-		side:       side,
-		stepsLeft:  stepsLeft,
-		depth:      depth,
-		moveNum:    moveNum,
-		moves:      moves,
-		zhash:      zhash,
-	}
+	p.hash = computeHash(p.bitboards, p.side, p.stepsLeft)
+	return p
 }
 
 var shortPosPattern = regexp.MustCompile(`^([wbgs]) \[([ RCDHMErcdhme]{64})\]$`)
 
+// ParseShortPosition parses the position in short notation.
+// The turn number is set to 2 with the provided color to move.
+// Pass moves are inserted to represent previous moves.
 func ParseShortPosition(s string) (*Pos, error) {
 	matches := shortPosPattern.FindStringSubmatch(s)
 	if matches == nil {
@@ -117,7 +62,12 @@ func ParseShortPosition(s string) (*Pos, error) {
 	if err != nil {
 		return nil, err
 	}
-	pos := newPos(nil, nil, nil, nil, nil, nil, nil, nil, nil, side, 34, 2, nil, 4, 0)
+	p := NewEmptyPosition()
+	p.Pass()
+	p.Pass()
+	if side != p.side {
+		p.Pass()
+	}
 	for i, b := range []byte(matches[2]) {
 		square := Square(8*(7-i/8) + i%8)
 		piece, err := ParsePiece(b)
@@ -127,24 +77,14 @@ func ParseShortPosition(s string) (*Pos, error) {
 		if piece == Empty {
 			continue
 		}
-		if err := pos.Place(piece, square); err != nil {
+		if err := p.Place(piece, square); err != nil {
 			return nil, fmt.Errorf("at %s: %v", square.String(), err)
 		}
 	}
-	return pos, nil
+	return p, nil
 }
 
-func NewEmptyPosition() *Pos {
-	pos, err := ParseShortPosition(posEmpty)
-	if err != nil {
-		panic(err)
-	}
-	pos.stepsLeft = 16
-	pos.moveNum = 1
-	pos.depth = 0
-	return pos
-}
-
+// Clone returns a deep copy of the position p.
 func (p *Pos) Clone() *Pos {
 	board := make([]Piece, 64)
 	bs := make([]Bitboard, 15)
@@ -168,10 +108,23 @@ func (p *Pos) Clone() *Pos {
 		moves[i] = make(Move, len(p.moves[i]))
 		copy(moves[i], p.moves[i])
 	}
-	return newPos(
-		board, bs, ps, sb, wb, tb, db, fb, threefold,
-		p.side, p.depth, p.moveNum, moves, p.stepsLeft, p.zhash,
-	)
+	return &Pos{
+		board:      board,
+		bitboards:  bs,
+		presence:   ps,
+		stronger:   sb,
+		weaker:     wb,
+		touching:   tb,
+		dominating: db,
+		frozen:     fb,
+		threefold:  threefold,
+		side:       p.Side(),
+		moveNum:    p.moveNum,
+		moves:      moves,
+		lastSrc:    p.lastSrc,
+		stepsLeft:  p.stepsLeft,
+		hash:       p.hash,
+	}
 }
 
 func (p *Pos) CurrentMove() Move {
@@ -181,12 +134,8 @@ func (p *Pos) CurrentMove() Move {
 	return nil
 }
 
-func (p *Pos) ZHash() uint64 {
-	return p.zhash
-}
-
-func (p *Pos) Depth() int {
-	return p.depth
+func (p *Pos) Hash() Hash {
+	return p.hash
 }
 
 func (p *Pos) Side() Color {
@@ -259,7 +208,7 @@ func (p *Pos) Place(piece Piece, i Square) error {
 	for r := piece.RemoveColor() + 1; r <= GElephant; r++ {
 		p.weaker[r] |= b
 	}
-	p.zhash ^= ZPieceKey(piece, i)
+	p.hash ^= pieceHashKey(piece, i)
 	return nil
 }
 
@@ -283,14 +232,13 @@ func (p *Pos) Remove(piece Piece, i Square) error {
 	for r := piece.RemoveColor() + 1; r <= GElephant; r++ {
 		p.weaker[r] &= notB
 	}
-	p.zhash ^= ZPieceKey(piece, i)
+	p.hash ^= pieceHashKey(piece, i)
 	return nil
 }
 
 func (p *Pos) Pass() {
-	p.depth++
 	p.moves = append(p.moves, nil)
-	p.zhash ^= ZSilverKey()
+	p.hash ^= silverHashKey()
 	if p.side = p.side.Opposite(); p.side == Gold {
 		p.moveNum++
 	}
@@ -304,9 +252,8 @@ func (p *Pos) Unpass() error {
 	if len(p.moves) < 2 {
 		return fmt.Errorf("no move to unpass")
 	}
-	p.depth--
 	p.moves = p.moves[:len(p.moves)-1]
-	p.zhash ^= ZSilverKey()
+	p.hash ^= silverHashKey()
 	if p.side = p.side.Opposite(); p.side == Silver {
 		p.moveNum--
 	}
@@ -339,7 +286,6 @@ func (p *Pos) Step(step Step) error {
 			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
 		}
 	}
-	p.depth += n
 	p.stepsLeft -= n
 	p.moves[len(p.moves)-1] = append(p.moves[len(p.moves)-1], step)
 	return nil
@@ -353,7 +299,6 @@ func (p *Pos) Unstep() error {
 	step := move[len(move)-1]
 	p.moves[len(p.moves)-1] = p.moves[len(p.moves)-1][:len(move)-1]
 	n := 1
-	p.depth -= n
 	p.stepsLeft += n
 	switch {
 	case step.Capture():
@@ -379,7 +324,7 @@ func (p *Pos) Move(m Move) error {
 	if p.moveNum == 1 && m.Len() != 16 {
 		return fmt.Errorf("move %s: wrong number of setup moves", m.String())
 	}
-	initZHash := p.zhash
+	initHash := p.hash
 	for _, step := range m {
 		if err := p.Step(step); err != nil {
 			return fmt.Errorf("move %s: step %s: %v", m.String(), step.String(), err)
@@ -388,11 +333,11 @@ func (p *Pos) Move(m Move) error {
 	p.Pass()
 	// TODO(ajzaff): Movegen should filter moves that would result
 	// in recurring positions.
-	if initZHash == p.zhash^ZSilverKey() {
+	if initHash == p.Hash()^silverHashKey() {
 		return errRecurringPosition
 	}
 	// Check threefold repetition.
-	if p.threefold.Lookup(p.zhash) >= 3 {
+	if p.threefold.Lookup(p.Hash()) >= 3 {
 		return errRecurringPosition
 	}
 	return nil

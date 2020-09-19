@@ -19,7 +19,7 @@ type Engine struct {
 	log *log.Logger
 	out *log.Logger
 
-	p *Pos
+	*Pos
 
 	timeControl TimeControl
 	timeInfo    *TimeInfo
@@ -31,7 +31,7 @@ func NewEngine() *Engine {
 	e := &Engine{
 		Options:     newOptions(),
 		timeControl: makeTimeControl(),
-		p:           NewEmptyPosition(),
+		Pos:         NewEmptyPosition(),
 		log:         log.New(os.Stdout, "log ", 0),
 		out:         log.New(os.Stdout, "", 0),
 	}
@@ -40,18 +40,9 @@ func NewEngine() *Engine {
 }
 
 func (e *Engine) NewGame() {
-	pos := NewEmptyPosition()
-	e.SetPos(pos)
+	e.Pos = NewEmptyPosition()
 	e.tt.Clear()
 	e.timeInfo = e.timeControl.newTimeInfo()
-}
-
-func (e *Engine) Pos() *Pos {
-	return e.p
-}
-
-func (e *Engine) SetPos(p *Pos) {
-	*e.p = *p
 }
 
 func (e *Engine) startNow(ponder bool) {
