@@ -2,6 +2,8 @@ package zoo
 
 import (
 	"fmt"
+	"log"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -11,6 +13,9 @@ type Engine struct {
 	opts *Options
 	aei  *AEISettings
 	AEI
+
+	log *log.Logger
+	out *log.Logger
 
 	timeControl TimeControl
 	timeInfo    *TimeInfo
@@ -44,14 +49,15 @@ type Engine struct {
 
 func NewEngine(seed int64) *Engine {
 	e := &Engine{
+		opts:        newOptions(),
 		timeControl: makeTimeControl(),
 		p:           NewEmptyPosition(),
+		log:         log.New(os.Stdout, "log", 0),
+		out:         log.New(os.Stdout, "", 0),
 		concurrency: 4,
 		table:       NewTable(),
 		useTable:    true,
 	}
-	var opts Options
-	e.opts = &opts
 	return e
 }
 
@@ -73,7 +79,7 @@ func (e *Engine) SetPos(p *Pos) {
 func (e *Engine) startNow() {
 	defer func() {
 		if r := recover(); r != nil {
-			panic(fmt.Sprintf("SEARCH_ERROR recovered: %v\n", r))
+			panic(fmt.Sprintf("SEARCH_ERROR recovered: %v", r))
 		}
 	}()
 	go e.searchRoot()
@@ -125,10 +131,23 @@ func (e *Engine) printSearchInfo(nodes int, depth uint8, start time.Time, best E
 	if e.ponder {
 		e.Logf("ponder")
 	}
-	e.writef("info depth %d\n", depth)
-	e.writef("info time %d\n", int(time.Now().Sub(start).Seconds()))
-	e.writef("info score %d\n", best.Value)
-	e.writef("info nodes %d\n", nodes)
+	e.Outputf("info depth %d", depth)
+	e.Outputf("info time %d", int(time.Now().Sub(start).Seconds()))
+	e.Outputf("info score %d", best.Value)
+	e.Outputf("info nodes %d", nodes)
 	e.Logf("rate %d kN/s", searchRateKNps(nodes, start))
 	e.Logf("hashfull %d", e.table.Hashfull())
+}
+
+// Logf logs the formatted message to the configured log writer.
+// This is used for all logging as well as AEI protocol logging
+// which requires the prefix be set to "log".
+func (e *Engine) Logf(format string, a ...interface{}) {
+	e.log.Printf(format, a...)
+}
+
+// Outputf outputs the formatted message to the configured output log.
+// This is used for AEI protocol messages.
+func (e *Engine) Outputf(format string, a ...interface{}) {
+	e.out.Printf(format, a...)
 }

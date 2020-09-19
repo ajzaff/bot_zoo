@@ -5,10 +5,33 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 )
 
-// Options is a map that stores the parsed results of `setoption` AEI commands.
-type Options map[string]interface{}
+// Options is a thread-safe map that stores the parsed results of `setoption` AEI commands.
+type Options struct {
+	data map[string]interface{}
+	m    sync.RWMutex
+}
+
+func newOptions() *Options {
+	return &Options{data: make(map[string]interface{})}
+}
+
+// Get returns the value of the named option.
+func (o *Options) Get(name string) interface{} {
+	o.m.RLock()
+	defer o.m.RUnlock()
+	return o.data[name]
+}
+
+// Lookup returns the value of the named option and a bool indicating whether it existed.
+func (o *Options) Lookup(name string) (value interface{}, ok bool) {
+	o.m.RLock()
+	defer o.m.RUnlock()
+	v, ok := o.data[name]
+	return v, ok
+}
 
 var setOptionPattern = regexp.MustCompile(`^name (\S+) value (\S+)$`)
 
@@ -27,7 +50,9 @@ func (o *Options) ExecuteSetOption(s string) error {
 	if err != nil {
 		return err
 	}
-	(*o)[name] = value
+	o.m.Lock()
+	defer o.m.Unlock()
+	o.data[name] = value
 	return nil
 }
 

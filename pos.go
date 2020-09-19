@@ -60,7 +60,7 @@ func newPos(
 			GElephant,
 		} {
 			presence[Gold] |= bitboards[p]
-			presence[Silver] |= bitboards[p.MakeColor(Silver)]
+			presence[Silver] |= bitboards[p.WithColor(Silver)]
 		}
 	}
 	if stronger == nil {
@@ -152,7 +152,7 @@ func (p *Pos) updateFrozen() {
 }
 
 func (p *Pos) frozenB(t Piece, b Bitboard) bool {
-	return !t.SameType(GElephant) && p.frozen[t.Color()]&(p.presence[t.Color().Opposite()]&p.stronger[t.MakeColor(Gold)]).Neighbors()&b != 0
+	return !t.SameType(GElephant) && p.frozen[t.Color()]&(p.presence[t.Color().Opposite()]&p.stronger[t.WithColor(Gold)]).Neighbors()&b != 0
 }
 
 func (p *Pos) Frozen(i Square) bool {
@@ -180,11 +180,11 @@ func (p *Pos) At(i Square) Piece {
 }
 
 func (p *Pos) Stronger(t Piece) Bitboard {
-	return p.stronger[t.Decolor()]
+	return p.stronger[t.RemoveColor()]
 }
 
 func (p *Pos) Weaker(t Piece) Bitboard {
-	return p.weaker[t.Decolor()]
+	return p.weaker[t.RemoveColor()]
 }
 
 func (p *Pos) Place(piece Piece, i Square) error {
@@ -204,12 +204,12 @@ func (p *Pos) Place(piece Piece, i Square) error {
 	p.bitboards[Empty] &= ^b
 	p.presence[c] |= b
 	p.touching[c] = p.presence[c].Neighbors()
-	p.dominating[c] = (p.presence[c] & ^p.bitboards[GRabbit.MakeColor(c)]).Neighbors()
+	p.dominating[c] = (p.presence[c] & ^p.bitboards[GRabbit.WithColor(c)]).Neighbors()
 	p.updateFrozen()
-	for r := GRabbit; r < piece.Decolor(); r++ {
+	for r := GRabbit; r < piece.RemoveColor(); r++ {
 		p.stronger[r] |= b
 	}
-	for r := piece.Decolor() + 1; r <= GElephant; r++ {
+	for r := piece.RemoveColor() + 1; r <= GElephant; r++ {
 		p.weaker[r] |= b
 	}
 	p.zhash ^= ZPieceKey(piece, i)
@@ -228,12 +228,12 @@ func (p *Pos) Remove(piece Piece, i Square) error {
 	p.bitboards[Empty] |= b
 	p.presence[c] &= notB
 	p.touching[c] = p.presence[c].Neighbors()
-	p.dominating[c] = (p.presence[c] & ^p.bitboards[GRabbit.MakeColor(c)]).Neighbors()
+	p.dominating[c] = (p.presence[c] & ^p.bitboards[GRabbit.WithColor(c)]).Neighbors()
 	p.updateFrozen()
-	for r := GRabbit; r < piece.Decolor(); r++ {
+	for r := GRabbit; r < piece.RemoveColor(); r++ {
 		p.stronger[r] &= notB
 	}
-	for r := piece.Decolor() + 1; r <= GElephant; r++ {
+	for r := piece.RemoveColor() + 1; r <= GElephant; r++ {
 		p.weaker[r] &= notB
 	}
 	p.zhash ^= ZPieceKey(piece, i)
@@ -268,7 +268,7 @@ func (p *Pos) Unpass() error {
 	if p.side = p.side.Opposite(); p.side == Silver {
 		p.moveNum--
 	}
-	p.stepsLeft = 4 - MoveLen(p.steps)
+	p.stepsLeft = 4 - Move(p.steps).Len()
 	if p.moveNum == 1 {
 		p.stepsLeft = 16
 	}
@@ -276,74 +276,30 @@ func (p *Pos) Unpass() error {
 }
 
 func (p *Pos) Step(step Step) error {
-	if step.Pass() {
-		p.Pass()
-		return nil
-	}
-	n := step.Len()
+	n := 1
 	if n > p.stepsLeft {
 		return fmt.Errorf("%s: not enough steps left", step)
 	}
-	switch step.Kind() {
-	case KindSetup:
-		if step.Capture() {
-			return fmt.Errorf("%s: setup step has capture", step)
-		}
-		if p.moveNum > 1 {
-			return fmt.Errorf("%s: setup move after first turn", step)
-		}
-		if err := p.Place(step.Piece1(), step.Alt()); err != nil {
+	switch {
+	case step.Capture():
+		if err := p.Remove(step.Piece(), step.Src()); err != nil {
 			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
 		}
-	case KindPush:
-		src, dest, alt := step.Src(), step.Dest(), step.Alt()
-		if err := p.Remove(step.Piece2(), dest); err != nil {
+	case step.Setup():
+		if err := p.Place(step.Piece(), step.Dest()); err != nil {
 			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
 		}
-		if err := p.Place(step.Piece2(), alt); err != nil {
+	default:
+		if err := p.Remove(step.Piece(), step.Src()); err != nil {
 			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
 		}
-		if err := p.Remove(step.Piece1(), src); err != nil {
+		if err := p.Place(step.Piece(), step.Dest()); err != nil {
 			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
 		}
-		if err := p.Place(step.Piece1(), dest); err != nil {
-			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
-		}
-	case KindPull:
-		src, dest, alt := step.Src(), step.Dest(), step.Alt()
-		if err := p.Remove(step.Piece1(), src); err != nil {
-			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
-		}
-		if err := p.Place(step.Piece1(), dest); err != nil {
-			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
-		}
-		if err := p.Remove(step.Piece2(), alt); err != nil {
-			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
-		}
-		if err := p.Place(step.Piece2(), src); err != nil {
-			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
-		}
-	case KindDefault:
-		src, dest := step.Src(), step.Dest()
-		if err := p.Remove(step.Piece1(), src); err != nil {
-			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
-		}
-		if err := p.Place(step.Piece1(), dest); err != nil {
-			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
-		}
-	case KindInvalid:
-		return fmt.Errorf("invalid step: %s", step)
 	}
 	p.depth += n
 	p.stepsLeft -= n
 	p.steps = append(p.steps, step)
-	if step.Capture() {
-		cap := step.Cap()
-		src := step.CapSquare()
-		if err := p.Remove(cap, src); err != nil {
-			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
-		}
-	}
 	return nil
 }
 
@@ -353,93 +309,40 @@ func (p *Pos) Unstep() error {
 	}
 	step := p.steps[len(p.steps)-1]
 	p.steps = p.steps[:len(p.steps)-1]
-	if step.Pass() {
-		p.Unpass()
-		return nil
-	}
-	n := step.Len()
+	n := 1
 	p.depth -= n
 	p.stepsLeft += n
-	if step.Capture() {
-		cap := step.Cap()
-		src := step.CapSquare()
-		if err := p.Place(cap, src); err != nil {
-			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
-		}
-	}
-	switch step.Kind() {
-	case KindSetup:
-		if step.Capture() {
-			return fmt.Errorf("setup step has capture")
-		}
-		if p.moveNum > 1 {
-			return fmt.Errorf("setup move after first turn")
-		}
-		return p.Remove(step.Piece1(), step.Alt())
-	case KindPush:
-		src, dest, alt := step.Src(), step.Dest(), step.Alt()
-		piece1, piece2 := p.At(dest), p.At(alt)
-		if err := p.Remove(piece1, dest); err != nil {
+	switch {
+	case step.Capture():
+		return p.Place(step.Piece(), step.Src())
+	case step.Setup():
+		if err := p.Remove(step.Piece(), step.Dest()); err != nil {
 			return err
 		}
-		if err := p.Place(piece1, src); err != nil {
+	default:
+		if err := p.Remove(step.Piece(), step.Dest()); err != nil {
 			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
 		}
-		if err := p.Remove(piece2, alt); err != nil {
+		if err := p.Place(step.Piece(), step.Src()); err != nil {
 			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
 		}
-		if err := p.Place(piece2, dest); err != nil {
-			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
-		}
-	case KindPull:
-		src, dest, alt := step.Src(), step.Dest(), step.Alt()
-		piece1, piece2 := p.At(dest), p.At(src)
-		if err := p.Remove(piece2, src); err != nil {
-			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
-		}
-		if err := p.Place(piece2, alt); err != nil {
-			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
-		}
-		if err := p.Remove(piece1, dest); err != nil {
-			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
-		}
-		if err := p.Place(piece1, src); err != nil {
-			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
-		}
-	case KindDefault:
-		src, dest := step.Src(), step.Dest()
-		piece := p.At(dest)
-		if err := p.Remove(piece, dest); err != nil {
-			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
-		}
-		if err := p.Place(piece, src); err != nil {
-			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
-		}
-	case KindInvalid:
-		return fmt.Errorf("invalid step: %s", step)
 	}
 	return nil
 }
 
 var errRecurringPosition = errors.New("recurring position")
 
-func (p *Pos) Move(steps []Step) error {
-	if p.moveNum == 1 && MoveLen(steps) != 16 {
-		return fmt.Errorf("move %s: wrong number of setup moves", MoveString(steps))
+func (p *Pos) Move(m Move) error {
+	if p.moveNum == 1 && m.Len() != 16 {
+		return fmt.Errorf("move %s: wrong number of setup moves", m.String())
 	}
-	initSide := p.side
 	initZHash := p.zhash
-	for i, step := range steps {
-		if step.Pass() && i < len(steps)-1 {
-			return fmt.Errorf("move %s: pass before last step", MoveString(steps))
-		}
+	for _, step := range m {
 		if err := p.Step(step); err != nil {
-			return fmt.Errorf("move %s: %v", MoveString(steps), err)
+			return fmt.Errorf("move %s: step %s: %v", m.String(), step.String(), err)
 		}
 	}
-	if p.side == initSide {
-		return fmt.Errorf("move %s: no pass step", MoveString(steps))
-	}
+	p.Pass()
 	// TODO(ajzaff): Movegen should filter moves that would result
 	// in recurring positions.
 	if initZHash == p.zhash^ZSilverKey() {
@@ -454,15 +357,12 @@ func (p *Pos) Move(steps []Step) error {
 
 func (p *Pos) Unmove() error {
 	if err := p.Unpass(); err != nil {
-		return err
+		return fmt.Errorf("unmove %s: unpass: %v", err)
 	}
 	for i := len(p.steps) - 1; i >= 0; i-- {
 		step := p.steps[i]
-		if step.Pass() {
-			continue
-		}
 		if err := p.Unstep(); err != nil {
-			return fmt.Errorf("unmove %s: %v", MoveString(p.steps), err)
+			return fmt.Errorf("unmove %s: unstep %s: %v", Move(p.steps).String(), step.String(), err)
 		}
 	}
 	return nil

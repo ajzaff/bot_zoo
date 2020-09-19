@@ -51,7 +51,7 @@ func main() {
 	sc := bufio.NewScanner(os.Stdin)
 	for sc.Scan() {
 		text := strings.TrimSpace(sc.Text())
-		if err := engine.ExecuteCommand(text); err != nil {
+		if err := engine.ExecuteCommand(engine, text); err != nil {
 			if zoo.IsQuit(err) {
 				break
 			}

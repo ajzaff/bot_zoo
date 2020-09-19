@@ -72,7 +72,7 @@ func (l MoveList) appendString(sb *strings.Builder) {
 		m.appendString(sb)
 		sb.WriteByte('\n')
 	}
-	fmt.Fprintf(sb, "%d%c\n", turnNumber, side.Byte())
+	fmt.Fprintf(sb, "%d%c", turnNumber, side.Byte())
 }
 
 // String returns the string representation of this MoveList.

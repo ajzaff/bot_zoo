@@ -30,7 +30,10 @@ func ParseShortPosition(s string) (*Pos, error) {
 	if matches == nil {
 		return nil, fmt.Errorf("input does not match /%s/", shortPosPattern)
 	}
-	side := ParseColor(matches[1])
+	side, err := ParseColor(matches[1][0])
+	if err != nil {
+		return nil, err
+	}
 	pos := newPos(nil, nil, nil, nil, nil, nil, nil, nil, nil, side, 34, 2, nil, nil, 4, 0)
 	for i, b := range []byte(matches[2]) {
 		square := Square(8*(7-i/8) + i%8)
@@ -53,7 +56,7 @@ func (p *Pos) ShortString() string {
 		return ""
 	}
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "%s [", p.side.String())
+	fmt.Fprintf(&sb, "%c [", p.side.Byte())
 	for i := 7; i >= 0; i-- {
 		for j := 0; j < 8; j++ {
 			at := Square(8*i + j)
@@ -71,7 +74,7 @@ func (p *Pos) String() string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "%d%c", p.moveNum, p.side.Byte())
 	if len(p.steps) > 0 {
-		fmt.Fprintf(&sb, " %s", MoveString(p.steps))
+		fmt.Fprintf(&sb, " %s", Move(p.steps).String())
 	}
 	sb.WriteString("\n +-----------------+\n")
 	for i := 7; i >= 0; i-- {

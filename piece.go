@@ -42,6 +42,11 @@ func (p Piece) Color() Color {
 	return Color((p & 0b1000) >> 3)
 }
 
+// WithColor returns the Piece p  with the Color c.
+func (p Piece) WithColor(c Color) Piece {
+	return Piece(uint8(p&0b011) | uint8(c<<3))
+}
+
 // RemoveColor returns the Piece p if it were Gold.
 func (p Piece) RemoveColor() Piece {
 	return p & 0b0111

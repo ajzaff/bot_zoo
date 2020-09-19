@@ -5,34 +5,36 @@ import (
 	"time"
 )
 
-type RandomSelectionPolicy struct {
+type RandomMovePolicy struct {
 	r *rand.Rand
 }
 
-func NewRandomSelectionPolicy() *RandomSelectionPolicy {
-	p := &RandomSelectionPolicy{}
+func NewRandomMovePolicy() *RandomMovePolicy {
+	p := &RandomMovePolicy{}
 	p.SetSeed(time.Now().UnixNano())
 	return p
 }
 
-func (p *RandomSelectionPolicy) SetSeed(seed int64) {
+func (p *RandomMovePolicy) SetSeed(seed int64) {
 	p.r = rand.New(rand.NewSource(seed))
 }
 
-func (*RandomSelectionPolicy) Select() Move {
-
+func (*RandomMovePolicy) Select() {
 }
 
-type ModelbasedPolicy struct {
+type ModelBasedMovePolicy struct {
 	r *rand.Rand
 }
 
-func NewRandomEvaluator() *RandomEvaluator {
-	e := &RandomEvaluator{}
+func NewModelBasedMovePolicy() *ModelBasedMovePolicy {
+	e := &ModelBasedMovePolicy{}
 	e.SetSeed(time.Now().UnixNano())
 	return e
 }
 
-func (e *RandomEvaluator) SetSeed(seed int64) {
+func (e *ModelBasedMovePolicy) SetSeed(seed int64) {
 	e.r = rand.New(rand.NewSource(seed))
+}
+
+func (*ModelBasedMovePolicy) Select() {
 }

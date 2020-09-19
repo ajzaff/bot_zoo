@@ -5,30 +5,30 @@ import (
 	"time"
 )
 
-type RandomEvaluator struct {
+type RandomPositionEvaluator struct {
 	r *rand.Rand
 }
 
-func NewRandomEvaluator() *RandomEvaluator {
-	e := &RandomEvaluator{}
+func NewRandomPositionEvaluator() *RandomPositionEvaluator {
+	e := &RandomPositionEvaluator{}
 	e.SetSeed(time.Now().UnixNano())
 	return e
 }
 
-func (e *RandomEvaluator) SetSeed(seed int64) {
+func (e *RandomPositionEvaluator) SetSeed(seed int64) {
 	e.r = rand.New(rand.NewSource(seed))
 }
 
-type ModelBasedEvaluator struct {
+type ModelBasedPositionEvaluator struct {
 	r *rand.Rand
 }
 
-func NewRandomEvaluator() *RandomEvaluator {
-	e := &RandomEvaluator{}
+func NewModelBasedPositionEvaluator() *ModelBasedPositionEvaluator {
+	e := &ModelBasedPositionEvaluator{}
 	e.SetSeed(time.Now().UnixNano())
 	return e
 }
 
-func (e *RandomEvaluator) SetSeed(seed int64) {
+func (e *ModelBasedPositionEvaluator) SetSeed(seed int64) {
 	e.r = rand.New(rand.NewSource(seed))
 }

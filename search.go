@@ -16,7 +16,7 @@ func (e *Engine) searchRoot() ExtStep {
 
 	e.table.NewSearch()
 
-	var best []Step
+	var bestMove Move
 
 	for p.stepsLeft > 0 {
 		var (
@@ -28,17 +28,12 @@ func (e *Engine) searchRoot() ExtStep {
 		for j := 0; j < stepList.Len(); j++ {
 			step := stepList.At(j)
 
-			if step.Len() > p.stepsLeft {
-				step.Value = -1
-				continue
-			}
-
 			var stepValue Value
 			for k := 0; k < trials; k++ {
 				if err := p.Step(step.Step); err != nil {
 					ppanic(p, err)
 				}
-				value := e.search(p, r, &stepList, uint8(step.Step.Len()))
+				value := e.search(p, r, &stepList)
 				if err := p.Unstep(); err != nil {
 					ppanic(p, err)
 				}
@@ -62,11 +57,8 @@ func (e *Engine) searchRoot() ExtStep {
 		if bestValue == -Inf {
 			break
 		}
-		if bestStep.Pass() {
-			break
-		}
 
-		best = append(best, bestStep)
+		bestMove = append(bestMove, bestStep)
 		if err := p.Step(bestStep); err != nil {
 			ppanic(p, err)
 		}
@@ -76,9 +68,8 @@ func (e *Engine) searchRoot() ExtStep {
 			}
 		}()
 	}
-	best = append(best, Pass)
-	if !e.ponder && MoveLen(best) > 0 {
-		e.writef("bestmove %s\n", MoveString(best))
+	if !e.ponder {
+		e.Outputf("bestmove %s", bestMove.String())
 	}
 	return ExtStep{}
 }
@@ -88,7 +79,7 @@ func (e *Engine) searchRoot() ExtStep {
 // being a Win for one side or the other. This value is a single
 // stochastic outcome and must be repeated many times to hone in
 // on a true result.
-func (e *Engine) search(p *Pos, r *rand.Rand, steps *StepList, depth uint8) Value {
+func (e *Engine) search(p *Pos, r *rand.Rand, steps *StepList) Value {
 	// Maintain a stack of move lengths which will allow us to backprop the search value up.
 	ls := []int{steps.Len()}
 	defer steps.Truncate(ls[0])
