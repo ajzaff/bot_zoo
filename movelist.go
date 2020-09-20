@@ -64,15 +64,19 @@ func ParseMoveList(s string) (MoveList, error) {
 // appendString appends the MoveList string to sb.
 func (l MoveList) appendString(sb *strings.Builder) {
 	var (
-		turnNumber = 1
+		moveNumber = 1
 		side       = Gold
 	)
 	for _, m := range l {
-		fmt.Fprintf(sb, "%d%c ", turnNumber, side.Byte())
+		fmt.Fprintf(sb, "%d%c ", moveNumber, side.Byte())
 		m.appendString(sb)
 		sb.WriteByte('\n')
+		side = side.Opposite()
+		if side == Gold {
+			moveNumber++
+		}
 	}
-	fmt.Fprintf(sb, "%d%c", turnNumber, side.Byte())
+	fmt.Fprintf(sb, "%d%c", moveNumber, side.Byte())
 }
 
 // String returns the string representation of this MoveList.

@@ -93,23 +93,20 @@ func (e *Engine) search(p *Pos, r *rand.Rand, steps *StepList) Value {
 	ls := []int{steps.Len()}
 	defer steps.Truncate(ls[0])
 
-	m := Value(1) // side value multiplier
-
-	for {
+	for m := Value(1); ; {
 		// Is this a terminal node? Return the value immediately.
-		// eval := 0 //p.Value()
-		// if eval.Terminal() {
-		// 	return m * eval
-		// }
+		if v := p.Terminal(); v != 0 {
+			return m * v
+		}
 
 		// Generate the steps for the next node.
 		ls = append(ls, steps.Len())
 		steps.Generate(p)
 
-		// If immobilized return a losing score.
+		// Immobilized? Return a terminal loss.
 		numSteps := steps.Len() - ls[len(ls)-1]
 		if numSteps <= 0 {
-			return m * -Win
+			return m * Loss
 		}
 
 		// Choose a next step at random.
@@ -120,17 +117,19 @@ func (e *Engine) search(p *Pos, r *rand.Rand, steps *StepList) Value {
 
 		// Make the step now.
 		if err := p.Step(step.Step); err != nil {
-			ppanic(p, err)
+			ppanic(p, fmt.Errorf("search_step: %v", err))
 		}
 
 		if p.Side() != initSide {
 			m = -m
 		}
 
-		// Defer the unstep as well as backpropagation.
-		if err := p.Unstep(); err != nil {
-			ppanic(p, err)
-		}
+		// Defer the unstep and backpropagation.
+		defer func() {
+			if err := p.Unstep(); err != nil {
+				ppanic(p, fmt.Errorf("search_unstep: %v", err))
+			}
+		}()
 	}
 }
 

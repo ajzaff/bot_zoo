@@ -17,5 +17,6 @@ func passert(p *Pos, message string, cond bool) {
 func ppanic(p *Pos, v interface{}) {
 	log.Println(p.String())
 	log.Println(p.ShortString())
+	log.Println(p.moves.String())
 	panic(v)
 }

@@ -11,7 +11,7 @@ func (e *Engine) ExecuteCommand(s string) error {
 	s = strings.TrimSpace(s)
 
 	if e.LogProtocolTraffic {
-		e.Logf("> %s", s)
+		e.Debugf("> %s", s)
 	}
 
 	i := strings.IndexByte(s, ' ')
@@ -139,7 +139,7 @@ func init() {
 		stepList.Generate(e.Pos)
 		for i := 0; i < stepList.Len(); i++ {
 			step := stepList.At(i)
-			e.Logf("[%f] %s", step.Value, step.Step.String())
+			e.Logf("[%f] %s", step.Value, step.Step)
 		}
 		return nil
 	}))
@@ -170,6 +170,10 @@ func init() {
 		if err := e.Unpass(); err != nil {
 			return err
 		}
+		return nil
+	}))
+	RegisterAEIHandler("movelist", extendedHandler(func(e *Engine, args string) error {
+		e.Debugf(e.moves.String())
 		return nil
 	}))
 	RegisterAEIHandler("eval", extendedHandler(func(e *Engine, args string) error {

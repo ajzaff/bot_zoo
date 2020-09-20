@@ -52,7 +52,6 @@ var shortPosPattern = regexp.MustCompile(`^([wbgs]) \[([ RCDHMErcdhme]{64})\]$`)
 
 // ParseShortPosition parses the position in short notation.
 // The turn number is set to 2 with the provided color to move.
-// Pass moves are inserted to represent previous moves.
 func ParseShortPosition(s string) (*Pos, error) {
 	matches := shortPosPattern.FindStringSubmatch(s)
 	if matches == nil {
@@ -65,7 +64,7 @@ func ParseShortPosition(s string) (*Pos, error) {
 	p := NewEmptyPosition()
 	p.Pass()
 	p.Pass()
-	if side != p.side {
+	if p.side != side {
 		p.Pass()
 	}
 	for i, b := range []byte(matches[2]) {
@@ -183,6 +182,20 @@ func (p *Pos) Weaker(t Piece) Bitboard {
 	return p.weaker[t.RemoveColor()]
 }
 
+// Terminal tests whether this position is a terminal node for the side to move.
+// It does not test for immobilization.
+func (p *Pos) Terminal() Value {
+
+	// Has an enemy rabbit reached goal? Are we eliminated?
+	if c2 := p.side.Opposite(); (c2 == Gold && p.bitboards[GRabbit.WithColor(c2)] & ^NotRank8 != 0) ||
+		(c2 == Silver && p.bitboards[GRabbit.WithColor(c2)] & ^NotRank1 != 0) ||
+		p.bitboards[GRabbit.WithColor(p.side)] == 0 {
+		return Loss
+	}
+
+	return 0
+}
+
 func (p *Pos) Place(piece Piece, i Square) error {
 	if piece == Empty {
 		return p.Remove(piece, i)
@@ -264,19 +277,17 @@ func (p *Pos) Unpass() error {
 	return nil
 }
 
-// completeCapture returns a capture step resulting from playing s or 0.
-func (p *Pos) completeCapture(s Step) Step {
-	piece, src, dest := s.Piece(), s.Src(), s.Dest()
+// completeCapture returns a capture step resulting after playing s or 0.
+func (p *Pos) completeCapture(c Color) Step {
+	presence := p.Presence(c)
+	undefended := ^presence.Neighbors()
 
-	// Does this step remove a defender?
-	if b := src.Neighbors() & Traps & ^p.Presence(piece.Color()).Neighbors(); b != 0 {
+	// Capture any undefended piece.
+	if b := Traps & presence & undefended; b != 0 {
 		i := b.Square()
 		return MakeCapture(p.At(i), i)
 	}
-	// Does this step land on an undefended trap?
-	if b := dest.Bitboard() & Traps & ^p.Presence(piece.Color()).Neighbors(); b != 0 {
-		return MakeCapture(piece, b.Square())
-	}
+
 	return 0
 }
 
@@ -307,8 +318,7 @@ func (p *Pos) Step(step Step) error {
 	p.stepsLeft--
 	p.moves[len(p.moves)-1] = append(p.moves[len(p.moves)-1], step)
 	// Check if any capture results and execute it:
-	cap := p.completeCapture(step)
-	if cap != 0 {
+	if cap := p.completeCapture(piece.Color()); cap != 0 {
 		if err := p.Remove(cap.Piece(), cap.Src()); err != nil {
 			return fmt.Errorf("capture %s %s: %v", step, cap, err)
 		}
@@ -325,12 +335,19 @@ func (p *Pos) Unstep() error {
 	step := move[len(move)-1]
 	p.moves[len(p.moves)-1] = p.moves[len(p.moves)-1][:len(move)-1]
 	p.stepsLeft++
-	switch {
-	case step.Capture():
-		p.stepsLeft-- // correct
+	// Unstep current capture and fetch the previous step.
+	if step.Capture() {
 		if err := p.Place(step.Piece(), step.Src()); err != nil {
 			return fmt.Errorf("uncapture %s: %v", step, err)
 		}
+		if len(p.moves[len(p.moves)-1]) == 0 {
+			return fmt.Errorf("uncapture: first step should not be capture")
+		}
+		move := p.CurrentMove()
+		p.moves[len(p.moves)-1] = p.moves[len(p.moves)-1][:len(move)-1]
+		step = move[len(move)-1]
+	}
+	switch {
 	case step.Setup():
 		if err := p.Remove(step.Piece(), step.Dest()); err != nil {
 			return fmt.Errorf("unsetup %s: %v", step, err)
@@ -380,6 +397,9 @@ func (p *Pos) Unmove() error {
 		step := move[i]
 		if err := p.Unstep(); err != nil {
 			return fmt.Errorf("unmove %s: unstep %s: %v", move.String(), step.String(), err)
+		}
+		if step.Capture() {
+			i--
 		}
 	}
 	return nil
