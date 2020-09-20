@@ -183,14 +183,24 @@ func (p *Pos) Weaker(t Piece) Bitboard {
 }
 
 // Terminal tests whether this position is a terminal node for the side to move.
+// This checks:
+//	1. Goal
+//	2. Repetition
+//	3. Threefold repetition
 // It does not test for immobilization.
+// Scores are presented as if the side to move passed their turn.
 func (p *Pos) Terminal() Value {
 
-	// Has an enemy rabbit reached goal? Are we eliminated?
+	// Has an opponent's rabbit reached goal? Are we eliminated?
 	if c2 := p.side.Opposite(); (c2 == Gold && p.bitboards[GRabbit.WithColor(c2)] & ^NotRank8 != 0) ||
 		(c2 == Silver && p.bitboards[GRabbit.WithColor(c2)] & ^NotRank1 != 0) ||
 		p.bitboards[GRabbit.WithColor(p.side)] == 0 {
 		return Loss
+	}
+
+	// Has our opponent played a threefold repetition? We win.
+	if p.threefold.Lookup(p.hash) >= 3 {
+		return Win
 	}
 
 	return 0
@@ -315,7 +325,6 @@ func (p *Pos) Step(step Step) error {
 			return fmt.Errorf("%s: %v", step, err)
 		}
 	}
-	p.stepsLeft--
 	p.moves[len(p.moves)-1] = append(p.moves[len(p.moves)-1], step)
 	// Check if any capture results and execute it:
 	if cap := p.completeCapture(piece.Color()); cap != 0 {
@@ -323,6 +332,10 @@ func (p *Pos) Step(step Step) error {
 			return fmt.Errorf("capture %s %s: %v", step, cap, err)
 		}
 		p.moves[len(p.moves)-1] = append(p.moves[len(p.moves)-1], cap)
+	}
+	p.stepsLeft--
+	if p.stepsLeft == 0 {
+		p.Pass()
 	}
 	return nil
 }
@@ -369,21 +382,14 @@ func (p *Pos) Move(m Move) error {
 	if p.moveNum == 1 && m.Len() != 16 {
 		return fmt.Errorf("move %s: wrong number of setup moves", m.String())
 	}
-	initHash := p.hash
+	initSide := p.Side()
 	for _, step := range m {
 		if err := p.Step(step); err != nil {
 			return fmt.Errorf("move %s: step %s: %v", m.String(), step.String(), err)
 		}
 	}
-	p.Pass()
-	// TODO(ajzaff): Movegen should filter moves that would result
-	// in recurring positions.
-	if initHash == p.Hash()^silverHashKey() {
-		return errRecurringPosition
-	}
-	// Check threefold repetition.
-	if p.threefold.Lookup(p.Hash()) >= 3 {
-		return errRecurringPosition
+	if p.Side() == initSide {
+		p.Pass()
 	}
 	return nil
 }

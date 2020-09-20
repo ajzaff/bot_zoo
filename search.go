@@ -30,6 +30,8 @@ func (e *Engine) searchRoot(ponder bool) {
 		e.tt.NewSearch()
 	}
 
+	initHash := p.Hash()
+
 	var bestMove Move
 
 	for p.stepsLeft > 0 {
@@ -45,15 +47,19 @@ func (e *Engine) searchRoot(ponder bool) {
 			if err := p.Step(step.Step); err != nil {
 				ppanic(p, err)
 			}
-			value := e.search(p, r, &stepList)
-			if err := p.Unstep(); err != nil {
-				ppanic(p, err)
+
+			if p.Hash() != initHash^silverHashKey() {
+				value := e.search(p, r, &stepList, initHash)
+
+				stepList.SetValue(j, value)
+				if value > bestValue {
+					bestValue = value
+					bestStep = step.Step
+				}
 			}
 
-			stepList.SetValue(j, value)
-			if value > bestValue {
-				bestValue = value
-				bestStep = step.Step
+			if err := p.Unstep(); err != nil {
+				ppanic(p, err)
 			}
 		}
 
@@ -88,7 +94,7 @@ func (e *Engine) searchRoot(ponder bool) {
 // being a Win for one side or the other. This value is a single
 // stochastic outcome and must be repeated many times to hone in
 // on a true result.
-func (e *Engine) search(p *Pos, r *rand.Rand, steps *StepList) Value {
+func (e *Engine) search(p *Pos, r *rand.Rand, steps *StepList, initHash Hash) Value {
 	// Maintain a stack of move lengths which will allow us to backprop the search value up.
 	ls := []int{steps.Len()}
 	defer steps.Truncate(ls[0])
@@ -109,18 +115,29 @@ func (e *Engine) search(p *Pos, r *rand.Rand, steps *StepList) Value {
 			return m * Loss
 		}
 
-		// Choose a next step at random.
-		i := ls[len(ls)-1] + r.Intn(numSteps)
-		step := steps.At(i)
-
 		initSide := p.Side()
 
-		// Make the step now.
-		if err := p.Step(step.Step); err != nil {
-			ppanic(p, fmt.Errorf("search_step: %v", err))
+		// Choose a next step at random until it doesn't repeat the position
+		for {
+			i := ls[len(ls)-1] + r.Intn(numSteps)
+			step := steps.At(i)
+
+			// Make the step now.
+			if err := p.Step(step.Step); err != nil {
+				ppanic(p, fmt.Errorf("search_step: %v", err))
+			}
+
+			if p.Hash() != initHash^silverHashKey() {
+				break
+			}
+
+			if err := p.Unstep(); err != nil {
+				ppanic(p, fmt.Errorf("search_repetition_unstep: %v", err))
+			}
 		}
 
 		if p.Side() != initSide {
+			initHash = p.Hash()
 			m = -m
 		}
 
