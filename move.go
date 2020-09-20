@@ -47,6 +47,24 @@ func (m Move) Equals(move Move) bool {
 	return true
 }
 
+// Recurring extends Step.Recurring and returns whether appending s would make m recurring.
+// By the Arimaa rules, a move that would result in no change to the position is not allowed.
+// However, it is ok to have intermediate recurring positions, such as when pulling a piece.
+func (m Move) Recurring(s Step) bool {
+	if s.Capture() {
+		return false
+	}
+	for _, x := range m {
+		if x.Capture() {
+			continue
+		}
+		if x.Recurring(s) {
+			return true
+		}
+	}
+	return false
+}
+
 // appendString appends the move to the builder.
 // This is useful for formatting PV lines.
 func (m Move) appendString(sb *strings.Builder) {
@@ -163,6 +181,11 @@ func (s Step) Setup() bool {
 		s&0b1111110000000000 != 0b111010000000000 &&
 		s&0b1111110000000000 != 0b101000000000000 &&
 		s&0b1111110000000000 != 0b110110000000000
+}
+
+// Recurring returns true if playing s and step lead to a recurring position (i.e. step "undoes" s).
+func (s Step) Recurring(step Step) bool {
+	return s.Piece() == step.Piece() && s.Src() == step.Dest() && s.Dest() == step.Src()
 }
 
 // appendString appends the Step string to the builder.

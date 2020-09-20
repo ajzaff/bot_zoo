@@ -19,16 +19,16 @@ func (e *RandomPositionEvaluator) SetSeed(seed int64) {
 	e.r = rand.New(rand.NewSource(seed))
 }
 
-type ModelBasedPositionEvaluator struct {
+type ModelPositionEvaluator struct {
 	r *rand.Rand
 }
 
-func NewModelBasedPositionEvaluator() *ModelBasedPositionEvaluator {
-	e := &ModelBasedPositionEvaluator{}
+func NewModelPositionEvaluator() *ModelPositionEvaluator {
+	e := &ModelPositionEvaluator{}
 	e.SetSeed(time.Now().UnixNano())
 	return e
 }
 
-func (e *ModelBasedPositionEvaluator) SetSeed(seed int64) {
+func (e *ModelPositionEvaluator) SetSeed(seed int64) {
 	e.r = rand.New(rand.NewSource(seed))
 }
