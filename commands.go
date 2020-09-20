@@ -117,7 +117,7 @@ func init() {
 
 	RegisterAEIHandler("new", extendedHandler(func(e *Engine, args string) error {
 		e.NewGame()
-		p, err := ParseShortPosition(posStandard)
+		p, err := ParseShortPosition(`g [rrrrrrrrhdcemcdh                                HDCMECDHRRRRRRRR]`)
 		if err != nil {
 			return err
 		}
@@ -178,26 +178,21 @@ func init() {
 		return nil
 	}))
 	RegisterAEIHandler("print", extendedHandler(func(e *Engine, args string) error {
-		parts := strings.SplitN(args, " ", 2)
-		if len(parts) < 2 {
+		var b Bitboard
+		switch args {
+		case "":
 			e.Logf(e.Pos.String())
 			return nil
-		}
-		var b Bitboard
-		switch parts[1] {
 		case "weaker":
-			b = e.touching[Gold]
 			for t := GRabbit; t <= GElephant; t++ {
-				b = e.weaker[t]
 				e.Logf(string(t.Byte()))
-				e.Logf(b.String())
+				e.Logf(e.weaker[t].String())
 			}
 			return nil
 		case "stronger":
 			for t := GRabbit; t <= GElephant; t++ {
-				b = e.stronger[t]
 				e.Logf(string(t.Byte()))
-				e.Logf(b.String())
+				e.Logf(e.stronger[t].String())
 			}
 			return nil
 		case "tg":
@@ -220,12 +215,13 @@ func init() {
 			e.Logf(e.ShortString())
 			return nil
 		default:
-			p, err := ParsePiece(parts[1][0])
+			p, err := ParsePiece(args[0])
 			if err != nil {
 				return fmt.Errorf("printing piece bitboard: %v", err)
 			}
 			b = e.bitboards[p]
 		}
+		e.Logf(b.String())
 		return nil
 	}))
 }

@@ -264,55 +264,83 @@ func (p *Pos) Unpass() error {
 	return nil
 }
 
+// completeCapture returns a capture step resulting from playing s or 0.
+func (p *Pos) completeCapture(s Step) Step {
+	piece, src, dest := s.Piece(), s.Src(), s.Dest()
+
+	// Does this step remove a defender?
+	if b := src.Neighbors() & Traps & ^p.Presence(piece.Color()).Neighbors(); b != 0 {
+		i := b.Square()
+		return MakeCapture(p.At(i), i)
+	}
+	// Does this step land on an undefended trap?
+	if b := dest.Bitboard() & Traps & ^p.Presence(piece.Color()).Neighbors(); b != 0 {
+		return MakeCapture(piece, b.Square())
+	}
+	return 0
+}
+
 func (p *Pos) Step(step Step) error {
-	n := 1
-	if n > p.stepsLeft {
+	// Is this a capture? We can skip it.
+	if step.Capture() {
+		return nil
+	}
+	// Are there enough steps left?
+	if p.stepsLeft < 1 {
 		return fmt.Errorf("%s: not enough steps left", step)
 	}
+	// Execute the step:
+	piece, src, dest := step.Piece(), step.Src(), step.Dest()
 	switch {
-	case step.Capture():
-		if err := p.Remove(step.Piece(), step.Src()); err != nil {
-			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
-		}
 	case step.Setup():
-		if err := p.Place(step.Piece(), step.Dest()); err != nil {
-			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
+		if err := p.Place(piece, dest); err != nil {
+			return fmt.Errorf("setup %s: %v", step, err)
 		}
 	default:
-		if err := p.Remove(step.Piece(), step.Src()); err != nil {
-			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
+		if err := p.Remove(piece, src); err != nil {
+			return fmt.Errorf("%s: %v", step, err)
 		}
-		if err := p.Place(step.Piece(), step.Dest()); err != nil {
-			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
+		if err := p.Place(piece, dest); err != nil {
+			return fmt.Errorf("%s: %v", step, err)
 		}
 	}
-	p.stepsLeft -= n
+	p.stepsLeft--
 	p.moves[len(p.moves)-1] = append(p.moves[len(p.moves)-1], step)
+	// Check if any capture results and execute it:
+	cap := p.completeCapture(step)
+	if cap != 0 {
+		if err := p.Remove(cap.Piece(), cap.Src()); err != nil {
+			return fmt.Errorf("capture %s %s: %v", step, cap, err)
+		}
+		p.moves[len(p.moves)-1] = append(p.moves[len(p.moves)-1], cap)
+	}
 	return nil
 }
 
 func (p *Pos) Unstep() error {
-	if p.CurrentMove().Len() == 0 {
+	move := p.CurrentMove()
+	if move.Len() == 0 {
 		return p.Unpass()
 	}
-	move := p.moves[len(p.moves)-1]
 	step := move[len(move)-1]
 	p.moves[len(p.moves)-1] = p.moves[len(p.moves)-1][:len(move)-1]
-	n := 1
-	p.stepsLeft += n
+	p.stepsLeft++
 	switch {
 	case step.Capture():
-		return p.Place(step.Piece(), step.Src())
+		p.stepsLeft-- // correct
+		if err := p.Place(step.Piece(), step.Src()); err != nil {
+			return fmt.Errorf("uncapture %s: %v", step, err)
+		}
 	case step.Setup():
 		if err := p.Remove(step.Piece(), step.Dest()); err != nil {
-			return err
+			return fmt.Errorf("unsetup %s: %v", step, err)
 		}
 	default:
 		if err := p.Remove(step.Piece(), step.Dest()); err != nil {
-			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
+			return fmt.Errorf("%s: %v", step, err)
 		}
 		if err := p.Place(step.Piece(), step.Src()); err != nil {
-			return fmt.Errorf("%s (%s): %v", step.GoString(), step, err)
+			return fmt.Errorf("%s: %v", step, err)
 		}
 	}
 	return nil
@@ -344,10 +372,10 @@ func (p *Pos) Move(m Move) error {
 }
 
 func (p *Pos) Unmove() error {
-	move := p.CurrentMove()
 	if err := p.Unpass(); err != nil {
-		return fmt.Errorf("unmove %s: unpass: %v", move, err)
+		return fmt.Errorf("unmove: unpass: %v", err)
 	}
+	move := p.CurrentMove()
 	for i := len(move) - 1; i >= 0; i-- {
 		step := move[i]
 		if err := p.Unstep(); err != nil {
@@ -357,18 +385,8 @@ func (p *Pos) Unmove() error {
 	return nil
 }
 
-const (
-	posEmpty     = `g [                                                                ]`
-	posStandard  = `g [rrrrrrrrhdcemcdh                                HDCMECDHRRRRRRRR]`
-	posStandardG = `s [rrrrrrrrhdcemcdh                                                ]`
-)
-
-func (p *Pos) ShortString() string {
-	if p == nil {
-		return ""
-	}
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "%c [", p.side.Byte())
+func (p *Pos) appendShortString(sb *strings.Builder) {
+	fmt.Fprintf(sb, "%c [", p.side.Byte())
 	for i := 7; i >= 0; i-- {
 		for j := 0; j < 8; j++ {
 			at := Square(8*i + j)
@@ -376,21 +394,22 @@ func (p *Pos) ShortString() string {
 		}
 	}
 	sb.WriteByte(']')
+}
+
+func (p *Pos) ShortString() string {
+	var sb strings.Builder
+	p.appendShortString(&sb)
 	return sb.String()
 }
 
-func (p *Pos) String() string {
-	if p == nil {
-		return ""
-	}
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "%d%c", p.moveNum, p.side.Byte())
+func (p *Pos) appendString(sb *strings.Builder) {
+	fmt.Fprintf(sb, "%d%c", p.moveNum, p.side.Byte())
 	if move := p.CurrentMove(); move != nil {
-		fmt.Fprintf(&sb, " %s", move.String())
+		fmt.Fprintf(sb, " %s", move.String())
 	}
 	sb.WriteString("\n +-----------------+\n")
 	for i := 7; i >= 0; i-- {
-		fmt.Fprintf(&sb, "%d| ", i+1)
+		fmt.Fprintf(sb, "%d| ", i+1)
 		for j := 0; j < 8; j++ {
 			at := Square(8*i + j)
 			if piece := p.board[at]; piece == Empty {
@@ -407,5 +426,10 @@ func (p *Pos) String() string {
 		sb.WriteString("|\n")
 	}
 	sb.WriteString(" +-----------------+\n   a b c d e f g h")
+}
+
+func (p *Pos) String() string {
+	var sb strings.Builder
+	p.appendString(&sb)
 	return sb.String()
 }

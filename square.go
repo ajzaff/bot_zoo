@@ -130,10 +130,45 @@ func (i Square) Bitboard() Bitboard {
 	return Bitboard(1) << i
 }
 
+var (
+	neighbors        [64]Bitboard
+	forwardNeighbors [128]Bitboard
+)
+
+func init() {
+	for i := Square(0); i < 64; i++ {
+		b := i.Bitboard()
+		steps := b.Neighbors()
+		neighbors[i] = steps
+		grSteps := steps
+		if b&NotRank1 != 0 { // rabbits can't move backwards.
+			grSteps ^= b >> 8
+		}
+		srSteps := steps
+		if b&NotRank8 != 0 {
+			srSteps ^= b << 8
+		}
+		forwardNeighbors[i] = grSteps
+		forwardNeighbors[64+i] = srSteps
+	}
+}
+
+// Neighbors returns the neighbors of the square.
+// It panics if i is invalid.
+func (i Square) Neighbors() Bitboard {
+	return neighbors[i]
+}
+
+// ForwardNeighbors returns the forward neighbors of the square for the given color c.
+// It panics if i is invalid.
+func (i Square) ForwardNeighbors(c Color) Bitboard {
+	return forwardNeighbors[64*uint8(c)+uint8(i)]
+}
+
 // AdjacentTrap returns the Trap Square adjacent to i if present.
 func (i Square) AdjacentTrap() Square {
 	if i.Valid() {
-		b := stepsB[i] & Traps
+		b := i.Neighbors() & Traps
 		if b != 0 {
 			return b.Square()
 		}

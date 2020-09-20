@@ -93,7 +93,7 @@ func (e *Engine) search(p *Pos, r *rand.Rand, steps *StepList) Value {
 	ls := []int{steps.Len()}
 	defer steps.Truncate(ls[0])
 
-	m := Value(1) // side multiplier
+	m := Value(1) // side value multiplier
 
 	for {
 		// Is this a terminal node? Return the value immediately.
@@ -128,11 +128,9 @@ func (e *Engine) search(p *Pos, r *rand.Rand, steps *StepList) Value {
 		}
 
 		// Defer the unstep as well as backpropagation.
-		defer func(i int) {
-			if err := p.Unstep(); err != nil {
-				ppanic(p, err)
-			}
-		}(i)
+		if err := p.Unstep(); err != nil {
+			ppanic(p, err)
+		}
 	}
 }
 

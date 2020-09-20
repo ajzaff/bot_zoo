@@ -9,16 +9,19 @@ type AEISettings struct {
 	BotVersion         string
 	BotAuthor          string
 	LogProtocolTraffic bool
+	LogVerbosePosition bool
 	Extensions         bool
 	ProtoVersion       string
 }
 
 func RegisterAEIFlags(flagset *flag.FlagSet) *AEISettings {
 	s := new(AEISettings)
+	flagset.StringVar(&s.ProtoVersion, "protocol_version", "1", "AEI protocol-version.")
 	flagset.StringVar(&s.BotName, "bot_name", "bot_alpha_zoo", "Bot name reported by AEI `id`.")
 	flagset.StringVar(&s.BotVersion, "bot_version", "0", "Bot verion reported by AEI `id`.")
 	flagset.StringVar(&s.BotAuthor, "bot_author", "Alan Zaffetti", "Bot author reported by AEI `id`.")
-	flagset.BoolVar(&s.LogProtocolTraffic, "log_aei_protocol_traffic", false, "Log all AEI protocol messages sent and received to stderr.")
+	flagset.BoolVar(&s.LogProtocolTraffic, "log_protocol_traffic", false, "Log all AEI protocol messages sent and received to stderr.")
+	flagset.BoolVar(&s.LogVerbosePosition, "log_verbose_position", false, "Log verbose position before all sent messages to stderr.")
 	return s
 }
 

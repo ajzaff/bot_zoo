@@ -4,11 +4,6 @@ import (
 	"sort"
 )
 
-var (
-	stepsB       [64]Bitboard
-	rabbitStepsB [2][64]Bitboard
-)
-
 // ExtStep contains a step and associated value.
 type ExtStep struct {
 	Step
@@ -61,51 +56,6 @@ func (l *StepList) SetValue(i int, v Value) {
 	l.steps[i].Value = v
 }
 
-func init() {
-	for i := Square(0); i < 64; i++ {
-		b := i.Bitboard()
-		steps := b.Neighbors()
-		stepsB[i] = steps
-		grSteps := steps
-		if b&NotRank1 != 0 { // rabbits can't move backwards.
-			grSteps ^= b >> 8
-		}
-		srSteps := steps
-		if b&NotRank8 != 0 {
-			srSteps ^= b << 8
-		}
-		rabbitStepsB[Gold][i] = grSteps
-		rabbitStepsB[Silver][i] = srSteps
-	}
-}
-
-func unguardedB(b, presence Bitboard) Bitboard {
-	return b & ^presence.Neighbors()
-}
-
-func trappedB(b, presence Bitboard) Bitboard {
-	return b & unguardedB(Traps, presence)
-}
-
-// capture computes statically the capture resulting from a move from src to dest if any.
-// The possible types of captures are abandoning a trapped piece or
-// capturing ourselves by stepping onto an unguarded trap square.
-func (p *Pos) capture(presence Bitboard, src, dest Square) Square {
-	srcB := src.Bitboard()
-	destB := dest.Bitboard()
-	newPresence := presence ^ (srcB | destB)
-	if b := unguardedB(destB&Traps, newPresence); b != 0 {
-		// Capture of piece pushed from srcB to destB.
-		return src
-	}
-	if b := trappedB(newPresence&srcB.Neighbors(), newPresence); b != 0 {
-		// Capture of piece left next to src.
-		// TODO(ajzaff): It would be more clear to have a adjacentTrap helper for this.
-		return b.Square()
-	}
-	return 64
-}
-
 // generateSteps appends all legal steps to a.
 // a legal step is any sliding step, push or
 // pull step in which the Src, Dest, or Alt is occupied
@@ -132,9 +82,9 @@ func (p *Pos) generateSteps(a *[]ExtStep) {
 		}
 		var db Bitboard
 		if t.SameType(GRabbit) {
-			db = rabbitStepsB[c][src]
+			db = src.ForwardNeighbors(c)
 		} else {
-			db = stepsB[src]
+			db = src.Neighbors()
 		}
 		emptyDB := db & empty
 

@@ -16,8 +16,9 @@ type Engine struct {
 
 	*Options
 
-	log *log.Logger
-	out *log.Logger
+	log   *log.Logger
+	out   *log.Logger
+	debug *log.Logger
 
 	*Pos
 
@@ -34,6 +35,7 @@ func NewEngine() *Engine {
 		Pos:         NewEmptyPosition(),
 		log:         log.New(os.Stdout, "log ", 0),
 		out:         log.New(os.Stdout, "", 0),
+		debug:       log.New(os.Stderr, "", 0),
 	}
 	e.searchState.tt.Resize(50)
 	return e
@@ -102,7 +104,20 @@ func (e *Engine) Logf(format string, a ...interface{}) {
 }
 
 // Outputf outputs the formatted message to the configured output log.
-// This is used for AEI protocol messages.
+// This should be used only for AEI protocol messages.
 func (e *Engine) Outputf(format string, a ...interface{}) {
-	e.out.Printf(format, a...)
+	if e.LogVerbosePosition {
+		e.Debugf(e.Pos.String())
+		e.Debugf(e.Pos.ShortString())
+	}
+	s := fmt.Sprintf(format, a...)
+	if e.LogProtocolTraffic {
+		e.Debugf("< %s", s)
+	}
+	e.out.Print(s)
+}
+
+// Debugf logs the formatted message to stderr.
+func (e *Engine) Debugf(format string, a ...interface{}) {
+	e.debug.Printf(format, a...)
 }
