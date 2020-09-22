@@ -29,14 +29,19 @@ func ParseMove(s string) (Move, error) {
 	return move, nil
 }
 
-// Len returns the length of the Move m in number of steps.
-func (m Move) Len() int {
-	return len(m)
+// Len returns the length of the Move m in number of steps not including captures.
+func (m Move) Len() (n int) {
+	for _, step := range m {
+		if !step.Capture() {
+			n++
+		}
+	}
+	return n
 }
 
 // Equals returns true if m and move contain the same Steps.
 func (m Move) Equals(move Move) bool {
-	if m.Len() != move.Len() {
+	if len(m) != len(move) {
 		return false
 	}
 	for i := range m {
@@ -63,6 +68,30 @@ func (m Move) Recurring(s Step) bool {
 		}
 	}
 	return false
+}
+
+// Last returns the last step that is not a capture or 0.
+func (m Move) Last() Step {
+	for i := len(m) - 1; i >= 0; i-- {
+		if step := m[i]; !step.Capture() {
+			return step
+		}
+	}
+	return 0
+}
+
+// Pop removes and returns the last step with possible capture.
+func (m *Move) Pop() (s, cap Step) {
+	n := len(*m) - 1
+	if n >= 0 && (*m)[n].Capture() {
+		cap = (*m)[n]
+		n--
+	}
+	if n >= 0 {
+		s = (*m)[n]
+		*m = (*m)[:n]
+	}
+	return s, cap
 }
 
 // appendString appends the move to the builder.

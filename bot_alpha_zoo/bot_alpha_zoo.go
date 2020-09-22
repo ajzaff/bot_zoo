@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"flag"
+	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -27,6 +28,20 @@ func main() {
 	log.Println("bot_alpha_zoo by Alan Zaffetti")
 	log.Println("For operation instructions: <https://github.com/ajzaff/bot_zoo>")
 	log.Println(`To quit: type "quit"`)
+
+	if engineSettings.MoveList != "" {
+		bs, err := ioutil.ReadFile(engineSettings.MoveList)
+		if err != nil {
+			log.Fatalf("Failed to load movelist file: %v", err)
+		}
+		l, err := zoo.ParseMoveList(string(bs))
+		if err != nil {
+			log.Fatalf("Failed to parse movelist: %v", err)
+		}
+		for _, m := range l {
+			engine.Move(m)
+		}
+	}
 
 	// Execute AEI loop:
 	sc := bufio.NewScanner(os.Stdin)

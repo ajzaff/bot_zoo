@@ -50,7 +50,7 @@ func ParseMoveList(s string) (MoveList, error) {
 		}
 		move, err := ParseMove(text)
 		if err != nil {
-			return nil, fmt.Errorf("line %d: bad move: %s: %v", i, match[0], text, err)
+			return nil, fmt.Errorf("line %d: bad move: %s: %s: %v", i, match[0], text, err)
 		}
 		res = append(res, move)
 		side = side.Opposite()
@@ -76,7 +76,6 @@ func (l MoveList) appendString(sb *strings.Builder) {
 			moveNumber++
 		}
 	}
-	fmt.Fprintf(sb, "%d%c", moveNumber, side.Byte())
 }
 
 // String returns the string representation of this MoveList.

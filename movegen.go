@@ -69,26 +69,23 @@ func (p *Pos) generateSteps(a *[]ExtStep) {
 		p.generateSetupSteps(a)
 		return
 	}
-	c := p.Side()
-	presence := p.Presence(c)
+	ourSide := p.Side()
+	ourRabbit := GRabbit.WithColor(ourSide)
 	empty := p.Empty()
-	for b := presence; b > 0; b &= b - 1 {
-		sb := b & -b
+	occupied := ^empty
+	for b := occupied; b > 0; b &= b - 1 {
 		src := b.Square()
-		t := p.board[src]
+		t := p.At(src)
 
-		if p.frozenB(t, sb) {
-			continue
-		}
 		var db Bitboard
-		if t.SameType(GRabbit) {
-			db = src.ForwardNeighbors(c)
+		if t == ourRabbit {
+			db = src.ForwardNeighbors(ourSide)
 		} else {
 			db = src.Neighbors()
 		}
-		emptyDB := db & empty
 
 		// Generate step from src to dest.
+		emptyDB := db & empty
 		for b2 := emptyDB; b2 > 0; b2 &= b2 - 1 {
 			dest := b2.Square()
 			*a = append(*a, makeExtStep(MakeStep(t, src, dest)))
@@ -97,40 +94,17 @@ func (p *Pos) generateSteps(a *[]ExtStep) {
 }
 
 func (p *Pos) generateSetupSteps(a *[]ExtStep) {
-	setupPieces := map[Piece]int{
-		GRabbit:   8,
-		GCat:      2,
-		GDog:      2,
-		GHorse:    2,
-		GCamel:    1,
-		GElephant: 1,
-	}
-	i, end := A1, H2
 	c := p.Side()
+	i := A1
+	for ; i <= H2 && (c == Gold && p.At(i) != Empty || c == Silver && p.At(i.Flip()) != Empty); i++ {
+	}
+	if i > H2 {
+		return
+	}
 	if c == Silver {
-		i = A8
-		end = H7
+		i = i.Flip()
 	}
-	for i != end {
-		t := p.At(i)
-		if t == Empty {
-			break
-		}
-		setupPieces[t.RemoveColor()]--
-		if i.File() == 7 && c == Silver {
-			i -= 15
-		} else {
-			i++
-		}
-	}
-	var piecesInt []int
-	for t := range setupPieces {
-		if t != Empty && setupPieces[t] > 0 {
-			piecesInt = append(piecesInt, int(t))
-		}
-	}
-	sort.Ints(piecesInt)
-	for _, t := range piecesInt {
+	for t := GRabbit.WithColor(c); t <= GElephant.WithColor(c); t++ {
 		*a = append(*a, makeExtStep(MakeSetup(Piece(t).WithColor(c), i)))
 	}
 }

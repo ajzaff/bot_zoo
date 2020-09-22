@@ -1,0 +1,21 @@
+1g Ma1 Cb1 Hc1 Ed1 He1 Rf1 Dg1 Dh1 Ca2 Rb2 Rc2 Rd2 Re2 Rf2 Rg2 Rh2
+1s dh7 hg7 cf7 me7 ed7 cc7 hb7 da7 rh8 rg8 rf8 re8 rd8 rc8 rb8 ra8
+2g Rd2n Ed1n Hc1e Re2n
+2s dh7s rh8s dh6s rh7s
+3g He1n Rg2n Rb2n Rb3w
+3s dh5w rh6s rh5s rh4s
+4g Rg3n Ca2e Cb2n He2s
+4s rh3w rg3s Rg4s dg5s
+5g Ra3n Cb3w Ed2e Ca3e
+5s rg8e rh8s rh7s rh6s
+6g Ma1n Re3n Ma2n Cb1e
+6s rh5s rh4s da7s ra8s
+7g Cb3s Cb2w Ra4e Ma3n
+7s da6e ra7s ra6s rf8e
+8g ra5n Ma4n Ee2n Re4e
+8s Rf4n dg4w Rf5n Rf6x df4n
+9g Rg3n Rb4n rg2n Dg1n
+9s db6e Rb5n dc6s Rb6e Rc6x
+10g Ee3n Rd3n Ee4n Rg4w
+10s hb7w ra6e rb6s rb5s
+11g

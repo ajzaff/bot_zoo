@@ -94,9 +94,7 @@ func init() {
 		if err != nil {
 			return err
 		}
-		if err := e.Move(move); err != nil {
-			return err
-		}
+		e.Move(move)
 		return nil
 	})
 	RegisterAEIHandler("go", func(e *Engine, args string) error {
@@ -125,9 +123,7 @@ func init() {
 		return nil
 	}))
 	RegisterAEIHandler("unmove", extendedHandler(func(e *Engine, args string) error {
-		if err := e.Unmove(); err != nil {
-			return err
-		}
+		e.Unmove()
 		return nil
 	}))
 	RegisterAEIHandler("hash", extendedHandler(func(e *Engine, args string) error {
@@ -139,7 +135,24 @@ func init() {
 		stepList.Generate(e.Pos)
 		for i := 0; i < stepList.Len(); i++ {
 			step := stepList.At(i)
-			e.Logf("[%f] %s", step.Value, step.Step)
+			illegalStr := ""
+			if ok, err := e.Legal(step.Step); !ok {
+				illegalStr = fmt.Sprintf(" (illegal; %v)", err)
+			}
+			e.Logf("[%f] %s%s", step.Value, step.Step, illegalStr)
+		}
+		return nil
+	}))
+	RegisterAEIHandler("legal", extendedHandler(func(e *Engine, args string) error {
+		if len(args) == 0 {
+			return fmt.Errorf("missing step")
+		}
+		step, err := ParseStep(args)
+		if err != nil {
+			return err
+		}
+		if legal, err := e.Legal(step); !legal {
+			e.Logf(err.Error())
 		}
 		return nil
 	}))
@@ -151,15 +164,14 @@ func init() {
 		if err != nil {
 			return err
 		}
-		if err := e.Step(step); err != nil {
-			return err
+		if legal, err := e.Legal(step); !legal {
+			return fmt.Errorf("step %s: %v", step, err)
 		}
+		e.Step(step)
 		return nil
 	}))
 	RegisterAEIHandler("unstep", extendedHandler(func(e *Engine, args string) error {
-		if err := e.Unstep(); err != nil {
-			return err
-		}
+		e.Unstep()
 		return nil
 	}))
 	RegisterAEIHandler("pass", extendedHandler(func(e *Engine, args string) error {
@@ -167,9 +179,7 @@ func init() {
 		return nil
 	}))
 	RegisterAEIHandler("unpass", extendedHandler(func(e *Engine, args string) error {
-		if err := e.Unpass(); err != nil {
-			return err
-		}
+		e.Unpass()
 		return nil
 	}))
 	RegisterAEIHandler("movelist", extendedHandler(func(e *Engine, args string) error {
@@ -177,8 +187,7 @@ func init() {
 		return nil
 	}))
 	RegisterAEIHandler("eval", extendedHandler(func(e *Engine, args string) error {
-		// TODO(ajzaff): Output current eval.
-		e.Logf("0")
+		e.Logf("%f", e.Terminal())
 		return nil
 	}))
 	RegisterAEIHandler("print", extendedHandler(func(e *Engine, args string) error {

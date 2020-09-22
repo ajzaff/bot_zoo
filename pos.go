@@ -21,7 +21,8 @@ type Pos struct {
 	side       Color      // side to play
 	moveNum    int        // number of moves left for this turn
 	moves      MoveList   // moves to arrive at this position including the current in progress move
-	lastSrc    Square     // last source square or an invalid square used for validating pulls
+	lastPiece  Piece      // last piece to move or Empty; used for validating pulls
+	lastSrc    Square     // last source square or an invalid square; used for validating pulls
 	stepsLeft  int        // steps remaining in the current move
 	hash       Hash       // hash of the current position
 }
@@ -76,9 +77,7 @@ func ParseShortPosition(s string) (*Pos, error) {
 		if piece == Empty {
 			continue
 		}
-		if err := p.Place(piece, square); err != nil {
-			return nil, fmt.Errorf("at %s: %v", square.String(), err)
-		}
+		p.Place(piece, square)
 	}
 	return p, nil
 }
@@ -120,6 +119,7 @@ func (p *Pos) Clone() *Pos {
 		side:       p.Side(),
 		moveNum:    p.moveNum,
 		moves:      moves,
+		lastPiece:  p.lastPiece,
 		lastSrc:    p.lastSrc,
 		stepsLeft:  p.stepsLeft,
 		hash:       p.hash,
@@ -182,40 +182,65 @@ func (p *Pos) Weaker(t Piece) Bitboard {
 	return p.weaker[t.RemoveColor()]
 }
 
-// Terminal tests whether this position is a terminal node for the side to move.
-// This checks:
-//	1. Goal
-//	2. Repetition
-//	3. Threefold repetition
-// It does not test for immobilization.
-// Scores are presented as if the side to move passed their turn.
+// Terminal tests whether this position is a terminal node from the perspecitve of player B to move.
+// Only checks for goal or elimination.
 func (p *Pos) Terminal() Value {
 
-	// Has an opponent's rabbit reached goal? Are we eliminated?
-	if c2 := p.side.Opposite(); (c2 == Gold && p.bitboards[GRabbit.WithColor(c2)] & ^NotRank8 != 0) ||
-		(c2 == Silver && p.bitboards[GRabbit.WithColor(c2)] & ^NotRank1 != 0) ||
-		p.bitboards[GRabbit.WithColor(p.side)] == 0 {
+	// Still setting up?
+	if p.moveNum == 1 {
+		return 0
+	}
+
+	c := p.Side()
+
+	// Goal:
+	goalA := p.bitboards[GRabbit] & ^NotRank8 != 0
+	goalB := p.bitboards[SRabbit] & ^NotRank1 != 0
+	if c == Gold {
+		goalA, goalB = goalB, goalA
+	}
+
+	// Has a rabbit of player A reached goal? If so player A wins.
+	if goalA {
 		return Loss
 	}
 
-	// Has our opponent played a threefold repetition? We win.
-	if p.threefold.Lookup(p.hash) >= 3 {
+	// Has a rabbit of player B reached goal? If so player B wins.
+	if goalB {
+		return Win
+	}
+
+	// Elimination:
+	elimA := p.bitboards[GRabbit] == 0
+	elimB := p.bitboards[SRabbit] == 0
+	if c == Gold {
+		elimA, elimB = elimB, elimA
+	}
+
+	// Has player B lost all rabbits? If so player A wins.
+	if elimB {
+		return Loss
+	}
+
+	// Has player A lost all rabbits? If so player B wins.
+	if elimA {
 		return Win
 	}
 
 	return 0
 }
 
-func (p *Pos) Place(piece Piece, i Square) error {
+// Place places piece on i. If piece is Empty it instead removes the piece.
+// If a piece is already present it removes the piece first.
+func (p *Pos) Place(piece Piece, i Square) {
 	if piece == Empty {
-		return p.Remove(piece, i)
-	}
-	if !piece.Valid() {
-		return fmt.Errorf("invalid piece: %c", piece.Byte())
+		p.Remove(piece, i)
+		return
 	}
 	b := i.Bitboard()
 	if p.bitboards[Empty]&b == 0 {
-		return fmt.Errorf("piece already present on %s", i)
+		// Remove piece before placing a new one.
+		p.Remove(p.At(i), i)
 	}
 	c := piece.Color()
 	p.board[i] = piece
@@ -232,13 +257,13 @@ func (p *Pos) Place(piece Piece, i Square) error {
 		p.weaker[r] |= b
 	}
 	p.hash ^= pieceHashKey(piece, i)
-	return nil
 }
 
-func (p *Pos) Remove(piece Piece, i Square) error {
+// Remove removes the piece from i. If no piece is present it does nothing.
+func (p *Pos) Remove(piece Piece, i Square) {
 	b := i.Bitboard()
 	if p.bitboards[Empty]&b != 0 {
-		return fmt.Errorf("no piece present on %s", i)
+		return
 	}
 	c := piece.Color()
 	notB := ^b
@@ -256,40 +281,171 @@ func (p *Pos) Remove(piece Piece, i Square) error {
 		p.weaker[r] &= notB
 	}
 	p.hash ^= pieceHashKey(piece, i)
-	return nil
 }
 
+// HashAfter returns the hash that would result after playing the Step s.
+func (p *Pos) HashAfter(s Step) Hash {
+	hash := p.Hash()
+	switch {
+	case s.Capture():
+		hash ^= pieceHashKey(s.Piece(), s.Src())
+	case s.Setup():
+		hash ^= pieceHashKey(s.Piece(), s.Dest())
+	default:
+		t := s.Piece()
+		src, dest := s.Src(), s.Dest()
+		hash ^= pieceHashKey(t, s.Src())
+		hash ^= pieceHashKey(t, s.Dest())
+		presence := p.Presence(t.Color()) ^ (src.Bitboard() | dest.Bitboard())
+		if cap := p.completeCapture(presence); cap != 0 {
+			hash ^= pieceHashKey(cap.Piece(), cap.Src())
+		}
+	}
+	if p.stepsLeft == 1 {
+		hash ^= silverHashKey()
+	}
+	return hash
+}
+
+var setupCounts = []uint8{0, 8, 2, 2, 2, 1, 1}
+
+// Legal checks the legality of a step in the context of an ongoing move
+// and returns ok and an error if any.
+// Legal is meant to be called before playing s.
+func (p *Pos) Legal(s Step) (ok bool, err error) {
+	piece, src, dest := s.Piece(), s.Src(), s.Dest()
+
+	// Steps left?
+	if p.stepsLeft == 0 {
+		return false, fmt.Errorf("no steps left")
+	}
+
+	// Is piece valid?
+	if !piece.Valid() {
+		return false, fmt.Errorf("piece is not valid: %d", piece)
+	}
+
+	if s.Setup() {
+		// Setup move after move 1?
+		if p.moveNum != 1 {
+			return false, fmt.Errorf("setup move after move 1")
+		}
+
+		// Check setup piece:
+		if piece.Color() != p.Side() {
+			return false, fmt.Errorf("wrong color for setup piece: %c", piece.Byte())
+		}
+		if t := piece.RemoveColor(); p.Bitboard(piece).Count() >= setupCounts[t] {
+			return false, fmt.Errorf("setup step places too many of one piece: %c", piece.Byte())
+		}
+
+		// Check setup square:
+		if c := p.Side(); c == Gold && dest > H2 || c == Silver && dest < A6 {
+			return false, fmt.Errorf("illegal setup square: %s", dest)
+		}
+
+		return true, nil
+	}
+
+	// Is src valid?
+	if t := p.At(src); !t.Valid() {
+		return false, fmt.Errorf("src is not a valid piece: %c", t)
+	}
+
+	// Is dest empty?
+	if t := p.At(dest); t != Empty {
+		return false, fmt.Errorf("dest is not empty: %c", t.Byte())
+	}
+
+	// Is frozen?
+	if piece.Color() == p.Side() && p.Frozen(src) {
+		return false, fmt.Errorf("piece is frozen")
+	}
+
+	// Validate the capture against the generated capture:
+	if cap := p.completeCapture(p.Presence(piece.Color())); cap.Capture() && cap != s {
+		return false, fmt.Errorf("expected capture: %s", cap)
+	}
+	if s.Capture() {
+		return false, fmt.Errorf("unexpected capture")
+	}
+
+	if p.lastSrc.Valid() && p.lastPiece.Color() != p.Side() {
+		// Does s abandon ongoing push?
+		if piece.Color() != p.Side() {
+			return false, fmt.Errorf("step abandons ongoing push: %s", p.lastSrc)
+		}
+
+		// Does s complete the push?
+		if dest != p.lastSrc {
+			return false, fmt.Errorf("step does not complete push: %s", p.lastSrc)
+		}
+
+		// Piece is too weak to push?
+		if !p.lastPiece.WeakerThan(piece) {
+			return false, fmt.Errorf("piece is too weak to push: %c", p.lastPiece.Byte())
+		}
+	} else if p.lastSrc.Valid() && p.stepsLeft == 1 && piece.Color() != p.Side() && dest != p.lastSrc {
+		// Begins push on last step?
+		return false, fmt.Errorf("step begins push on last step")
+	}
+
+	// New push has stronger adjacent piece?
+	if piece.Color() != p.Side() && src.Neighbors()&p.Stronger(piece)&p.Presence(p.Side()) == 0 {
+		return false, fmt.Errorf("no stronger friendly piece: %s", src)
+	}
+
+	// Does this step end the turn and repeat a position for the third time?
+	if p.stepsLeft == 1 && p.threefold.Lookup(p.HashAfter(s)) >= 3 {
+		return false, fmt.Errorf("position repeats for the third time")
+	}
+
+	return true, nil
+}
+
+// Pass the turn and reset step variables.
 func (p *Pos) Pass() {
 	p.moves = append(p.moves, nil)
 	p.hash ^= silverHashKey()
 	if p.side = p.side.Opposite(); p.side == Gold {
 		p.moveNum++
 	}
+	p.lastPiece = 0
+	p.lastSrc = 64
 	p.stepsLeft = 4
 	if p.moveNum == 1 {
 		p.stepsLeft = 16
 	}
 }
 
-func (p *Pos) Unpass() error {
+// Unpass the turn and restore step variables.
+func (p *Pos) Unpass() {
 	if len(p.moves) < 2 {
-		return fmt.Errorf("no move to unpass")
+		// No move to unpass
+		return
 	}
 	p.moves = p.moves[:len(p.moves)-1]
 	p.hash ^= silverHashKey()
 	if p.side = p.side.Opposite(); p.side == Silver {
 		p.moveNum--
 	}
-	p.stepsLeft = 4 - p.moves[len(p.moves)-1].Len()
-	if p.moveNum == 1 {
-		p.stepsLeft = 16
+	p.lastPiece = 0
+	p.lastSrc = 64
+	if move := p.CurrentMove(); len(move) > 0 {
+		if step := move.Last(); step != 0 {
+			p.lastPiece = step.Piece()
+			p.lastSrc = step.Src()
+		}
 	}
-	return nil
+	if p.moveNum == 1 {
+		p.stepsLeft = 16 - p.moves[len(p.moves)-1].Len()
+	} else {
+		p.stepsLeft = 4 - p.moves[len(p.moves)-1].Len()
+	}
 }
 
 // completeCapture returns a capture step resulting after playing s or 0.
-func (p *Pos) completeCapture(c Color) Step {
-	presence := p.Presence(c)
+func (p *Pos) completeCapture(presence Bitboard) Step {
 	undefended := ^presence.Neighbors()
 
 	// Capture any undefended piece.
@@ -301,114 +457,85 @@ func (p *Pos) completeCapture(c Color) Step {
 	return 0
 }
 
-func (p *Pos) Step(step Step) error {
+func (p *Pos) Step(step Step) {
 	// Is this a capture? We can skip it.
 	if step.Capture() {
-		return nil
-	}
-	// Are there enough steps left?
-	if p.stepsLeft < 1 {
-		return fmt.Errorf("%s: not enough steps left", step)
+		return
 	}
 	// Execute the step:
 	piece, src, dest := step.Piece(), step.Src(), step.Dest()
 	switch {
 	case step.Setup():
-		if err := p.Place(piece, dest); err != nil {
-			return fmt.Errorf("setup %s: %v", step, err)
-		}
+		p.Place(piece, dest)
 	default:
-		if err := p.Remove(piece, src); err != nil {
-			return fmt.Errorf("%s: %v", step, err)
-		}
-		if err := p.Place(piece, dest); err != nil {
-			return fmt.Errorf("%s: %v", step, err)
-		}
+		p.Remove(piece, src)
+		p.Place(piece, dest)
 	}
 	p.moves[len(p.moves)-1] = append(p.moves[len(p.moves)-1], step)
 	// Check if any capture results and execute it:
-	if cap := p.completeCapture(piece.Color()); cap != 0 {
-		if err := p.Remove(cap.Piece(), cap.Src()); err != nil {
-			return fmt.Errorf("capture %s %s: %v", step, cap, err)
-		}
+	if cap := p.completeCapture(p.Presence(piece.Color())); cap != 0 {
+		p.Remove(cap.Piece(), cap.Src())
 		p.moves[len(p.moves)-1] = append(p.moves[len(p.moves)-1], cap)
 	}
+	p.lastPiece = piece
+	p.lastSrc = src
 	p.stepsLeft--
 	if p.stepsLeft == 0 {
 		p.Pass()
 	}
-	return nil
 }
 
-func (p *Pos) Unstep() error {
+func (p *Pos) Unstep() {
 	move := p.CurrentMove()
 	if move.Len() == 0 {
-		return p.Unpass()
+		p.Unpass()
 	}
-	step := move[len(move)-1]
-	p.moves[len(p.moves)-1] = p.moves[len(p.moves)-1][:len(move)-1]
+	step, cap := p.moves[len(p.moves)-1].Pop()
 	p.stepsLeft++
-	// Unstep current capture and fetch the previous step.
-	if step.Capture() {
-		if err := p.Place(step.Piece(), step.Src()); err != nil {
-			return fmt.Errorf("uncapture %s: %v", step, err)
+	p.lastPiece = 0
+	p.lastSrc = 64
+	if move := p.CurrentMove(); len(move) > 0 {
+		if step := move.Last(); step != 0 {
+			p.lastPiece = step.Piece()
+			p.lastSrc = step.Src()
 		}
-		if len(p.moves[len(p.moves)-1]) == 0 {
-			return fmt.Errorf("uncapture: first step should not be capture")
-		}
-		move := p.CurrentMove()
-		p.moves[len(p.moves)-1] = p.moves[len(p.moves)-1][:len(move)-1]
-		step = move[len(move)-1]
+	}
+	if cap.Capture() {
+		p.Place(step.Piece(), step.Src())
 	}
 	switch {
 	case step.Setup():
-		if err := p.Remove(step.Piece(), step.Dest()); err != nil {
-			return fmt.Errorf("unsetup %s: %v", step, err)
-		}
+		p.Remove(step.Piece(), step.Dest())
 	default:
-		if err := p.Remove(step.Piece(), step.Dest()); err != nil {
-			return fmt.Errorf("%s: %v", step, err)
-		}
-		if err := p.Place(step.Piece(), step.Src()); err != nil {
-			return fmt.Errorf("%s: %v", step, err)
-		}
+		p.Remove(step.Piece(), step.Dest())
+		p.Place(step.Piece(), step.Src())
 	}
-	return nil
 }
 
 var errRecurringPosition = errors.New("recurring position")
 
-func (p *Pos) Move(m Move) error {
-	if p.moveNum == 1 && m.Len() != 16 {
-		return fmt.Errorf("move %s: wrong number of setup moves", m.String())
-	}
+func (p *Pos) Move(m Move) {
 	initSide := p.Side()
 	for _, step := range m {
-		if err := p.Step(step); err != nil {
-			return fmt.Errorf("move %s: step %s: %v", m.String(), step.String(), err)
-		}
+		p.Step(step)
 	}
 	if p.Side() == initSide {
 		p.Pass()
 	}
-	return nil
+	p.threefold.Increment(p.Hash())
 }
 
-func (p *Pos) Unmove() error {
-	if err := p.Unpass(); err != nil {
-		return fmt.Errorf("unmove: unpass: %v", err)
-	}
+func (p *Pos) Unmove() {
+	p.threefold.Decrement(p.Hash())
+	p.Unpass()
 	move := p.CurrentMove()
 	for i := len(move) - 1; i >= 0; i-- {
 		step := move[i]
-		if err := p.Unstep(); err != nil {
-			return fmt.Errorf("unmove %s: unstep %s: %v", move.String(), step.String(), err)
-		}
+		p.Unstep()
 		if step.Capture() {
 			i--
 		}
 	}
-	return nil
 }
 
 func (p *Pos) appendShortString(sb *strings.Builder) {

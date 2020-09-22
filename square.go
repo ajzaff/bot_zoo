@@ -181,6 +181,22 @@ func (i Square) Trap() bool {
 	return i == C3 || i == F6 || i == C6 || i == F3
 }
 
+// Mirror returns the square mirrored acoss the rank and file axes (e.g. c1 <=> f8)
+func (i Square) Mirror() Square {
+	if i.Valid() {
+		return 63 - i
+	}
+	return 64
+}
+
+// Flip returns the square mirrored acoss the rank axis (e.g. c1 <=> c8)
+func (i Square) Flip() Square {
+	if i.Valid() {
+		return Square(8*(7-i.Rank()) + i.File())
+	}
+	return 64
+}
+
 const squareNames = "a1b1c1d1e1f1g1h1a2b2c2d2e2f2g2h2a3b3c3d3e3f3g3h3a4b4c4d4e4f4g4h4a5b5c5d5e5f5g5h5a6b6c6d6e6f6g6h6a7b7c7d7e7f7g7h7a8b8c8d8e8f8g8h8"
 
 // String returns the string representation of this square if valid.

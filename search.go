@@ -32,7 +32,8 @@ func (e *Engine) searchRoot(ponder bool) {
 
 	var bestMove Move
 
-	for p.stepsLeft > 0 {
+	n := p.stepsLeft
+	for i := 0; i < n; i++ {
 		var (
 			bestStep  Step
 			bestValue = -Inf
@@ -42,11 +43,27 @@ func (e *Engine) searchRoot(ponder bool) {
 		for j := 0; j < stepList.Len(); j++ {
 			step := stepList.At(j)
 
-			if err := p.Step(step.Step); err != nil {
-				ppanic(p, err)
+			if ok, _ := p.Legal(step.Step); !ok {
+				continue
 			}
 
-			value := e.search(p, r, &stepList)
+			initSide := p.Side()
+
+			p.Step(step.Step)
+
+			var (
+				m     Value = 1
+				value Value
+			)
+
+			if p.Side() != initSide {
+				m = -1
+			}
+
+			for k := 0; k < trials; k++ {
+				value += m * e.search(p, r, &stepList)
+			}
+			value /= trials
 
 			stepList.SetValue(j, value)
 			if value > bestValue {
@@ -54,9 +71,7 @@ func (e *Engine) searchRoot(ponder bool) {
 				bestStep = step.Step
 			}
 
-			if err := p.Unstep(); err != nil {
-				ppanic(p, err)
-			}
+			p.Unstep()
 		}
 
 		stepList.Sort(0)
@@ -71,14 +86,8 @@ func (e *Engine) searchRoot(ponder bool) {
 		}
 
 		bestMove = append(bestMove, bestStep)
-		if err := p.Step(bestStep); err != nil {
-			ppanic(p, err)
-		}
-		defer func() {
-			if err := p.Unstep(); err != nil {
-				ppanic(p, err)
-			}
-		}()
+		p.Step(bestStep)
+		defer func() { p.Unstep() }()
 	}
 	if !ponder {
 		e.Outputf("bestmove %s", bestMove.String())
@@ -102,11 +111,23 @@ func (e *Engine) search(p *Pos, r *rand.Rand, steps *StepList) Value {
 		}
 
 		// Generate the steps for the next node.
-		ls = append(ls, steps.Len())
+		l := steps.Len()
+		ls = append(ls, l)
 		steps.Generate(p)
 
+		// Test and truncate illegal steps:
+		j := l
+		for i := j; i < steps.Len(); i++ {
+			step := steps.At(i)
+			if ok, _ := p.Legal(step.Step); ok {
+				steps.Swap(i, j)
+				j++
+			}
+		}
+		steps.Truncate(j)
+
 		// Immobilized? Return a terminal loss.
-		numSteps := steps.Len() - ls[len(ls)-1]
+		numSteps := steps.Len() - l
 		if numSteps <= 0 {
 			return m * Loss
 		}
@@ -118,24 +139,14 @@ func (e *Engine) search(p *Pos, r *rand.Rand, steps *StepList) Value {
 		step := steps.At(i)
 
 		// Make the step now.
-		if err := p.Step(step.Step); err != nil {
-			ppanic(p, fmt.Errorf("search_step: %v", err))
-		}
-
-		if err := p.Unstep(); err != nil {
-			ppanic(p, fmt.Errorf("search_repetition_unstep: %v", err))
-		}
+		p.Step(step.Step)
 
 		if p.Side() != initSide {
 			m = -m
 		}
 
 		// Defer the unstep and backpropagation.
-		defer func() {
-			if err := p.Unstep(); err != nil {
-				ppanic(p, fmt.Errorf("search_unstep: %v", err))
-			}
-		}()
+		defer func() { p.Unstep() }()
 	}
 }
 
