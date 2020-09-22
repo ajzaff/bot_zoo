@@ -126,9 +126,9 @@ func (p *Pos) Clone() *Pos {
 	}
 }
 
-func (p *Pos) CurrentMove() Move {
+func (p *Pos) currentMove() *Move {
 	if len(p.moves) > 0 {
-		return p.moves[len(p.moves)-1]
+		return &p.moves[len(p.moves)-1]
 	}
 	return nil
 }
@@ -296,8 +296,9 @@ func (p *Pos) HashAfter(s Step) Hash {
 		src, dest := s.Src(), s.Dest()
 		hash ^= pieceHashKey(t, s.Src())
 		hash ^= pieceHashKey(t, s.Dest())
-		presence := p.Presence(t.Color()) ^ (src.Bitboard() | dest.Bitboard())
-		if cap := p.completeCapture(presence); cap != 0 {
+		p1 := p.Presence(t.Color()) ^ (src.Bitboard() | dest.Bitboard())
+		p2 := p.Presence(t.Color().Opposite())
+		if cap := p.completeCapture(p1, p2); cap != 0 {
 			hash ^= pieceHashKey(cap.Piece(), cap.Src())
 		}
 	}
@@ -363,7 +364,7 @@ func (p *Pos) Legal(s Step) (ok bool, err error) {
 	}
 
 	// Validate the capture against the generated capture:
-	if cap := p.completeCapture(p.Presence(piece.Color())); cap.Capture() && cap != s {
+	if cap := p.completeCapture(p.Presence(piece.Color()), p.Presence(piece.Color().Opposite())); cap.Capture() && cap != s {
 		return false, fmt.Errorf("expected capture: %s", cap)
 	}
 	if s.Capture() {
@@ -431,7 +432,7 @@ func (p *Pos) Unpass() {
 	}
 	p.lastPiece = 0
 	p.lastSrc = 64
-	if move := p.CurrentMove(); len(move) > 0 {
+	if move := p.currentMove(); len(*move) > 0 {
 		if step := move.Last(); step != 0 {
 			p.lastPiece = step.Piece()
 			p.lastSrc = step.Src()
@@ -444,12 +445,14 @@ func (p *Pos) Unpass() {
 	}
 }
 
-// completeCapture returns a capture step resulting after playing s or 0.
-func (p *Pos) completeCapture(presence Bitboard) Step {
-	undefended := ^presence.Neighbors()
+// completeCapture returns a capture step resulting from an undefended piece on a trap.
+func (p *Pos) completeCapture(p1, p2 Bitboard) Step {
+	nonEmpty := ^p.Empty()
 
 	// Capture any undefended piece.
-	if b := Traps & presence & undefended; b != 0 {
+	if b := Traps&nonEmpty&^nonEmpty.Neighbors() |
+		Traps&p.Presence(Gold) & ^p.Presence(Gold).Neighbors() |
+		Traps&p.Presence(Silver) & ^p.Presence(Silver).Neighbors(); b != 0 {
 		i := b.Square()
 		return MakeCapture(p.At(i), i)
 	}
@@ -458,10 +461,13 @@ func (p *Pos) completeCapture(presence Bitboard) Step {
 }
 
 func (p *Pos) Step(step Step) {
-	// Is this a capture? We can skip it.
+	p.moves[len(p.moves)-1] = append(p.moves[len(p.moves)-1], step)
+
+	// Is this a capture? We can skip executing it.
 	if step.Capture() {
 		return
 	}
+
 	// Execute the step:
 	piece, src, dest := step.Piece(), step.Src(), step.Dest()
 	switch {
@@ -470,12 +476,11 @@ func (p *Pos) Step(step Step) {
 	default:
 		p.Remove(piece, src)
 		p.Place(piece, dest)
-	}
-	p.moves[len(p.moves)-1] = append(p.moves[len(p.moves)-1], step)
-	// Check if any capture results and execute it:
-	if cap := p.completeCapture(p.Presence(piece.Color())); cap != 0 {
-		p.Remove(cap.Piece(), cap.Src())
-		p.moves[len(p.moves)-1] = append(p.moves[len(p.moves)-1], cap)
+		// Check if any capture results and execute it:
+		if cap := p.completeCapture(p.Presence(Gold), p.Presence(Silver)); cap != 0 {
+			p.Remove(cap.Piece(), cap.Src())
+			p.moves[len(p.moves)-1] = append(p.moves[len(p.moves)-1], cap)
+		}
 	}
 	p.lastPiece = piece
 	p.lastSrc = src
@@ -486,29 +491,32 @@ func (p *Pos) Step(step Step) {
 }
 
 func (p *Pos) Unstep() {
-	move := p.CurrentMove()
-	if move.Len() == 0 {
+	move := p.currentMove()
+	if len(*move) == 0 {
 		p.Unpass()
 	}
-	step, cap := p.moves[len(p.moves)-1].Pop()
+	move = p.currentMove()
+	step, cap := move.Pop()
 	p.stepsLeft++
-	p.lastPiece = 0
-	p.lastSrc = 64
-	if move := p.CurrentMove(); len(move) > 0 {
+	if len(*move) > 0 {
+		p.lastPiece = 0
+		p.lastSrc = 64
 		if step := move.Last(); step != 0 {
 			p.lastPiece = step.Piece()
 			p.lastSrc = step.Src()
 		}
 	}
 	if cap.Capture() {
-		p.Place(step.Piece(), step.Src())
+		p.Place(cap.Piece(), cap.Src())
 	}
 	switch {
 	case step.Setup():
 		p.Remove(step.Piece(), step.Dest())
 	default:
-		p.Remove(step.Piece(), step.Dest())
-		p.Place(step.Piece(), step.Src())
+		if step != 0 {
+			p.Remove(step.Piece(), step.Dest())
+			p.Place(step.Piece(), step.Src())
+		}
 	}
 }
 
@@ -528,9 +536,9 @@ func (p *Pos) Move(m Move) {
 func (p *Pos) Unmove() {
 	p.threefold.Decrement(p.Hash())
 	p.Unpass()
-	move := p.CurrentMove()
-	for i := len(move) - 1; i >= 0; i-- {
-		step := move[i]
+	move := p.currentMove()
+	for i := len(*move) - 1; i >= 0; i-- {
+		step := (*move)[i]
 		p.Unstep()
 		if step.Capture() {
 			i--
@@ -557,7 +565,7 @@ func (p *Pos) ShortString() string {
 
 func (p *Pos) appendString(sb *strings.Builder) {
 	fmt.Fprintf(sb, "%d%c", p.moveNum, p.side.Byte())
-	if move := p.CurrentMove(); move != nil {
+	if move := p.currentMove(); move != nil {
 		fmt.Fprintf(sb, " %s", move.String())
 	}
 	sb.WriteString("\n +-----------------+\n")

@@ -94,6 +94,22 @@ func (m *Move) Pop() (s, cap Step) {
 	return s, cap
 }
 
+// WithCaptureContext returns a new Move with captures added.
+func (m Move) WithCaptureContext(p *Pos) Move {
+	p = p.Clone()
+	var res Move
+	for _, s := range m {
+		if !s.Capture() {
+			res = append(res, s)
+			if cap := p.completeCapture(p.Presence(Gold), p.Presence(Silver)); cap != 0 {
+				res = append(res, cap)
+			}
+		}
+		p.Step(s)
+	}
+	return res
+}
+
 // appendString appends the move to the builder.
 // This is useful for formatting PV lines.
 func (m Move) appendString(sb *strings.Builder) {

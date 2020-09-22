@@ -90,7 +90,7 @@ func (e *Engine) searchRoot(ponder bool) {
 		defer func() { p.Unstep() }()
 	}
 	if !ponder {
-		e.Outputf("bestmove %s", bestMove.String())
+		e.Outputf("bestmove %s", bestMove.WithCaptureContext(p).String())
 	}
 }
 
