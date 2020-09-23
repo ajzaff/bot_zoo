@@ -43,40 +43,38 @@ func (e *Engine) searchRoot(ponder bool) {
 	n := p.stepsLeft
 	for i := 0; i < n; i++ {
 		var (
-			bestStep  Step
-			bestValue = -Inf
-			stepList  StepList
+			best     ExtStep
+			stepList StepList
 		)
+		best.Value = -Inf
 		stepList.Generate(p)
 		for j := 0; j < stepList.Len(); j++ {
 			step := stepList.At(j)
 
-			if ok, _ := p.Legal(step.Step); !ok {
+			if !p.Legal(step.Step) {
+				fmt.Println("illegal", step)
 				continue
 			}
+
+			fmt.Println(step)
 
 			initSide := p.Side()
 
 			p.Step(step.Step)
 
-			var (
-				m     Value = 1
-				value Value
-			)
+			step.Value = 0
+			for k := 0; k < trials; k++ {
+				step.Value += e.search(p, r, &stepList)
+			}
+			step.Value /= trials
 
 			if p.Side() != initSide {
-				m = -1
+				step.Value = -step.Value
 			}
 
-			for k := 0; k < trials; k++ {
-				value += m * e.search(p, r, &stepList)
-			}
-			value /= trials
-
-			stepList.SetValue(j, value)
-			if value > bestValue {
-				bestValue = value
-				bestStep = step.Step
+			stepList.SetValue(j, step.Value)
+			if step.Value > best.Value {
+				best = step
 			}
 
 			p.Unstep()
@@ -84,17 +82,17 @@ func (e *Engine) searchRoot(ponder bool) {
 
 		stepList.Sort(0)
 		for i := 0; i < stepList.Len(); i++ {
-			fmt.Println("log ", stepList.At(i).Value, stepList.At(i).Step)
+			fmt.Println("log ", stepList.At(i).Value, Move{stepList.At(i).Step}.WithCaptureContext(p))
 		}
 		fmt.Println("log ---")
 		stepList.Truncate(0)
 
-		if bestValue == -Inf {
+		if best.Value == -Inf {
 			break
 		}
 
-		bestMove = append(bestMove, bestStep)
-		p.Step(bestStep)
+		bestMove = append(bestMove, best.Step)
+		p.Step(best.Step)
 		defer func() { p.Unstep() }()
 	}
 	if !ponder {
@@ -127,7 +125,7 @@ func (e *Engine) search(p *Pos, r *rand.Rand, steps *StepList) Value {
 		j := l
 		for i := j; i < steps.Len(); i++ {
 			step := steps.At(i)
-			if ok, _ := p.Legal(step.Step); ok {
+			if p.Legal(step.Step) {
 				steps.Swap(i, j)
 				j++
 			}

@@ -101,11 +101,11 @@ func (m Move) WithCaptureContext(p *Pos) Move {
 	for _, s := range m {
 		if !s.Capture() {
 			res = append(res, s)
-			if cap := p.completeCapture(p.Presence(Gold), p.Presence(Silver)); cap != 0 {
+			cap := p.Step(s)
+			if cap != 0 {
 				res = append(res, cap)
 			}
 		}
-		p.Step(s)
 	}
 	return res
 }

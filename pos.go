@@ -313,95 +313,95 @@ var setupCounts = []uint8{0, 8, 2, 2, 2, 1, 1}
 // Legal checks the legality of a step in the context of an ongoing move
 // and returns ok and an error if any.
 // Legal is meant to be called before playing s.
-func (p *Pos) Legal(s Step) (ok bool, err error) {
+func (p *Pos) Legal(s Step) bool {
 	piece, src, dest := s.Piece(), s.Src(), s.Dest()
 
 	// Steps left?
 	if p.stepsLeft == 0 {
-		return false, fmt.Errorf("no steps left")
+		return false
 	}
 
 	// Is piece valid?
 	if !piece.Valid() {
-		return false, fmt.Errorf("piece is not valid: %d", piece)
+		return false
 	}
 
 	if s.Setup() {
 		// Setup move after move 1?
 		if p.moveNum != 1 {
-			return false, fmt.Errorf("setup move after move 1")
+			return false
 		}
 
 		// Check setup piece:
 		if piece.Color() != p.Side() {
-			return false, fmt.Errorf("wrong color for setup piece: %c", piece.Byte())
+			return false
 		}
 		if t := piece.RemoveColor(); p.Bitboard(piece).Count() >= setupCounts[t] {
-			return false, fmt.Errorf("setup step places too many of one piece: %c", piece.Byte())
+			return false
 		}
 
 		// Check setup square:
 		if c := p.Side(); c == Gold && dest > H2 || c == Silver && dest < A6 {
-			return false, fmt.Errorf("illegal setup square: %s", dest)
+			return false
 		}
 
-		return true, nil
+		return true
 	}
 
 	// Is src valid?
 	if t := p.At(src); !t.Valid() {
-		return false, fmt.Errorf("src is not a valid piece: %c", t)
+		return false
 	}
 
 	// Is dest empty?
 	if t := p.At(dest); t != Empty {
-		return false, fmt.Errorf("dest is not empty: %c", t.Byte())
+		return false
 	}
 
 	// Is frozen?
 	if piece.Color() == p.Side() && p.Frozen(src) {
-		return false, fmt.Errorf("piece is frozen")
+		return false
 	}
 
 	// Validate the capture against the generated capture:
-	if cap := p.completeCapture(p.Presence(piece.Color()), p.Presence(piece.Color().Opposite())); cap.Capture() && cap != s {
-		return false, fmt.Errorf("expected capture: %s", cap)
+	if cap := p.completeCapture(p.Presence(Gold), p.Presence(Silver)); cap != 0 && cap != s {
+		return false
 	}
 	if s.Capture() {
-		return false, fmt.Errorf("unexpected capture")
+		return false
 	}
 
 	if p.lastSrc.Valid() && p.lastPiece.Color() != p.Side() {
 		// Does s abandon ongoing push?
 		if piece.Color() != p.Side() {
-			return false, fmt.Errorf("step abandons ongoing push: %s", p.lastSrc)
+			return false
 		}
 
 		// Does s complete the push?
 		if dest != p.lastSrc {
-			return false, fmt.Errorf("step does not complete push: %s", p.lastSrc)
+			return false
 		}
 
 		// Piece is too weak to push?
 		if !p.lastPiece.WeakerThan(piece) {
-			return false, fmt.Errorf("piece is too weak to push: %c", p.lastPiece.Byte())
+			return false
 		}
 	} else if p.lastSrc.Valid() && p.stepsLeft == 1 && piece.Color() != p.Side() && dest != p.lastSrc {
 		// Begins push on last step?
-		return false, fmt.Errorf("step begins push on last step")
+		return false
 	}
 
 	// New push has stronger adjacent piece?
-	if piece.Color() != p.Side() && src.Neighbors()&p.Stronger(piece)&p.Presence(p.Side()) == 0 {
-		return false, fmt.Errorf("no stronger friendly piece: %s", src)
+	if dest != p.lastSrc && piece.Color() != p.Side() && src.Neighbors()&p.Stronger(piece)&p.Presence(p.Side()) == 0 {
+		return false
 	}
 
 	// Does this step end the turn and repeat a position for the third time?
 	if p.stepsLeft == 1 && p.threefold.Lookup(p.HashAfter(s)) >= 3 {
-		return false, fmt.Errorf("position repeats for the third time")
+		return false
 	}
 
-	return true, nil
+	return true
 }
 
 // Pass the turn and reset step variables.
@@ -430,18 +430,18 @@ func (p *Pos) Unpass() {
 	if p.side = p.side.Opposite(); p.side == Silver {
 		p.moveNum--
 	}
-	p.lastPiece = 0
-	p.lastSrc = 64
-	if move := p.currentMove(); len(*move) > 0 {
-		if step := move.Last(); step != 0 {
-			p.lastPiece = step.Piece()
-			p.lastSrc = step.Src()
-		}
+	move := p.currentMove()
+	if step := move.Last(); step != 0 {
+		p.lastPiece = step.Piece()
+		p.lastSrc = step.Src()
+	} else {
+		p.lastPiece = 0
+		p.lastSrc = 64
 	}
 	if p.moveNum == 1 {
-		p.stepsLeft = 16 - p.moves[len(p.moves)-1].Len()
+		p.stepsLeft = 16 - move.Len()
 	} else {
-		p.stepsLeft = 4 - p.moves[len(p.moves)-1].Len()
+		p.stepsLeft = 4 - move.Len()
 	}
 }
 
@@ -450,9 +450,7 @@ func (p *Pos) completeCapture(p1, p2 Bitboard) Step {
 	nonEmpty := ^p.Empty()
 
 	// Capture any undefended piece.
-	if b := Traps&nonEmpty&^nonEmpty.Neighbors() |
-		Traps&p.Presence(Gold) & ^p.Presence(Gold).Neighbors() |
-		Traps&p.Presence(Silver) & ^p.Presence(Silver).Neighbors(); b != 0 {
+	if b := Traps&nonEmpty&^nonEmpty.Neighbors() | Traps&p1 & ^p1.Neighbors() | Traps&p2 & ^p2.Neighbors(); b != 0 {
 		i := b.Square()
 		return MakeCapture(p.At(i), i)
 	}
@@ -460,7 +458,7 @@ func (p *Pos) completeCapture(p1, p2 Bitboard) Step {
 	return 0
 }
 
-func (p *Pos) Step(step Step) {
+func (p *Pos) Step(step Step) (cap Step) {
 	p.moves[len(p.moves)-1] = append(p.moves[len(p.moves)-1], step)
 
 	// Is this a capture? We can skip executing it.
@@ -477,7 +475,7 @@ func (p *Pos) Step(step Step) {
 		p.Remove(piece, src)
 		p.Place(piece, dest)
 		// Check if any capture results and execute it:
-		if cap := p.completeCapture(p.Presence(Gold), p.Presence(Silver)); cap != 0 {
+		if cap = p.completeCapture(p.Presence(Gold), p.Presence(Silver)); cap != 0 {
 			p.Remove(cap.Piece(), cap.Src())
 			p.moves[len(p.moves)-1] = append(p.moves[len(p.moves)-1], cap)
 		}
@@ -488,35 +486,32 @@ func (p *Pos) Step(step Step) {
 	if p.stepsLeft == 0 {
 		p.Pass()
 	}
+	return cap
 }
 
 func (p *Pos) Unstep() {
-	move := p.currentMove()
-	if len(*move) == 0 {
+	step, cap := p.currentMove().Pop()
+	if step == 0 {
 		p.Unpass()
-	}
-	move = p.currentMove()
-	step, cap := move.Pop()
-	p.stepsLeft++
-	if len(*move) > 0 {
-		p.lastPiece = 0
-		p.lastSrc = 64
-		if step := move.Last(); step != 0 {
-			p.lastPiece = step.Piece()
-			p.lastSrc = step.Src()
-		}
+		step, cap = p.currentMove().Pop()
 	}
 	if cap.Capture() {
 		p.Place(cap.Piece(), cap.Src())
+	}
+	p.stepsLeft++
+	if step := p.currentMove().Last(); step != 0 {
+		p.lastPiece = step.Piece()
+		p.lastSrc = step.Src()
+	} else {
+		p.lastPiece = 0
+		p.lastSrc = 64
 	}
 	switch {
 	case step.Setup():
 		p.Remove(step.Piece(), step.Dest())
 	default:
-		if step != 0 {
-			p.Remove(step.Piece(), step.Dest())
-			p.Place(step.Piece(), step.Src())
-		}
+		p.Remove(step.Piece(), step.Dest())
+		p.Place(step.Piece(), step.Src())
 	}
 }
 
@@ -538,11 +533,7 @@ func (p *Pos) Unmove() {
 	p.Unpass()
 	move := p.currentMove()
 	for i := len(*move) - 1; i >= 0; i-- {
-		step := (*move)[i]
 		p.Unstep()
-		if step.Capture() {
-			i--
-		}
 	}
 }
 

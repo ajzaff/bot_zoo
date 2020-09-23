@@ -136,10 +136,10 @@ func init() {
 		for i := 0; i < stepList.Len(); i++ {
 			step := stepList.At(i)
 			illegalStr := ""
-			if ok, err := e.Legal(step.Step); !ok {
-				illegalStr = fmt.Sprintf(" (illegal; %v)", err)
+			if !e.Legal(step.Step) {
+				illegalStr = " (illegal)"
 			}
-			e.Logf("[%f] %s%s", step.Value, step.Step, illegalStr)
+			e.Logf("[%f] %s%s", step.Value, Move{step.Step}.WithCaptureContext(e.Pos), illegalStr)
 		}
 		return nil
 	}))
@@ -151,8 +151,10 @@ func init() {
 		if err != nil {
 			return err
 		}
-		if legal, err := e.Legal(step); !legal {
-			e.Logf(err.Error())
+		if e.Legal(step) {
+			e.Logf("legal")
+		} else {
+			e.Logf("illegal")
 		}
 		return nil
 	}))
@@ -164,8 +166,8 @@ func init() {
 		if err != nil {
 			return err
 		}
-		if legal, err := e.Legal(step); !legal {
-			return fmt.Errorf("step %s: %v", step, err)
+		if !e.Legal(step) {
+			return fmt.Errorf("illegal step")
 		}
 		e.Step(step)
 		return nil
@@ -184,6 +186,14 @@ func init() {
 	}))
 	RegisterAEIHandler("movelist", extendedHandler(func(e *Engine, args string) error {
 		e.Debugf(e.moves.String())
+		return nil
+	}))
+	RegisterAEIHandler("addcaptures", extendedHandler(func(e *Engine, args string) error {
+		move, err := ParseMove(args)
+		if err != nil {
+			return err
+		}
+		e.Debugf(move.WithCaptureContext(e.Pos).String())
 		return nil
 	}))
 	RegisterAEIHandler("eval", extendedHandler(func(e *Engine, args string) error {
