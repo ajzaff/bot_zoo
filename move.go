@@ -70,12 +70,20 @@ func (m Move) Recurring(s Step) bool {
 	return false
 }
 
-// Last returns the last step that is not a capture or 0.
-func (m Move) Last() Step {
+// LastIndex returns the index of the last step that is not a capture or -1.
+func (m Move) LastIndex() int {
 	for i := len(m) - 1; i >= 0; i-- {
 		if step := m[i]; !step.Capture() {
-			return step
+			return i
 		}
+	}
+	return -1
+}
+
+// Last returns the last step that is not a capture or 0.
+func (m Move) Last() Step {
+	if i := m.LastIndex(); i >= 0 {
+		return m[i]
 	}
 	return 0
 }

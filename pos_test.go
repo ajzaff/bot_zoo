@@ -1,17 +1,47 @@
 package zoo
 
-import "testing"
+import (
+	"testing"
+)
 
-func TestLegal(t *testing.T) {
-	for _, tc := range []struct {
-		name          string
-		shortPosition string
-		steps         []Step
-		moveNum       int
-		inputStep     Step
-		input         string
-		want          bool
-	}{{
+type legalTestCase struct {
+	name          string
+	shortPosition string
+	steps         []Step
+	moveNum       int
+	inputStep     Step
+	input         string
+	want          bool
+}
+
+func runLegalTestCase(t *testing.T, tc legalTestCase) {
+	p, err := ParseShortPosition(tc.shortPosition)
+	if err != nil {
+		t.Fatalf("ParseShortPosition(%q): %v", tc.shortPosition, err)
+	}
+	if tc.moveNum != 0 {
+		p.moveNum = tc.moveNum
+		if p.moveNum == 1 {
+			p.stepsLeft = 16
+		}
+	}
+	for _, step := range tc.steps {
+		p.Step(step)
+	}
+	s := tc.inputStep
+	if s == 0 {
+		s, err = ParseStep(tc.input)
+		if err != nil {
+			t.Fatalf("ParseStep(%q): %v", tc.input, err)
+		}
+	}
+	if got := p.Legal(s); got != tc.want {
+		t.Errorf("Legal(%q): got legal=%v, want legal=%v", tc.input, got, tc.want)
+	}
+}
+
+func TestIllegalSteps(t *testing.T) {
+	for _, tc := range []legalTestCase{{
 		name:          "steps left",
 		shortPosition: "g [                      r                               R         ]",
 		steps: []Step{
@@ -70,6 +100,14 @@ func TestLegal(t *testing.T) {
 		},
 		input: "ee6e",
 	}, {
+		name:          "incomplete push 2",
+		shortPosition: "s [          eD       r                                            ]",
+		steps: []Step{
+			MakeStep(SRabbit, D6, E6),
+			MakeStep(GDog, D7, D6),
+		},
+		input: "ra7s",
+	}, {
 		name:          "too weak push",
 		shortPosition: "g [                                                   rD      R    ]",
 		steps: []Step{
@@ -93,31 +131,130 @@ func TestLegal(t *testing.T) {
 		},
 		input: "Rh6w",
 	}, {
-		name:          "new push has stronger unfrozen adjacent piece 1",
+		name:          "push and pull not shared",
+		shortPosition: "g [                                  r       Cr      D             ]",
+		steps: []Step{
+			MakeStep(SRabbit, D3, D4),
+			MakeStep(GCat, C3, D3),
+		},
+		input: "rc4s",
+	}, {
+		name:          "new push has stronger unfrozen adjacent piece",
 		shortPosition: "g [                           r       D       h                    ]",
 		input:         "rd5n",
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			p, err := ParseShortPosition(tc.shortPosition)
-			if err != nil {
-				t.Fatalf("ParseShortPosition(%q): %v", tc.shortPosition, err)
-			}
-			if tc.moveNum != 0 {
-				p.moveNum = tc.moveNum
-			}
-			for _, step := range tc.steps {
-				p.Step(step)
-			}
-			s := tc.inputStep
-			if s == 0 {
-				s, err = ParseStep(tc.input)
-				if err != nil {
-					t.Fatalf("ParseStep(%q): %v", tc.input, err)
-				}
-			}
-			if got := p.Legal(s); got != tc.want {
-				t.Errorf("Legal(%q): got legal=%v, want legal=%v", tc.input, got, tc.want)
-			}
+			runLegalTestCase(t, tc)
+		})
+	}
+}
+
+func TestLegalSteps(t *testing.T) {
+	for _, tc := range []legalTestCase{{
+		name:          "push on third step",
+		shortPosition: "g [       r                            Ed     Cr           R       ]",
+		steps: []Step{
+			MakeStep(GCat, D3, D2),
+			MakeStep(SRabbit, E3, D3),
+		},
+		input: "df4s",
+		want:  true,
+	}, {
+		name:          "pull and push same piece",
+		shortPosition: "g [       r                            Ed     Cr           R       ]",
+		steps: []Step{
+			MakeStep(GCat, D3, D2),
+			MakeStep(SRabbit, E3, D3),
+		},
+		input: "rd3e",
+		want:  true,
+	}, {
+		name:          "pull and push same piece 2",
+		shortPosition: "g [       r                            Ed     Cr           R       ]",
+		steps: []Step{
+			MakeStep(GCat, D3, D2),
+			MakeStep(SRabbit, E3, D3),
+			MakeStep(SRabbit, D3, E3),
+		},
+		input: "Ra1n",
+	}, {
+		name:          "completed push",
+		shortPosition: "s [          eD       r                                            ]",
+		steps: []Step{
+			MakeStep(SRabbit, D6, E6),
+			MakeStep(GDog, D7, D6),
+		},
+		input: "ec7e",
+		want:  true,
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			runLegalTestCase(t, tc)
+		})
+	}
+}
+
+type canPassTestCase struct {
+	name          string
+	shortPosition string
+	steps         []Step
+	moveNum       int
+	want          bool
+}
+
+func runCanPassTestCase(t *testing.T, tc canPassTestCase) {
+	p, err := ParseShortPosition(tc.shortPosition)
+	if err != nil {
+		t.Fatalf("ParseShortPosition(%q): %v", tc.shortPosition, err)
+	}
+	if tc.moveNum != 0 {
+		p.moveNum = tc.moveNum
+		if p.moveNum == 1 {
+			p.stepsLeft = 16
+		}
+	}
+	for _, step := range tc.steps {
+		p.Step(step)
+	}
+	if got := p.CanPass(); got != tc.want {
+		t.Errorf("CanPass(): got can_pass=%v, want can_pass=%v", got, tc.want)
+	}
+}
+
+func TestCanPass(t *testing.T) {
+	for _, tc := range []canPassTestCase{{
+		name:          "no steps taken",
+		shortPosition: "g [rrrrrrrrhdcemcdh                                HDCMECDHRRRRRRRR]",
+	}, {
+		name:          "pass setup",
+		shortPosition: "g [                                                                ]",
+		moveNum:       1,
+		steps: []Step{
+			MakeSetup(GRabbit, A1),
+			MakeSetup(GRabbit, B1),
+			MakeSetup(GRabbit, C1),
+			MakeSetup(GRabbit, D1),
+			MakeSetup(GRabbit, E1),
+			MakeSetup(GRabbit, F1),
+			MakeSetup(GRabbit, G1),
+			MakeSetup(GRabbit, H1),
+			MakeSetup(GDog, A2),
+			MakeSetup(GHorse, B2),
+			MakeSetup(GCat, C2),
+			MakeSetup(GCat, D2),
+			MakeSetup(GElephant, E2),
+			MakeSetup(GCamel, F2),
+			MakeSetup(GHorse, G2),
+		},
+	}, {
+		name:          "incomplete push",
+		shortPosition: "s [          eD       r                                            ]",
+		steps: []Step{
+			MakeStep(SRabbit, D6, E6),
+			MakeStep(GDog, D7, D6),
+		},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			runCanPassTestCase(t, tc)
 		})
 	}
 }

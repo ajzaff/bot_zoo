@@ -21,8 +21,8 @@ type Pos struct {
 	side       Color      // side to play
 	moveNum    int        // number of moves left for this turn
 	moves      MoveList   // moves to arrive at this position including the current in progress move
-	lastPiece  Piece      // last piece to move or Empty; used for validating pulls
-	lastSrc    Square     // last source square or an invalid square; used for validating pulls
+	lastPiece  Piece      // last piece to move or Empty; used for validating push/pull
+	lastSrc    Square     // last source square or an invalid square; used for validating push/pull
 	stepsLeft  int        // steps remaining in the current move
 	hash       Hash       // hash of the current position
 }
@@ -363,27 +363,43 @@ func (p *Pos) Legal(s Step) bool {
 		return false
 	}
 
-	// Validate the capture against the generated capture:
-	if cap := p.completeCapture(p.Presence(Gold), p.Presence(Silver)); cap != 0 && cap != s {
-		return false
-	}
+	// Validate a capture if one is provided, but don't
+	// force us, as captures are not produced in movegen.
 	if s.Capture() {
-		return false
+		if cap := p.completeCapture(p.Presence(Gold), p.Presence(Silver)); cap != 0 && cap != s {
+			return false
+		}
 	}
 
 	if p.lastSrc.Valid() && p.lastPiece.Color() != p.Side() {
+
+		// Unfortunately, in order to determine if the last push was finished,
+		// we need to look up the last two moves and check whether the move landed
+		// on the right square and if so was it strong enough to be a real pull?
+		move := p.currentMove()
+		var lastCompleted bool
+		if i := move.LastIndex(); i > 0 {
+			last := (*move)[i]
+			if p := (*move)[:i].LastIndex(); p >= 0 {
+				prev := (*move)[p]
+				lastCompleted = !last.Piece().SameColor(prev.Piece()) &&
+					last.Dest() == prev.Src() &&
+					last.Piece().WeakerThan(prev.Piece())
+			}
+		}
+
 		// Does s abandon ongoing push?
-		if piece.Color() != p.Side() {
+		if !lastCompleted && piece.Color() != p.Side() {
 			return false
 		}
 
 		// Does s complete the push?
-		if dest != p.lastSrc {
+		if !lastCompleted && dest != p.lastSrc {
 			return false
 		}
 
 		// Piece is too weak to push?
-		if !p.lastPiece.WeakerThan(piece) {
+		if !lastCompleted && !p.lastPiece.WeakerThan(piece) {
 			return false
 		}
 	} else if p.lastSrc.Valid() && p.stepsLeft == 1 && piece.Color() != p.Side() && dest != p.lastSrc {
@@ -406,7 +422,7 @@ func (p *Pos) Legal(s Step) bool {
 		if !strongerUnfrozen {
 			return false
 		}
-	} else if dest == p.lastSrc && piece.Color() != p.Side() {
+	} else if dest == p.lastSrc && piece.Color() != p.Side() && piece.Color() != p.lastPiece.Color() {
 		// Piece is too weak to pull?
 		if !piece.WeakerThan(p.lastPiece) {
 			return false
@@ -436,13 +452,30 @@ func (p *Pos) CanPass() bool {
 	}
 
 	// Are we in the middle of a push?
-	if p.lastPiece != Empty && p.lastPiece.Color() != p.Side() {
-		return false
+	if p.lastSrc.Valid() {
+		// Unfortunately, in order to determine if the last push was finished,
+		// we need to look up the last two moves and check whether the move landed
+		// on the right square and if so was it strong enough to be a real pull?
+		move := p.currentMove()
+		var lastCompleted bool
+		if i := move.LastIndex(); i > 0 {
+			last := (*move)[i]
+			if p := (*move)[:i].LastIndex(); p >= 0 {
+				prev := (*move)[p]
+				lastCompleted = !last.Piece().SameColor(prev.Piece()) &&
+					last.Dest() == prev.Src() &&
+					last.Piece().WeakerThan(prev.Piece())
+			}
+		}
+
+		if !lastCompleted {
+			return false
+		}
 	}
 
 	// Would the position would repeat for a third time if we passed?
 	if p.threefold.Lookup(p.Hash()^silverHashKey()) >= 3 {
-		return false
+		// return false
 	}
 
 	return true
