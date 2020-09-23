@@ -86,6 +86,13 @@ func TestLegal(t *testing.T) {
 		},
 		input: "Db4e",
 	}, {
+		name:          "too weak pull",
+		shortPosition: "s [                      rR                                        ]",
+		steps: []Step{
+			MakeStep(SRabbit, G6, G5),
+		},
+		input: "Rh6w",
+	}, {
 		name:          "new push has stronger unfrozen adjacent piece 1",
 		shortPosition: "g [                           r       D       h                    ]",
 		input:         "rd5n",

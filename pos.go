@@ -406,6 +406,11 @@ func (p *Pos) Legal(s Step) bool {
 		if !strongerUnfrozen {
 			return false
 		}
+	} else if dest == p.lastSrc && piece.Color() != p.Side() {
+		// Piece is too weak to pull?
+		if !piece.WeakerThan(p.lastPiece) {
+			return false
+		}
 	}
 
 	// Does this step end the turn and repeat a position for the third time?
