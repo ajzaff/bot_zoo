@@ -395,15 +395,15 @@ func (p *Pos) Legal(s Step) bool {
 	if dest != p.lastSrc && piece.Color() != p.Side() {
 
 		// Check for an unfrozen piece.
-		var unfrozen bool
+		var strongerUnfrozen bool
 		for b := src.Neighbors() & p.Stronger(piece) & p.Presence(p.Side()); b > 0; b &= b - 1 {
 			if !p.Frozen(b.Square()) {
-				unfrozen = true
+				strongerUnfrozen = true
 				break
 			}
 		}
 
-		if !unfrozen {
+		if !strongerUnfrozen {
 			return false
 		}
 	}

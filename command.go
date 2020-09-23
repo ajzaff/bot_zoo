@@ -162,6 +162,28 @@ func init() {
 		}
 		return nil
 	}))
+	RegisterAEIHandler("place", extendedHandler(func(e *Engine, args string) error {
+		if len(args) == 0 {
+			return fmt.Errorf("missing setup")
+		}
+		step, err := ParseStep(args)
+		if err != nil {
+			return err
+		}
+		e.Place(step.Piece(), step.Dest())
+		return nil
+	}))
+	RegisterAEIHandler("remove", extendedHandler(func(e *Engine, args string) error {
+		if len(args) == 0 {
+			return fmt.Errorf("missing square")
+		}
+		i, err := ParseSquare(args)
+		if err != nil {
+			return err
+		}
+		e.Remove(e.At(i), i)
+		return nil
+	}))
 	RegisterAEIHandler("step", extendedHandler(func(e *Engine, args string) error {
 		if len(args) == 0 {
 			return fmt.Errorf("missing step")
