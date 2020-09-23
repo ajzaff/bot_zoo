@@ -30,14 +30,16 @@ type Engine struct {
 
 func NewEngine() *Engine {
 	e := &Engine{
-		Options:     newOptions(),
-		timeControl: makeTimeControl(),
-		Pos:         NewEmptyPosition(),
-		log:         log.New(os.Stdout, "log ", 0),
-		out:         log.New(os.Stdout, "", 0),
-		debug:       log.New(os.Stderr, "", 0),
+		AEISettings:    &AEISettings{},
+		EngineSettings: &EngineSettings{},
+		Options:        newOptions(),
+		timeControl:    makeTimeControl(),
+		Pos:            NewEmptyPosition(),
+		log:            log.New(os.Stdout, "log ", 0),
+		out:            log.New(os.Stdout, "", 0),
+		debug:          log.New(os.Stderr, "", 0),
 	}
-	e.searchState.tt.Resize(50)
+	e.searchState.Reset()
 	return e
 }
 

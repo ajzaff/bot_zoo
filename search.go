@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const trials = 800
+const trials = 2000
 
 type searchState struct {
 	tt TranspositionTable
@@ -18,6 +18,14 @@ type searchState struct {
 	// semi-atomic
 	stopping int32
 	running  int32
+}
+
+func (s *searchState) Reset() {
+	s.tt.Resize(50)
+	s.wg = sync.WaitGroup{}
+	s.resultChan = make(chan Move)
+	s.stopping = 0
+	s.running = 0
 }
 
 func (e *Engine) searchRoot(ponder bool) {

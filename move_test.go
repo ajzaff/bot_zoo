@@ -9,34 +9,34 @@ import (
 func TestParseMove(t *testing.T) {
 	for _, tc := range []struct {
 		input   string
-		want    []Step
+		want    Move
 		wantErr bool
 	}{{
 		input: "Da4n",
-		want: []Step{
+		want: Move{
 			MakeStep(GDog, A4, A5),
 		},
 	}, {
 		input: "Da4n Da5e",
-		want: []Step{
+		want: Move{
 			MakeStep(GDog, A4, A5),
 			MakeStep(GDog, A5, B5),
 		},
 	}, {
 		input: "Da4n Ra3n",
-		want: []Step{
+		want: Move{
 			MakeStep(GDog, A4, A5),
 			MakeStep(GRabbit, A3, A4),
 		},
 	}, {
 		input: "Da4n ra3n",
-		want: []Step{
+		want: Move{
 			MakeStep(GDog, A4, A5),
 			MakeStep(SRabbit, A3, A4),
 		},
 	}, {
 		input: "Dh3s Rh2n Rg1e Rf1e",
-		want: []Step{
+		want: Move{
 			MakeStep(GDog, H3, H2),
 			MakeStep(GRabbit, H2, H3),
 			MakeStep(GRabbit, G1, H1),
@@ -44,7 +44,7 @@ func TestParseMove(t *testing.T) {
 		},
 	}, {
 		input: "Md2n Dh2n Md3n Md4s",
-		want: []Step{
+		want: Move{
 			MakeStep(GCamel, D2, D3),
 			MakeStep(GDog, H2, H3),
 			MakeStep(GCamel, D3, D4),
@@ -52,7 +52,7 @@ func TestParseMove(t *testing.T) {
 		},
 	}, {
 		input: "Hc4s rc5s Hc3w rc4s rc3x",
-		want: []Step{
+		want: Move{
 			MakeStep(GHorse, C4, C3),
 			MakeStep(SRabbit, C5, C4),
 			MakeStep(GHorse, C3, B3),
@@ -61,7 +61,7 @@ func TestParseMove(t *testing.T) {
 		},
 	}, {
 		input: "Rf1w Rg1w Hg2w Hb3w Cc3x",
-		want: []Step{
+		want: Move{
 			MakeStep(GRabbit, F1, E1),
 			MakeStep(GRabbit, G1, F1),
 			MakeStep(GHorse, G2, F2),
