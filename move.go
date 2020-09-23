@@ -94,22 +94,6 @@ func (m *Move) Pop() (s, cap Step) {
 	return s, cap
 }
 
-// WithCaptureContext returns a new Move with captures added.
-func (m Move) WithCaptureContext(p *Pos) Move {
-	p = p.Clone()
-	var res Move
-	for _, s := range m {
-		if !s.Capture() {
-			res = append(res, s)
-			cap := p.Step(s)
-			if cap != 0 {
-				res = append(res, cap)
-			}
-		}
-	}
-	return res
-}
-
 // appendString appends the move to the builder.
 // This is useful for formatting PV lines.
 func (m Move) appendString(sb *strings.Builder) {
@@ -231,6 +215,16 @@ func (s Step) Setup() bool {
 // Recurring returns true if playing s and step lead to a recurring position (i.e. step "undoes" s).
 func (s Step) Recurring(step Step) bool {
 	return s.Piece() == step.Piece() && s.Src() == step.Dest() && s.Dest() == step.Src()
+}
+
+// DebugCaptureContext returns the capture resulting from playing s.
+// Intended for debugging only.
+func (s Step) DebugCaptureContext(p *Pos) (cap Step) {
+	p = p.Clone()
+	if !s.Capture() {
+		cap = p.Step(s)
+	}
+	return cap
 }
 
 // appendString appends the Step string to the builder.

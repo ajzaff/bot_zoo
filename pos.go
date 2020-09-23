@@ -391,13 +391,52 @@ func (p *Pos) Legal(s Step) bool {
 		return false
 	}
 
-	// New push has stronger adjacent piece?
-	if dest != p.lastSrc && piece.Color() != p.Side() && src.Neighbors()&p.Stronger(piece)&p.Presence(p.Side()) == 0 {
-		return false
+	// New push has stronger unfrozen adjacent piece?
+	if dest != p.lastSrc && piece.Color() != p.Side() {
+
+		// Check for an unfrozen piece.
+		var unfrozen bool
+		for b := src.Neighbors() & p.Stronger(piece) & p.Presence(p.Side()); b > 0; b &= b - 1 {
+			if !p.Frozen(b.Square()) {
+				unfrozen = true
+				break
+			}
+		}
+
+		if !unfrozen {
+			return false
+		}
 	}
 
 	// Does this step end the turn and repeat a position for the third time?
 	if p.stepsLeft == 1 && p.threefold.Lookup(p.HashAfter(s)) >= 3 {
+		return false
+	}
+
+	return true
+}
+
+// CanPass returns true when passing the turn would be a legal move.
+// It considers the number of steps taken so far, push progress,
+// and threefold repetitions.
+func (p *Pos) CanPass() bool {
+	// Never pass during setup.
+	if p.moveNum == 1 {
+		return false
+	}
+
+	// We need to make at least one step.
+	if p.stepsLeft == 4 {
+		return false
+	}
+
+	// Are we in the middle of a push?
+	if p.lastPiece != Empty && p.lastPiece.Color() != p.Side() {
+		return false
+	}
+
+	// Would the position would repeat for a third time if we passed?
+	if p.threefold.Lookup(p.Hash()^silverHashKey()) >= 3 {
 		return false
 	}
 

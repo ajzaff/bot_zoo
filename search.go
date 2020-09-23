@@ -48,55 +48,90 @@ func (e *Engine) searchRoot(ponder bool) {
 		)
 		best.Value = -Inf
 		stepList.Generate(p)
-		for j := 0; j < stepList.Len(); j++ {
-			step := stepList.At(j)
+		for j := 0; j <= stepList.Len(); /* <= for passing move */ j++ {
 
-			if !p.Legal(step.Step) {
-				fmt.Println("illegal", step)
-				continue
+			var (
+				step ExtStep
+				m    = Value(1)
+			)
+
+			if j < stepList.Len() {
+				step = stepList.At(j)
+
+				if !p.Legal(step.Step) {
+					continue
+				}
+
+				initSide := p.Side()
+
+				p.Step(step.Step)
+
+				if p.Side() != initSide {
+					m = -1
+				}
+			} else {
+				if !p.CanPass() {
+					continue
+				}
+				p.Pass()
+				m = -1
 			}
-
-			fmt.Println(step)
-
-			initSide := p.Side()
-
-			p.Step(step.Step)
 
 			step.Value = 0
 			for k := 0; k < trials; k++ {
 				step.Value += e.search(p, r, &stepList)
 			}
 			step.Value /= trials
+			step.Value *= m
 
-			if p.Side() != initSide {
-				step.Value = -step.Value
-			}
-
-			stepList.SetValue(j, step.Value)
 			if step.Value > best.Value {
 				best = step
 			}
 
-			p.Unstep()
+			if j < stepList.Len() {
+				stepList.SetValue(j, step.Value)
+				p.Unstep()
+			} else {
+				p.Unpass()
+			}
 		}
 
 		stepList.Sort(0)
 		for i := 0; i < stepList.Len(); i++ {
-			fmt.Println("log ", stepList.At(i).Value, Move{stepList.At(i).Step}.WithCaptureContext(p))
+			step := stepList.At(i)
+			if cap := step.DebugCaptureContext(p); cap != 0 {
+				fmt.Println("log ", stepList.At(i).Value, step.Step, cap)
+			} else {
+				fmt.Println("log ", stepList.At(i).Value, step.Step)
+			}
 		}
 		fmt.Println("log ---")
-		stepList.Truncate(0)
 
+		// No available moves.
 		if best.Value == -Inf {
 			break
 		}
 
+		// Passing move.
+		if best.Step == 0 {
+			break
+		}
+
+		cap := p.Step(best.Step)
 		bestMove = append(bestMove, best.Step)
-		p.Step(best.Step)
+		if cap != 0 {
+			bestMove = append(bestMove, cap)
+		}
+
 		defer func() { p.Unstep() }()
+
+		// Win achieved.
+		if p.Terminal().Win() {
+			break
+		}
 	}
 	if !ponder {
-		e.Outputf("bestmove %s", bestMove.WithCaptureContext(p).String())
+		e.Outputf("bestmove %s", bestMove.String())
 	}
 }
 
@@ -132,27 +167,41 @@ func (e *Engine) search(p *Pos, r *rand.Rand, steps *StepList) Value {
 		}
 		steps.Truncate(j)
 
+		numSteps := j - l
+
+		// Add a step for passing if legal.
+		canPass := p.CanPass()
+		if canPass {
+			numSteps++
+		}
 		// Immobilized? Return a terminal loss.
-		numSteps := steps.Len() - l
 		if numSteps <= 0 {
 			return m * Loss
 		}
 
-		initSide := p.Side()
-
 		// Choose a next step at random.
-		i := ls[len(ls)-1] + r.Intn(numSteps)
-		step := steps.At(i)
+		i := l + r.Intn(numSteps)
 
-		// Make the step now.
-		p.Step(step.Step)
+		if i < steps.Len() {
+			step := steps.At(i)
 
-		if p.Side() != initSide {
+			initSide := p.Side()
+
+			// Make the step now.
+			p.Step(step.Step)
+
+			if p.Side() != initSide {
+				m = -m
+			}
+
+			defer func() { p.Unstep() }()
+		} else {
+			p.Pass()
+
 			m = -m
-		}
 
-		// Defer the unstep and backpropagation.
-		defer func() { p.Unstep() }()
+			defer func() { p.Unpass() }()
+		}
 	}
 }
 

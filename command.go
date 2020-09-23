@@ -139,7 +139,11 @@ func init() {
 			if !e.Legal(step.Step) {
 				illegalStr = " (illegal)"
 			}
-			e.Logf("[%f] %s%s", step.Value, Move{step.Step}.WithCaptureContext(e.Pos), illegalStr)
+			if cap := step.Step.DebugCaptureContext(e.Pos); cap != 0 {
+				e.Logf("[%f] %s %s%s", step.Value, step.Step, cap, illegalStr)
+			} else {
+				e.Logf("[%f] %s%s", step.Value, step.Step, illegalStr)
+			}
 		}
 		return nil
 	}))
@@ -186,14 +190,6 @@ func init() {
 	}))
 	RegisterAEIHandler("movelist", extendedHandler(func(e *Engine, args string) error {
 		e.Debugf(e.moves.String())
-		return nil
-	}))
-	RegisterAEIHandler("addcaptures", extendedHandler(func(e *Engine, args string) error {
-		move, err := ParseMove(args)
-		if err != nil {
-			return err
-		}
-		e.Debugf(move.WithCaptureContext(e.Pos).String())
 		return nil
 	}))
 	RegisterAEIHandler("eval", extendedHandler(func(e *Engine, args string) error {
