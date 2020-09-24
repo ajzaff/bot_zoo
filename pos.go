@@ -310,7 +310,7 @@ func isPushMove(c Color, move *Move) (src Square, piece Piece, ok bool) {
 		if piece := last.Piece(); piece.Color() != c {
 			last0 := (*move)[:lastIndex].Last()
 			piece0 := last0.Piece()
-			if last0 == 0 || piece0.Color() == piece.Color() || piece0.Color() != c && last0.Src() != last.Dest() {
+			if last0 == 0 || piece0.Color() == piece.Color() || last0.Src() != last.Dest() {
 				return last.Src(), piece, true
 			}
 		}
@@ -392,7 +392,6 @@ func (p *Pos) Legal(s Step) bool {
 			return false
 		}
 	} else {
-
 		// Step abandons ongoing push.
 		if _, _, ok := p.Push(); ok {
 			return false

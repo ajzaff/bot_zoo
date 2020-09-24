@@ -108,6 +108,16 @@ func TestIllegalSteps(t *testing.T) {
 		},
 		input: "ra7s",
 	}, {
+		name:          "incomplete push 3",
+		shortPosition: "s [  dchehm   c Rrrd  Rr  R r R DR r       H  D  H   CEMC   RRR    ]",
+		steps: []Step{
+			MakeStep(GRabbit, F7, F6),
+			MakeStep(SElephant, F8, F7),
+			MakeStep(GRabbit, D6, C6),
+			MakeCapture(GRabbit, C6),
+		},
+		input: "rb5s",
+	}, {
 		name:          "too weak push",
 		shortPosition: "g [                                                   rD      R    ]",
 		steps: []Step{
