@@ -439,9 +439,6 @@ func (p *Pos) Legal(s Step) bool {
 	}
 
 	// Does this step repeat the position?
-	fmt.Println(s)
-	fmt.Println(p.HashAfter(s), p.turnHash[len(p.turnHash)-1], p.turnHash[len(p.turnHash)-1]^silverHashKey())
-
 	if p.stepsLeft == 1 && p.HashAfter(s) == p.turnHash[len(p.turnHash)-1]^silverHashKey() {
 		return false
 	}
