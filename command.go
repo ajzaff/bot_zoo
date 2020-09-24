@@ -130,6 +130,17 @@ func init() {
 		e.Logf("%d", e.Hash())
 		return nil
 	}))
+	RegisterAEIHandler("hashafter", extendedHandler(func(e *Engine, args string) error {
+		if len(args) == 0 {
+			return fmt.Errorf("missing step")
+		}
+		step, err := ParseStep(args)
+		if err != nil {
+			return err
+		}
+		e.Debugf("%d", e.HashAfter(step))
+		return nil
+	}))
 	RegisterAEIHandler("steps", extendedHandler(func(e *Engine, args string) error {
 		var stepList StepList
 		stepList.Generate(e.Pos)

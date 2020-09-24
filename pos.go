@@ -23,6 +23,7 @@ type Pos struct {
 	moves      MoveList   // moves to arrive at this position including the current in progress move
 	stepsLeft  int        // steps remaining in the current move
 	hash       Hash       // hash of the current position
+	turnHash   []Hash     // hash at the beginning of the turn used to detect repetition
 }
 
 // NewEmptyPosition creates a new initial position with no pieces and turn number 1g.
@@ -43,6 +44,7 @@ func NewEmptyPosition() *Pos {
 		stepsLeft:  16,
 	}
 	p.hash = computeHash(p.bitboards, p.side, p.stepsLeft)
+	p.turnHash = append(p.turnHash, p.hash)
 	return p
 }
 
@@ -91,6 +93,7 @@ func (p *Pos) Clone() *Pos {
 	fb := make([]Bitboard, 2)
 	threefold := p.threefold.Clone()
 	moves := make([]Move, len(p.moves))
+	hashes := make([]Hash, len(p.turnHash))
 	copy(board, p.board)
 	copy(bs, p.bitboards)
 	copy(ps, p.presence)
@@ -103,6 +106,7 @@ func (p *Pos) Clone() *Pos {
 		moves[i] = make(Move, len(p.moves[i]))
 		copy(moves[i], p.moves[i])
 	}
+	copy(hashes, p.turnHash)
 	return &Pos{
 		board:      board,
 		bitboards:  bs,
@@ -118,6 +122,7 @@ func (p *Pos) Clone() *Pos {
 		moves:      moves,
 		stepsLeft:  p.stepsLeft,
 		hash:       p.hash,
+		turnHash:   hashes,
 	}
 }
 
@@ -433,6 +438,14 @@ func (p *Pos) Legal(s Step) bool {
 		return false
 	}
 
+	// Does this step repeat the position?
+	fmt.Println(s)
+	fmt.Println(p.HashAfter(s), p.turnHash[len(p.turnHash)-1], p.turnHash[len(p.turnHash)-1]^silverHashKey())
+
+	if p.stepsLeft == 1 && p.HashAfter(s) == p.turnHash[len(p.turnHash)-1]^silverHashKey() {
+		return false
+	}
+
 	return true
 }
 
@@ -467,6 +480,7 @@ func (p *Pos) CanPass() bool {
 func (p *Pos) Pass() {
 	p.moves = append(p.moves, nil)
 	p.hash ^= silverHashKey()
+	p.turnHash = append(p.turnHash, p.hash)
 	if p.side = p.side.Opposite(); p.side == Gold {
 		p.moveNum++
 	}
@@ -484,6 +498,7 @@ func (p *Pos) Unpass() {
 	}
 	p.moves = p.moves[:len(p.moves)-1]
 	p.hash ^= silverHashKey()
+	p.turnHash = p.turnHash[:len(p.turnHash)-1]
 	if p.side = p.side.Opposite(); p.side == Silver {
 		p.moveNum--
 	}
