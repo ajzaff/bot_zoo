@@ -26,6 +26,9 @@ func runLegalTestCase(t *testing.T, tc legalTestCase) {
 		}
 	}
 	for _, step := range tc.steps {
+		if !p.Legal(step) {
+			t.Fatalf("Intermediate step is not legal: %s", step)
+		}
 		p.Step(step)
 	}
 	s := tc.inputStep
@@ -45,12 +48,12 @@ func TestIllegalSteps(t *testing.T) {
 		name:          "steps left",
 		shortPosition: "g [                      r                               R         ]",
 		steps: []Step{
-			MakeStep(GRabbit, B2, D2),
-			MakeStep(GRabbit, D2, E2),
-			MakeStep(GRabbit, E2, F2),
-			MakeStep(GRabbit, F2, G2),
+			MakeStep(GRabbit, G2, G3),
+			MakeStep(GRabbit, G3, G4),
+			MakeStep(GRabbit, G4, F4),
+			MakeStep(GRabbit, F4, E4),
 		},
-		input: "Rg2n",
+		input: "Re4n",
 	}, {
 		name:          "valid piece",
 		shortPosition: "g [                                                                ]",
@@ -86,8 +89,17 @@ func TestIllegalSteps(t *testing.T) {
 		shortPosition: "s [                  r         R                                   ]",
 		input:         "Rc6x",
 	}, {
+		name:          "capture validation 2",
+		shortPosition: "s [  dchehm   c Rrrd  Rr  R r R DR r       H  D  H   CEMC   RRR    ]",
+		steps: []Step{
+			MakeStep(GRabbit, F7, F6),
+			MakeStep(SElephant, F8, F7),
+			MakeStep(GRabbit, D6, C6),
+		},
+		input: "Rc6x",
+	}, {
 		name:          "abandon push",
-		shortPosition: "g [                                  rr      C       D             ]",
+		shortPosition: "g [                                  r       Cr      D             ]",
 		steps: []Step{
 			MakeStep(SRabbit, D3, D4),
 		},
@@ -100,13 +112,9 @@ func TestIllegalSteps(t *testing.T) {
 		},
 		input: "ee6e",
 	}, {
-		name:          "incomplete push 2",
+		name:          "incomplete push frozen",
 		shortPosition: "s [          eD       r                                            ]",
-		steps: []Step{
-			MakeStep(SRabbit, D6, E6),
-			MakeStep(GDog, D7, D6),
-		},
-		input: "ra7s",
+		input:         "rd6e",
 	}, {
 		name:          "incomplete push 3",
 		shortPosition: "s [  dchehm   c Rrrd  Rr  R r R DR r       H  D  H   CEMC   RRR    ]",
@@ -148,6 +156,15 @@ func TestIllegalSteps(t *testing.T) {
 			MakeStep(GCat, C3, D3),
 		},
 		input: "rc4s",
+	}, {
+		name:          "push and pull not shared 2",
+		shortPosition: "s [    rrhem    r   d  c  r Rh R R   R H   rC     rR D  E R  M   CR]",
+		steps: []Step{
+			MakeStep(GRabbit, C4, C3),
+			MakeStep(SHorse, C5, C4),
+			MakeStep(GRabbit, B5, C5),
+		},
+		input: "ma7s",
 	}, {
 		name:          "new push has stronger unfrozen adjacent piece",
 		shortPosition: "g [                           r       D       h                    ]",

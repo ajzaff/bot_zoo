@@ -22,8 +22,14 @@ type Pos struct {
 	moveNum    int        // number of moves left for this turn
 	moves      MoveList   // moves to arrive at this position including the current in progress move
 	stepsLeft  int        // steps remaining in the current move
+	stack      []posStack // information allocated per step thats needs to be restored on unstep.
 	hash       Hash       // hash of the current position
 	turnHash   []Hash     // hash at the beginning of the turn used to detect repetition
+}
+
+type posStack struct {
+	push bool
+	src  Square
 }
 
 // NewEmptyPosition creates a new initial position with no pieces and turn number 1g.
@@ -42,6 +48,7 @@ func NewEmptyPosition() *Pos {
 		moveNum:    1,
 		moves:      []Move{nil},
 		stepsLeft:  16,
+		stack:      make([]posStack, 1, 4*maxPly),
 	}
 	p.hash = computeHash(p.bitboards, p.side, p.stepsLeft)
 	p.turnHash = append(p.turnHash, p.hash)
@@ -94,6 +101,7 @@ func (p *Pos) Clone() *Pos {
 	threefold := p.threefold.Clone()
 	moves := make([]Move, len(p.moves))
 	hashes := make([]Hash, len(p.turnHash))
+	stack := make([]posStack, len(p.stack), cap(p.stack))
 	copy(board, p.board)
 	copy(bs, p.bitboards)
 	copy(ps, p.presence)
@@ -106,6 +114,7 @@ func (p *Pos) Clone() *Pos {
 		moves[i] = make(Move, len(p.moves[i]))
 		copy(moves[i], p.moves[i])
 	}
+	copy(stack, p.stack)
 	copy(hashes, p.turnHash)
 	return &Pos{
 		board:      board,
@@ -121,6 +130,7 @@ func (p *Pos) Clone() *Pos {
 		moveNum:    p.moveNum,
 		moves:      moves,
 		stepsLeft:  p.stepsLeft,
+		stack:      stack,
 		hash:       p.hash,
 		turnHash:   hashes,
 	}
@@ -368,6 +378,15 @@ func (p *Pos) Legal(s Step) bool {
 		return true
 	}
 
+	// Validate a capture if one is provided, but don't
+	// force us, as captures are automatic.
+	if s.Capture() {
+		move := p.currentMove()
+		if l := len(*move); l == 0 || (*move)[l-1] != s {
+			return false
+		}
+	}
+
 	// Is src valid?
 	if t := p.At(src); !t.Valid() {
 		return false
@@ -381,14 +400,6 @@ func (p *Pos) Legal(s Step) bool {
 	// Is frozen?
 	if piece.Color() == p.Side() && p.Frozen(src) {
 		return false
-	}
-
-	// Validate a capture if one is provided, but don't
-	// force us, as captures are not produced in movegen.
-	if s.Capture() {
-		if cap := p.completeCapture(p.Presence(Gold), p.Presence(Silver)); cap != 0 && cap != s {
-			return false
-		}
 	}
 
 	if piece.Color() == p.Side() {
@@ -432,15 +443,18 @@ func (p *Pos) Legal(s Step) bool {
 			}
 		}
 	}
-
 	// Does this step end the turn and repeat a position for the third time?
-	if p.stepsLeft == 1 && p.threefold.Lookup(p.HashAfter(s)) >= 3 {
-		return false
-	}
+	if p.stepsLeft == 1 {
+		hashAfter := p.HashAfter(s)
 
-	// Does this step repeat the position?
-	if p.stepsLeft == 1 && p.HashAfter(s) == p.turnHash[len(p.turnHash)-1]^silverHashKey() {
-		return false
+		if p.threefold.Lookup(hashAfter) >= 3 {
+			return false
+		}
+
+		// Does this step repeat the position?
+		if hashAfter == p.turnHash[len(p.turnHash)-1]^silverHashKey() {
+			return false
+		}
 	}
 
 	return true
@@ -478,6 +492,11 @@ func (p *Pos) Pass() {
 	p.moves = append(p.moves, nil)
 	p.hash ^= silverHashKey()
 	p.turnHash = append(p.turnHash, p.hash)
+	if l := len(p.stack); l < cap(p.stack) {
+		p.stack = p.stack[:l+1]
+	} else {
+		p.stack = append(p.stack, posStack{})
+	}
 	if p.side = p.side.Opposite(); p.side == Gold {
 		p.moveNum++
 	}
@@ -496,6 +515,7 @@ func (p *Pos) Unpass() {
 	p.moves = p.moves[:len(p.moves)-1]
 	p.hash ^= silverHashKey()
 	p.turnHash = p.turnHash[:len(p.turnHash)-1]
+	p.stack = p.stack[:len(p.stack)-1]
 	if p.side = p.side.Opposite(); p.side == Silver {
 		p.moveNum--
 	}

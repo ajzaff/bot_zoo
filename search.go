@@ -7,7 +7,9 @@ import (
 	"time"
 )
 
-const trials = 2000
+const trials = 20
+
+const maxPly = 1024
 
 type searchState struct {
 	tt TranspositionTable
