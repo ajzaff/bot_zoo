@@ -87,11 +87,11 @@ func TestIllegalSteps(t *testing.T) {
 		input:         "Rc6x",
 	}, {
 		name:          "abandon push",
-		shortPosition: "s [            C      De                                           ]",
+		shortPosition: "g [                                  rr      C       D             ]",
 		steps: []Step{
-			MakeStep(GCat, E7, E8),
+			MakeStep(SRabbit, D3, D4),
 		},
-		input: "Dd7w",
+		input: "rc4w",
 	}, {
 		name:          "incomplete push",
 		shortPosition: "s [            C      De                                           ]",
@@ -186,6 +186,14 @@ func TestLegalSteps(t *testing.T) {
 		},
 		input: "ec7e",
 		want:  true,
+	}, {
+		name:          "pull to capture",
+		shortPosition: "g [                                  rr      C       D             ]",
+		steps: []Step{
+			MakeStep(GCat, C3, D3),
+		},
+		input: "rc4s",
+		want:  true,
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			runLegalTestCase(t, tc)
@@ -247,9 +255,8 @@ func TestCanPass(t *testing.T) {
 		},
 	}, {
 		name:          "incomplete push",
-		shortPosition: "s [          eD       r                                            ]",
+		shortPosition: "s [          eD                                                    ]",
 		steps: []Step{
-			MakeStep(SRabbit, D6, E6),
 			MakeStep(GDog, D7, D6),
 		},
 	}} {

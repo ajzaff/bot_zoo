@@ -21,8 +21,6 @@ type Pos struct {
 	side       Color      // side to play
 	moveNum    int        // number of moves left for this turn
 	moves      MoveList   // moves to arrive at this position including the current in progress move
-	lastPiece  Piece      // last piece to move or Empty; used for validating push/pull
-	lastSrc    Square     // last source square or an invalid square; used for validating push/pull
 	stepsLeft  int        // steps remaining in the current move
 	hash       Hash       // hash of the current position
 }
@@ -42,7 +40,6 @@ func NewEmptyPosition() *Pos {
 		side:       Gold,
 		moveNum:    1,
 		moves:      []Move{nil},
-		lastSrc:    64,
 		stepsLeft:  16,
 	}
 	p.hash = computeHash(p.bitboards, p.side, p.stepsLeft)
@@ -119,8 +116,6 @@ func (p *Pos) Clone() *Pos {
 		side:       p.Side(),
 		moveNum:    p.moveNum,
 		moves:      moves,
-		lastPiece:  p.lastPiece,
-		lastSrc:    p.lastSrc,
 		stepsLeft:  p.stepsLeft,
 		hash:       p.hash,
 	}
@@ -308,6 +303,26 @@ func (p *Pos) HashAfter(s Step) Hash {
 	return hash
 }
 
+func isPushMove(c Color, move *Move) (src Square, piece Piece, ok bool) {
+	lastIndex := move.LastIndex()
+	if lastIndex != -1 {
+		last := (*move)[lastIndex]
+		if piece := last.Piece(); piece.Color() != c {
+			last0 := (*move)[:lastIndex].Last()
+			piece0 := last0.Piece()
+			if last0 == 0 || piece0.Color() == piece.Color() || piece0.Color() != c && last0.Src() != last.Dest() {
+				return last.Src(), piece, true
+			}
+		}
+	}
+	return 64, 0, false
+}
+
+// Push returns a Square, Piece, and bool of the ongoing push if any.
+func (p *Pos) Push() (src Square, piece Piece, ok bool) {
+	return isPushMove(p.Side(), p.currentMove())
+}
+
 var setupCounts = []uint8{0, 8, 2, 2, 2, 1, 1}
 
 // Legal checks the legality of a step in the context of an ongoing move
@@ -371,61 +386,46 @@ func (p *Pos) Legal(s Step) bool {
 		}
 	}
 
-	if p.lastSrc.Valid() && p.lastPiece.Color() != p.Side() {
-
-		// Unfortunately, in order to determine if the last push was finished,
-		// we need to look up the last two moves and check whether the move landed
-		// on the right square and if so was it strong enough to be a real pull?
-		move := p.currentMove()
-		var lastCompleted bool
-		if i := move.LastIndex(); i > 0 {
-			last := (*move)[i]
-			if p := (*move)[:i].LastIndex(); p >= 0 {
-				prev := (*move)[p]
-				lastCompleted = !last.Piece().SameColor(prev.Piece()) &&
-					last.Dest() == prev.Src() &&
-					last.Piece().WeakerThan(prev.Piece())
-			}
+	if piece.Color() == p.Side() {
+		// Check that this step completes the last push if any.
+		if src, t, ok := p.Push(); ok && dest != src || !t.WeakerThan(piece) {
+			return false
 		}
+	} else {
 
-		// Does s abandon ongoing push?
-		if !lastCompleted && piece.Color() != p.Side() {
+		// Step abandons ongoing push.
+		if _, _, ok := p.Push(); ok {
 			return false
 		}
 
-		// Does s complete the push?
-		if !lastCompleted && dest != p.lastSrc {
-			return false
-		}
-
-		// Piece is too weak to push?
-		if !lastCompleted && !p.lastPiece.WeakerThan(piece) {
-			return false
-		}
-	} else if p.lastSrc.Valid() && p.stepsLeft == 1 && piece.Color() != p.Side() && dest != p.lastSrc {
-		// Begins push on last step?
-		return false
-	}
-
-	// New push has stronger unfrozen adjacent piece?
-	if dest != p.lastSrc && piece.Color() != p.Side() {
-
-		// Check for an unfrozen piece.
 		var strongerUnfrozen bool
-		for b := src.Neighbors() & p.Stronger(piece) & p.Presence(p.Side()); b > 0; b &= b - 1 {
-			if !p.Frozen(b.Square()) {
-				strongerUnfrozen = true
-				break
+		if p.stepsLeft != 1 {
+			// Exclude the last step which must be a pull; we'll check that later
+			// if we don't find a unfrozen stronger piece to validate the push.
+			for b := src.Neighbors() & p.Stronger(piece) & p.Presence(p.Side()); b > 0; b &= b - 1 {
+				if !p.Frozen(b.Square()) {
+					strongerUnfrozen = true
+					break
+				}
 			}
 		}
 
 		if !strongerUnfrozen {
-			return false
-		}
-	} else if dest == p.lastSrc && piece.Color() != p.Side() && piece.Color() != p.lastPiece.Color() {
-		// Piece is too weak to pull?
-		if !piece.WeakerThan(p.lastPiece) {
-			return false
+			// Pull: Is it valid?
+			last := p.currentMove().Last()
+			if last.Piece().Color() != p.Side() || dest != last.Src() || !piece.WeakerThan(last.Piece()) {
+				return false
+			}
+
+			// Was the last step completing a push?
+			// In that case a pull would be illegal.
+			move := p.currentMove()
+			if p.stepsLeft < 4 {
+				beforeLastStep := (*move)[:move.LastIndex()]
+				if _, _, ok := isPushMove(p.Side(), &beforeLastStep); ok {
+					return false
+				}
+			}
 		}
 	}
 
@@ -452,30 +452,13 @@ func (p *Pos) CanPass() bool {
 	}
 
 	// Are we in the middle of a push?
-	if p.lastSrc.Valid() {
-		// Unfortunately, in order to determine if the last push was finished,
-		// we need to look up the last two moves and check whether the move landed
-		// on the right square and if so was it strong enough to be a real pull?
-		move := p.currentMove()
-		var lastCompleted bool
-		if i := move.LastIndex(); i > 0 {
-			last := (*move)[i]
-			if p := (*move)[:i].LastIndex(); p >= 0 {
-				prev := (*move)[p]
-				lastCompleted = !last.Piece().SameColor(prev.Piece()) &&
-					last.Dest() == prev.Src() &&
-					last.Piece().WeakerThan(prev.Piece())
-			}
-		}
-
-		if !lastCompleted {
-			return false
-		}
+	if _, _, ok := p.Push(); ok {
+		return false
 	}
 
 	// Would the position would repeat for a third time if we passed?
 	if p.threefold.Lookup(p.Hash()^silverHashKey()) >= 3 {
-		// return false
+		return false
 	}
 
 	return true
@@ -488,8 +471,6 @@ func (p *Pos) Pass() {
 	if p.side = p.side.Opposite(); p.side == Gold {
 		p.moveNum++
 	}
-	p.lastPiece = 0
-	p.lastSrc = 64
 	p.stepsLeft = 4
 	if p.moveNum == 1 {
 		p.stepsLeft = 16
@@ -508,13 +489,6 @@ func (p *Pos) Unpass() {
 		p.moveNum--
 	}
 	move := p.currentMove()
-	if step := move.Last(); step != 0 {
-		p.lastPiece = step.Piece()
-		p.lastSrc = step.Src()
-	} else {
-		p.lastPiece = 0
-		p.lastSrc = 64
-	}
 	if p.moveNum == 1 {
 		p.stepsLeft = 16 - move.Len()
 	} else {
@@ -557,8 +531,6 @@ func (p *Pos) Step(step Step) (cap Step) {
 			p.moves[len(p.moves)-1] = append(p.moves[len(p.moves)-1], cap)
 		}
 	}
-	p.lastPiece = piece
-	p.lastSrc = src
 	p.stepsLeft--
 	if p.stepsLeft == 0 {
 		p.Pass()
@@ -576,13 +548,6 @@ func (p *Pos) Unstep() {
 		p.Place(cap.Piece(), cap.Src())
 	}
 	p.stepsLeft++
-	if step := p.currentMove().Last(); step != 0 {
-		p.lastPiece = step.Piece()
-		p.lastSrc = step.Src()
-	} else {
-		p.lastPiece = 0
-		p.lastSrc = 64
-	}
 	switch {
 	case step.Setup():
 		p.Remove(step.Piece(), step.Dest())
