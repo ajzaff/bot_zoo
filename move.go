@@ -73,7 +73,7 @@ func (m Move) Recurring(s Step) bool {
 // LastIndex returns the index of the last step that is not a capture or -1.
 func (m Move) LastIndex() int {
 	for i := len(m) - 1; i >= 0; i-- {
-		if m[i].Capture() {
+		if !m[i].Capture() {
 			return i
 		}
 	}

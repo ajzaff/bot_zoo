@@ -22,14 +22,15 @@ type Pos struct {
 	moveNum    int        // number of moves left for this turn
 	moves      MoveList   // moves to arrive at this position including the current in progress move
 	stepsLeft  int        // steps remaining in the current move
-	stack      []posStack // information allocated per step thats needs to be restored on unstep.
+	stack      []pushInfo // information allocated per step thats needs to be restored on unstep.
 	hash       Hash       // hash of the current position
 	turnHash   []Hash     // hash at the beginning of the turn used to detect repetition
 }
 
-type posStack struct {
-	push bool
-	src  Square
+type pushInfo struct {
+	push  bool
+	piece Piece
+	src   Square
 }
 
 // NewEmptyPosition creates a new initial position with no pieces and turn number 1g.
@@ -48,8 +49,9 @@ func NewEmptyPosition() *Pos {
 		moveNum:    1,
 		moves:      []Move{nil},
 		stepsLeft:  16,
-		stack:      make([]posStack, 1, 4*maxPly),
+		stack:      make([]pushInfo, 1, 4*maxPly),
 	}
+	p.stack[0].src = 64
 	p.hash = computeHash(p.bitboards, p.side, p.stepsLeft)
 	p.turnHash = append(p.turnHash, p.hash)
 	return p
@@ -101,7 +103,7 @@ func (p *Pos) Clone() *Pos {
 	threefold := p.threefold.Clone()
 	moves := make([]Move, len(p.moves))
 	hashes := make([]Hash, len(p.turnHash))
-	stack := make([]posStack, len(p.stack), cap(p.stack))
+	stack := make([]pushInfo, len(p.stack), cap(p.stack))
 	copy(board, p.board)
 	copy(bs, p.bitboards)
 	copy(ps, p.presence)
@@ -318,24 +320,11 @@ func (p *Pos) HashAfter(s Step) Hash {
 	return hash
 }
 
-func isPushMove(c Color, move *Move) (src Square, piece Piece, ok bool) {
-	lastIndex := move.LastIndex()
-	if lastIndex != -1 {
-		last := (*move)[lastIndex]
-		if piece := last.Piece(); piece.Color() != c {
-			last0 := (*move)[:lastIndex].Last()
-			piece0 := last0.Piece()
-			if last0 == 0 || piece0.Color() == piece.Color() || last0.Src() != last.Dest() {
-				return last.Src(), piece, true
-			}
-		}
-	}
-	return 64, 0, false
-}
-
 // Push returns a Square, Piece, and bool of the ongoing push if any.
 func (p *Pos) Push() (src Square, piece Piece, ok bool) {
-	return isPushMove(p.Side(), p.currentMove())
+	// return isPushMove(p.Side(), p.currentMove())
+	e := p.stack[len(p.stack)-1]
+	return e.src, e.piece, e.push
 }
 
 var setupCounts = []uint8{0, 8, 2, 2, 2, 1, 1}
@@ -344,7 +333,11 @@ var setupCounts = []uint8{0, 8, 2, 2, 2, 1, 1}
 // and returns ok and an error if any.
 // Legal is meant to be called before playing s.
 func (p *Pos) Legal(s Step) bool {
-	piece, src, dest := s.Piece(), s.Src(), s.Dest()
+
+	// We don't try to validate captures.
+	if s.Capture() {
+		return false
+	}
 
 	// Steps left?
 	if p.stepsLeft == 0 {
@@ -352,9 +345,12 @@ func (p *Pos) Legal(s Step) bool {
 	}
 
 	// Is piece valid?
+	piece := s.Piece()
 	if !piece.Valid() {
 		return false
 	}
+
+	dest := s.Dest()
 
 	if s.Setup() {
 		// Setup move after move 1?
@@ -378,16 +374,8 @@ func (p *Pos) Legal(s Step) bool {
 		return true
 	}
 
-	// Validate a capture if one is provided, but don't
-	// force us, as captures are automatic.
-	if s.Capture() {
-		move := p.currentMove()
-		if l := len(*move); l == 0 || (*move)[l-1] != s {
-			return false
-		}
-	}
-
 	// Is src valid?
+	src := s.Src()
 	if t := p.At(src); !t.Valid() {
 		return false
 	}
@@ -397,56 +385,61 @@ func (p *Pos) Legal(s Step) bool {
 		return false
 	}
 
-	// Is frozen?
-	if piece.Color() == p.Side() && p.Frozen(src) {
+	// Move to non-adjacent square?
+	if src.Neighbors()&dest.Bitboard() == 0 {
 		return false
 	}
 
 	if piece.Color() == p.Side() {
+
+		// Is src frozen?
+		if piece.Color() == p.Side() && p.Frozen(src) {
+			return false
+		}
+
+		// Backwards rabbit move?
+		direction := dest.Sub(src)
+		if piece.SameType(GRabbit) &&
+			(piece.Color() == Gold && direction == South ||
+				piece.Color() == Silver && direction == North) {
+			return false
+		}
+
 		// Check that this step completes the last push if any.
-		if src, t, ok := p.Push(); ok && dest != src || !t.WeakerThan(piece) {
+		if src, t, ok := p.Push(); ok && (dest != src || !t.WeakerThan(piece)) {
 			return false
 		}
 	} else {
 		// Step abandons ongoing push.
-		if _, _, ok := p.Push(); ok {
+		lastSrc, lastPiece, ok := p.Push()
+		if ok {
 			return false
 		}
 
-		var strongerUnfrozen bool
-		if p.stepsLeft != 1 {
-			// Exclude the last step which must be a pull; we'll check that later
-			// if we don't find a unfrozen stronger piece to validate the push.
+		if lastPiece == Empty || lastSrc != dest || !piece.WeakerThan(lastPiece) {
+			// Push on last step.
+			if p.stepsLeft == 1 {
+				return false
+			}
+
+			// Find a valid pusher.
+			var strongerUnfrozen bool
 			for b := src.Neighbors() & p.Stronger(piece) & p.Presence(p.Side()); b > 0; b &= b - 1 {
 				if !p.Frozen(b.Square()) {
 					strongerUnfrozen = true
 					break
 				}
 			}
-		}
-
-		if !strongerUnfrozen {
-			// Pull: Is it valid?
-			last := p.currentMove().Last()
-			if last.Piece().Color() != p.Side() || dest != last.Src() || !piece.WeakerThan(last.Piece()) {
+			if !strongerUnfrozen {
 				return false
-			}
-
-			// Was the last step completing a push?
-			// In that case a pull would be illegal.
-			move := p.currentMove()
-			if p.stepsLeft < 4 {
-				beforeLastStep := (*move)[:move.LastIndex()]
-				if _, _, ok := isPushMove(p.Side(), &beforeLastStep); ok {
-					return false
-				}
 			}
 		}
 	}
-	// Does this step end the turn and repeat a position for the third time?
+
 	if p.stepsLeft == 1 {
 		hashAfter := p.HashAfter(s)
 
+		// Does this step end the turn and repeat a position for the third time?
 		if p.threefold.Lookup(hashAfter) >= 3 {
 			return false
 		}
@@ -492,11 +485,6 @@ func (p *Pos) Pass() {
 	p.moves = append(p.moves, nil)
 	p.hash ^= silverHashKey()
 	p.turnHash = append(p.turnHash, p.hash)
-	if l := len(p.stack); l < cap(p.stack) {
-		p.stack = p.stack[:l+1]
-	} else {
-		p.stack = append(p.stack, posStack{})
-	}
 	if p.side = p.side.Opposite(); p.side == Gold {
 		p.moveNum++
 	}
@@ -515,7 +503,6 @@ func (p *Pos) Unpass() {
 	p.moves = p.moves[:len(p.moves)-1]
 	p.hash ^= silverHashKey()
 	p.turnHash = p.turnHash[:len(p.turnHash)-1]
-	p.stack = p.stack[:len(p.stack)-1]
 	if p.side = p.side.Opposite(); p.side == Silver {
 		p.moveNum--
 	}
@@ -540,13 +527,13 @@ func (p *Pos) completeCapture(p1, p2 Bitboard) Step {
 	return 0
 }
 
-func (p *Pos) Step(step Step) (cap Step) {
-	p.moves[len(p.moves)-1] = append(p.moves[len(p.moves)-1], step)
-
-	// Is this a capture? We can skip executing it.
+func (p *Pos) Step(step Step) (capture Step) {
+	// captures are generated internally and we can skip them.
 	if step.Capture() {
 		return
 	}
+
+	p.moves[len(p.moves)-1] = append(p.moves[len(p.moves)-1], step)
 
 	// Execute the step:
 	piece, src, dest := step.Piece(), step.Src(), step.Dest()
@@ -557,16 +544,37 @@ func (p *Pos) Step(step Step) (cap Step) {
 		p.Remove(piece, src)
 		p.Place(piece, dest)
 		// Check if any capture results and execute it:
-		if cap = p.completeCapture(p.Presence(Gold), p.Presence(Silver)); cap != 0 {
-			p.Remove(cap.Piece(), cap.Src())
-			p.moves[len(p.moves)-1] = append(p.moves[len(p.moves)-1], cap)
+		if capture = p.completeCapture(p.Presence(Gold), p.Presence(Silver)); capture != 0 {
+			p.Remove(capture.Piece(), capture.Src())
+			p.moves[len(p.moves)-1] = append(p.moves[len(p.moves)-1], capture)
 		}
+		// Update push stack:
+		l := len(p.stack)
+		if l < cap(p.stack) {
+			p.stack = p.stack[:l+1]
+		} else {
+			p.stack = append(p.stack, pushInfo{})
+		}
+		var pull bool
+		if piece.Color() != p.Side() {
+			// Set push flag to whether this is a push.
+			pull = p.stack[l-1].piece.Valid() &&
+				p.stack[l-1].src == dest &&
+				piece.WeakerThan(p.stack[l-1].piece)
+			p.stack[l].push = !pull
+		}
+		if p.stack[l-1].push || pull {
+			piece = 0
+			dest = 64
+		}
+		p.stack[l].piece = piece
+		p.stack[l].src = src
 	}
 	p.stepsLeft--
 	if p.stepsLeft == 0 {
 		p.Pass()
 	}
-	return cap
+	return capture
 }
 
 func (p *Pos) Unstep() {
@@ -574,11 +582,13 @@ func (p *Pos) Unstep() {
 	if step == 0 {
 		p.Unpass()
 		step, cap = p.currentMove().Pop()
+		if step == 0 {
+			return
+		}
 	}
 	if cap.Capture() {
 		p.Place(cap.Piece(), cap.Src())
 	}
-	p.stepsLeft++
 	switch {
 	case step.Setup():
 		p.Remove(step.Piece(), step.Dest())
@@ -586,6 +596,8 @@ func (p *Pos) Unstep() {
 		p.Remove(step.Piece(), step.Dest())
 		p.Place(step.Piece(), step.Src())
 	}
+	p.stack = p.stack[:len(p.stack)-1]
+	p.stepsLeft++
 }
 
 var errRecurringPosition = errors.New("recurring position")

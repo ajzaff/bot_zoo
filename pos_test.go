@@ -27,6 +27,7 @@ func runLegalTestCase(t *testing.T, tc legalTestCase) {
 	}
 	for _, step := range tc.steps {
 		if !p.Legal(step) {
+			t.Log(p)
 			t.Fatalf("Intermediate step is not legal: %s", step)
 		}
 		p.Step(step)
@@ -39,6 +40,7 @@ func runLegalTestCase(t *testing.T, tc legalTestCase) {
 		}
 	}
 	if got := p.Legal(s); got != tc.want {
+		t.Log(p)
 		t.Errorf("Legal(%q): got legal=%v, want legal=%v", tc.input, got, tc.want)
 	}
 }
@@ -85,19 +87,6 @@ func TestIllegalSteps(t *testing.T) {
 		shortPosition: "s [                      r       rM                      R         ]",
 		input:         "Rg5w",
 	}, {
-		name:          "capture validation",
-		shortPosition: "s [                  r         R                                   ]",
-		input:         "Rc6x",
-	}, {
-		name:          "capture validation 2",
-		shortPosition: "s [  dchehm   c Rrrd  Rr  R r R DR r       H  D  H   CEMC   RRR    ]",
-		steps: []Step{
-			MakeStep(GRabbit, F7, F6),
-			MakeStep(SElephant, F8, F7),
-			MakeStep(GRabbit, D6, C6),
-		},
-		input: "Rc6x",
-	}, {
 		name:          "abandon push",
 		shortPosition: "g [                                  r       Cr      D             ]",
 		steps: []Step{
@@ -122,7 +111,6 @@ func TestIllegalSteps(t *testing.T) {
 			MakeStep(GRabbit, F7, F6),
 			MakeStep(SElephant, F8, F7),
 			MakeStep(GRabbit, D6, C6),
-			MakeCapture(GRabbit, C6),
 		},
 		input: "rb5s",
 	}, {
@@ -172,6 +160,7 @@ func TestIllegalSteps(t *testing.T) {
 	}, {
 		name:          "turn repetition",
 		shortPosition: "g [                                                                ]",
+		moveNum:       1,
 		steps: []Step{
 			MakeSetup(GRabbit, A1),
 			MakeSetup(GRabbit, B1),
@@ -247,12 +236,11 @@ func TestLegalSteps(t *testing.T) {
 		input: "Ra1n",
 	}, {
 		name:          "completed push",
-		shortPosition: "s [          eD       r                                            ]",
+		shortPosition: "g [          cD       r                                            ]",
 		steps: []Step{
 			MakeStep(SRabbit, D6, E6),
-			MakeStep(GDog, D7, D6),
 		},
-		input: "ec7e",
+		input: "Dd7s",
 		want:  true,
 	}, {
 		name:          "pull to capture",
