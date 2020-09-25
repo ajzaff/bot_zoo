@@ -1,6 +1,9 @@
 package zoo
 
-import "sync"
+import (
+	"log"
+	"sync"
+)
 
 // Threefold tracks the number of repetitions of a given position.
 // It provides the methods Lookup, Increment, and Decrement which
@@ -65,4 +68,15 @@ func (t *Threefold) Decrement(key Hash) int {
 		t.m.Store(key, n)
 	}
 	return n
+}
+
+// Debug prints the position information to the logger l.
+func (t *Threefold) Debug(l *log.Logger) {
+	l.Println("threefold (>=2):")
+	t.m.Range(func(k, v interface{}) bool {
+		if v.(int) >= 2 {
+			l.Printf("  %d=%d", k, v)
+		}
+		return true
+	})
 }

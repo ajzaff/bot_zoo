@@ -153,11 +153,6 @@ func (e *Engine) search(p *Pos, r *rand.Rand, steps *StepList) Value {
 
 		numSteps := j - l
 
-		// Add a step for passing if legal.
-		canPass := p.CanPass()
-		if canPass {
-			numSteps++
-		}
 		// Immobilized? Return a terminal loss.
 		if numSteps <= 0 {
 			return m * Loss
@@ -166,26 +161,18 @@ func (e *Engine) search(p *Pos, r *rand.Rand, steps *StepList) Value {
 		// Choose a next step at random.
 		i := l + r.Intn(numSteps)
 
-		if i < steps.Len() {
-			step := steps.At(i)
+		step := steps.At(i)
 
-			initSide := p.Side()
+		initSide := p.Side()
 
-			// Make the step now.
-			p.Step(step.Step)
+		// Make the step now.
+		p.Step(step.Step)
 
-			if p.Side() != initSide {
-				m = -m
-			}
-
-			defer func() { p.Unstep() }()
-		} else {
-			p.Pass()
-
+		if p.Side() != initSide {
 			m = -m
-
-			defer func() { p.Unpass() }()
 		}
+
+		defer func() { p.Unstep() }()
 	}
 }
 

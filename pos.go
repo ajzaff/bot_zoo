@@ -3,6 +3,7 @@ package zoo
 import (
 	"errors"
 	"fmt"
+	"log"
 	"regexp"
 	"strings"
 )
@@ -52,6 +53,18 @@ func (p *Pos) growStack() {
 
 func (p *Pos) shrinkStack() {
 	p.stack = p.stack[:len(p.stack)-1]
+}
+
+func (p *Pos) debugStack(l *log.Logger) {
+	l.Printf("stack (last 20):")
+	stack := p.stack
+	if len(stack) > 20 {
+		l.Printf("  ...")
+		stack = stack[len(stack)-20:]
+	}
+	for i, s := range stack {
+		l.Printf("  %d:%v", i, s)
+	}
 }
 
 // NewEmptyPosition creates a new initial position with no pieces and turn number 1g.
@@ -334,6 +347,15 @@ func (p *Pos) HashAfter(s Step) Hash {
 		if cap := p.completeCapture(p1, p2); cap != 0 {
 			hash ^= pieceHashKey(cap.Piece(), cap.Src())
 		}
+		hash ^= stepsHashKey(p.stepsLeft)
+		nextSteps := p.stepsLeft - 1
+		if nextSteps == 0 {
+			nextSteps = 4
+			if p.moveNum == 1 && p.Side() == Gold {
+				nextSteps = 16
+			}
+		}
+		hash ^= stepsHashKey(nextSteps)
 	}
 	if p.stepsLeft == 1 {
 		hash ^= silverHashKey()
@@ -509,6 +531,7 @@ func (p *Pos) CanPass() bool {
 func (p *Pos) Pass() {
 	p.moves = append(p.moves, nil)
 	p.hash ^= silverHashKey()
+	p.threefold.Increment(p.Hash())
 	p.turnHash = append(p.turnHash, p.hash)
 	p.growStack()
 	if p.side = p.side.Opposite(); p.side == Gold {
@@ -527,6 +550,7 @@ func (p *Pos) Unpass() {
 		return
 	}
 	p.moves = p.moves[:len(p.moves)-1]
+	p.threefold.Decrement(p.Hash())
 	p.hash ^= silverHashKey()
 	p.turnHash = p.turnHash[:len(p.turnHash)-1]
 	p.shrinkStack()
@@ -620,7 +644,9 @@ func (p *Pos) Unstep() {
 		p.Place(step.Piece(), step.Src())
 	}
 	p.shrinkStack()
+	p.hash ^= stepsHashKey(p.stepsLeft)
 	p.stepsLeft++
+	p.hash ^= stepsHashKey(p.stepsLeft)
 }
 
 var errRecurringPosition = errors.New("recurring position")
@@ -633,11 +659,9 @@ func (p *Pos) Move(m Move) {
 	if p.Side() == initSide {
 		p.Pass()
 	}
-	p.threefold.Increment(p.Hash())
 }
 
 func (p *Pos) Unmove() {
-	p.threefold.Decrement(p.Hash())
 	p.Unpass()
 	move := p.currentMove()
 	for i := len(*move) - 1; i >= 0; i-- {

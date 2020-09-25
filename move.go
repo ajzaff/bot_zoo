@@ -204,20 +204,20 @@ func (s Step) Dest() Square {
 
 // Capture returns true if the Step is a capture.
 func (s Step) Capture() bool {
-	return s&0b1111110000000000 == 0b111000000000000 &&
-		s&0b1111110000 != 0b1001000000 &&
-		s&0b1111110000 != 0b111010000 &&
-		s&0b1111110000 != 0b101000000 &&
-		s&0b1111110000 != 0b110110000
+	return s&0b1111110000000000 == 0b0111000000000000 && // dest == E4
+		s&0b1111110000 != 0b0101000000 && // src != E3
+		s&0b1111110000 != 0b1001000000 && // src != E5
+		s&0b1111110000 != 0b0110110000 && // src != D4
+		s&0b1111110000 != 0b0111010000 // src != F4
 }
 
 // Setup returns true if the Step is a setup Step.
 func (s Step) Setup() bool {
-	return s&0b1111110000 == 0b111000000 &&
-		s&0b1111110000000000 != 0b1001000000000000 &&
-		s&0b1111110000000000 != 0b111010000000000 &&
-		s&0b1111110000000000 != 0b101000000000000 &&
-		s&0b1111110000000000 != 0b110110000000000
+	return s&0b1111110000 == 0b0111000000 && // src == E4
+		s&0b1111110000000000 != 0b0101000000000000 && // dest != E3
+		s&0b1111110000000000 != 0b1001000000000000 && // dest != E5
+		s&0b1111110000000000 != 0b0110110000000000 && // dest != D4
+		s&0b1111110000000000 != 0b0111010000000000 // dest != F4
 }
 
 // Recurring returns true if playing s and step lead to a recurring position (i.e. step "undoes" s).

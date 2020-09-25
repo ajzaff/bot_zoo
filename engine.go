@@ -94,6 +94,19 @@ func (e *Engine) Stop() {
 	}
 }
 
+func (e *Engine) Debug() {
+	e.Debugf(e.Pos.String())
+	e.Debugf("hash=%v", e.Hash())
+
+	src, piece, ok := e.Push()
+	e.Debugf("can_pass=%v", e.CanPass())
+	e.Debugf("src=%v", src)
+	e.Debugf("piece=%c", piece.Byte())
+	e.Debugf("push=%v", ok)
+	e.debugStack(e.debug)
+	e.threefold.Debug(e.debug)
+}
+
 // Logf logs the formatted message to the configured log writer.
 // This is used for all logging as well as AEI protocol logging
 // which requires the prefix be set to "log" on each line.
@@ -109,8 +122,7 @@ func (e *Engine) Logf(format string, a ...interface{}) {
 // This should be used only for AEI protocol messages.
 func (e *Engine) Outputf(format string, a ...interface{}) {
 	if e.LogVerbosePosition {
-		e.Debugf(e.Pos.String())
-		e.Debugf(e.Pos.ShortString())
+		e.Debug()
 	}
 	s := fmt.Sprintf(format, a...)
 	if e.LogProtocolTraffic {
