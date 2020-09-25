@@ -1,13 +1,12 @@
 package zoo
 
 import (
-	"fmt"
 	"math/rand"
 	"sync"
 	"time"
 )
 
-const trials = 20
+const trials = 2000
 
 const maxPly = 1024
 
@@ -50,32 +49,24 @@ func (e *Engine) searchRoot(ponder bool) {
 		)
 		best.Value = -Inf
 		stepList.Generate(p)
-		for j := 0; j <= stepList.Len(); /* <= for passing move */ j++ {
+		for j := 0; j < stepList.Len(); j++ {
 
 			var (
 				step ExtStep
 				m    = Value(1)
 			)
 
-			if j < stepList.Len() {
-				step = stepList.At(j)
+			step = stepList.At(j)
 
-				if !p.Legal(step.Step) {
-					continue
-				}
+			if !p.Legal(step.Step) {
+				continue
+			}
 
-				initSide := p.Side()
+			initSide := p.Side()
 
-				p.Step(step.Step)
+			p.Step(step.Step)
 
-				if p.Side() != initSide {
-					m = -1
-				}
-			} else {
-				if !p.CanPass() {
-					continue
-				}
-				p.Pass()
+			if p.Side() != initSide {
 				m = -1
 			}
 
@@ -86,36 +77,27 @@ func (e *Engine) searchRoot(ponder bool) {
 			step.Value /= trials
 			step.Value *= m
 
+			stepList.SetValue(j, step.Value)
 			if step.Value > best.Value {
 				best = step
 			}
 
-			if j < stepList.Len() {
-				stepList.SetValue(j, step.Value)
-				p.Unstep()
-			} else {
-				p.Unpass()
-			}
+			p.Unstep()
 		}
 
 		stepList.Sort(0)
 		for i := 0; i < stepList.Len(); i++ {
 			step := stepList.At(i)
 			if cap := step.DebugCaptureContext(p); cap != 0 {
-				fmt.Println("log ", stepList.At(i).Value, step.Step, cap)
+				e.Debugf("[%f] %s %s", stepList.At(i).Value, step.Step, cap)
 			} else {
-				fmt.Println("log ", stepList.At(i).Value, step.Step)
+				e.Debugf("[%f] %s", stepList.At(i).Value, step.Step)
 			}
 		}
-		fmt.Println("log ---")
+		e.Debugf("---")
 
 		// No available moves.
 		if best.Value == -Inf {
-			break
-		}
-
-		// Passing move.
-		if best.Step == 0 {
 			break
 		}
 

@@ -229,6 +229,23 @@ func init() {
 		e.Logf("%f", e.Terminal())
 		return nil
 	}))
+	RegisterAEIHandler("debug", extendedHandler(func(e *Engine, args string) error {
+		e.Debugf(e.Pos.String())
+		e.Debugf("hash=%v", e.Hash())
+
+		src, piece, ok := e.Push()
+		e.Debugf("src=%v", src)
+		e.Debugf("piece=%c", piece.Byte())
+		e.Debugf("push=%v", ok)
+		e.Debugf("stack:")
+		for i, s := range e.stack {
+			e.Debugf("  %d:%v", i, s)
+		}
+
+		e.Debugf("can_pass=%v", e.CanPass())
+
+		return nil
+	}))
 	RegisterAEIHandler("print", extendedHandler(func(e *Engine, args string) error {
 		var b Bitboard
 		switch args {

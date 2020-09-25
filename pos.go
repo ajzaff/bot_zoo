@@ -33,6 +33,23 @@ type pushInfo struct {
 	src   Square
 }
 
+func (p *pushInfo) reset() {
+	p.push = false
+	p.piece = 0
+	p.src = 64
+}
+
+func (p *Pos) growStack() {
+	if l := len(p.stack); l < cap(p.stack) {
+		p.stack = p.stack[:l+1]
+		p.stack[l].reset() // entry is being reused, we must reset it.
+	} else {
+		e := pushInfo{}
+		e.reset()
+		p.stack = append(p.stack, e)
+	}
+}
+
 // NewEmptyPosition creates a new initial position with no pieces and turn number 1g.
 func NewEmptyPosition() *Pos {
 	p := &Pos{
@@ -51,7 +68,7 @@ func NewEmptyPosition() *Pos {
 		stepsLeft:  16,
 		stack:      make([]pushInfo, 1, 4*maxPly),
 	}
-	p.stack[0].src = 64
+	p.stack[0].reset()
 	p.hash = computeHash(p.bitboards, p.side, p.stepsLeft)
 	p.turnHash = append(p.turnHash, p.hash)
 	return p
@@ -322,7 +339,6 @@ func (p *Pos) HashAfter(s Step) Hash {
 
 // Push returns a Square, Piece, and bool of the ongoing push if any.
 func (p *Pos) Push() (src Square, piece Piece, ok bool) {
-	// return isPushMove(p.Side(), p.currentMove())
 	e := p.stack[len(p.stack)-1]
 	return e.src, e.piece, e.push
 }
@@ -440,7 +456,7 @@ func (p *Pos) Legal(s Step) bool {
 		hashAfter := p.HashAfter(s)
 
 		// Does this step end the turn and repeat a position for the third time?
-		if p.threefold.Lookup(hashAfter) >= 3 {
+		if p.threefold.Lookup(hashAfter) >= 2 {
 			return false
 		}
 
@@ -473,7 +489,12 @@ func (p *Pos) CanPass() bool {
 	}
 
 	// Would the position would repeat for a third time if we passed?
-	if p.threefold.Lookup(p.Hash()^silverHashKey()) >= 3 {
+	if p.threefold.Lookup(p.Hash()^silverHashKey()) >= 2 {
+		return false
+	}
+
+	// Would the move repeat if we passed now?
+	if p.Hash() == p.turnHash[len(p.turnHash)-1]^silverHashKey() {
 		return false
 	}
 
@@ -534,6 +555,7 @@ func (p *Pos) Step(step Step) (capture Step) {
 	}
 
 	p.moves[len(p.moves)-1] = append(p.moves[len(p.moves)-1], step)
+	p.growStack()
 
 	// Execute the step:
 	piece, src, dest := step.Piece(), step.Src(), step.Dest()
@@ -548,14 +570,9 @@ func (p *Pos) Step(step Step) (capture Step) {
 			p.Remove(capture.Piece(), capture.Src())
 			p.moves[len(p.moves)-1] = append(p.moves[len(p.moves)-1], capture)
 		}
-		// Update push stack:
-		l := len(p.stack)
-		if l < cap(p.stack) {
-			p.stack = p.stack[:l+1]
-		} else {
-			p.stack = append(p.stack, pushInfo{})
-		}
+		// Update push flag:
 		var pull bool
+		l := len(p.stack) - 1
 		if piece.Color() != p.Side() {
 			// Set push flag to whether this is a push.
 			pull = p.stack[l-1].piece.Valid() &&
@@ -563,9 +580,9 @@ func (p *Pos) Step(step Step) (capture Step) {
 				piece.WeakerThan(p.stack[l-1].piece)
 			p.stack[l].push = !pull
 		}
-		if p.stack[l-1].push || pull {
+		if p.stepsLeft == 1 || p.stack[l-1].push || pull {
 			piece = 0
-			dest = 64
+			src = 64
 		}
 		p.stack[l].piece = piece
 		p.stack[l].src = src
