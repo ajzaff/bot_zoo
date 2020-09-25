@@ -50,6 +50,10 @@ func (p *Pos) growStack() {
 	}
 }
 
+func (p *Pos) shrinkStack() {
+	p.stack = p.stack[:len(p.stack)-1]
+}
+
 // NewEmptyPosition creates a new initial position with no pieces and turn number 1g.
 func NewEmptyPosition() *Pos {
 	p := &Pos{
@@ -506,6 +510,7 @@ func (p *Pos) Pass() {
 	p.moves = append(p.moves, nil)
 	p.hash ^= silverHashKey()
 	p.turnHash = append(p.turnHash, p.hash)
+	p.growStack()
 	if p.side = p.side.Opposite(); p.side == Gold {
 		p.moveNum++
 	}
@@ -524,6 +529,7 @@ func (p *Pos) Unpass() {
 	p.moves = p.moves[:len(p.moves)-1]
 	p.hash ^= silverHashKey()
 	p.turnHash = p.turnHash[:len(p.turnHash)-1]
+	p.shrinkStack()
 	if p.side = p.side.Opposite(); p.side == Silver {
 		p.moveNum--
 	}
@@ -613,7 +619,7 @@ func (p *Pos) Unstep() {
 		p.Remove(step.Piece(), step.Dest())
 		p.Place(step.Piece(), step.Src())
 	}
-	p.stack = p.stack[:len(p.stack)-1]
+	p.shrinkStack()
 	p.stepsLeft++
 }
 
