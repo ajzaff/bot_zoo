@@ -110,7 +110,7 @@ func (e *Engine) searchRoot(ponder bool) {
 		defer func() { p.Unstep() }()
 
 		// Win achieved.
-		if p.Terminal().Win() {
+		if p.Terminal().Win() && p.CanPass() {
 			break
 		}
 	}

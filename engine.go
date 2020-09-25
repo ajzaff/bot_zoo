@@ -96,6 +96,7 @@ func (e *Engine) Stop() {
 
 func (e *Engine) Debug() {
 	e.Debugf(e.Pos.String())
+	e.Debugf("short=%s", e.ShortString())
 	e.Debugf("hash=%v", e.Hash())
 
 	src, piece, ok := e.Push()

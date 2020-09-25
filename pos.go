@@ -335,6 +335,7 @@ func (p *Pos) HashAfter(s Step) Hash {
 	switch {
 	case s.Capture():
 		hash ^= pieceHashKey(s.Piece(), s.Src())
+		return hash
 	case s.Setup():
 		hash ^= pieceHashKey(s.Piece(), s.Dest())
 	default:
@@ -347,16 +348,16 @@ func (p *Pos) HashAfter(s Step) Hash {
 		if cap := p.completeCapture(p1, p2); cap != 0 {
 			hash ^= pieceHashKey(cap.Piece(), cap.Src())
 		}
-		hash ^= stepsHashKey(p.stepsLeft)
-		nextSteps := p.stepsLeft - 1
-		if nextSteps == 0 {
-			nextSteps = 4
-			if p.moveNum == 1 && p.Side() == Gold {
-				nextSteps = 16
-			}
-		}
-		hash ^= stepsHashKey(nextSteps)
 	}
+	hash ^= stepsHashKey(p.stepsLeft)
+	nextSteps := p.stepsLeft - 1
+	if nextSteps == 0 {
+		nextSteps = 4
+		if p.moveNum == 1 && p.Side() == Gold {
+			nextSteps = 16
+		}
+	}
+	hash ^= stepsHashKey(nextSteps)
 	if p.stepsLeft == 1 {
 		hash ^= silverHashKey()
 	}
@@ -530,17 +531,19 @@ func (p *Pos) CanPass() bool {
 // Pass the turn and reset step variables.
 func (p *Pos) Pass() {
 	p.moves = append(p.moves, nil)
-	p.hash ^= silverHashKey()
-	p.threefold.Increment(p.Hash())
-	p.turnHash = append(p.turnHash, p.hash)
 	p.growStack()
 	if p.side = p.side.Opposite(); p.side == Gold {
 		p.moveNum++
 	}
+	p.hash ^= silverHashKey()
+	p.hash ^= stepsHashKey(p.stepsLeft)
 	p.stepsLeft = 4
 	if p.moveNum == 1 {
 		p.stepsLeft = 16
 	}
+	p.hash ^= stepsHashKey(p.stepsLeft)
+	p.threefold.Increment(p.Hash())
+	p.turnHash = append(p.turnHash, p.Hash())
 }
 
 // Unpass the turn and restore step variables.
@@ -550,19 +553,20 @@ func (p *Pos) Unpass() {
 		return
 	}
 	p.moves = p.moves[:len(p.moves)-1]
-	p.threefold.Decrement(p.Hash())
-	p.hash ^= silverHashKey()
 	p.turnHash = p.turnHash[:len(p.turnHash)-1]
 	p.shrinkStack()
 	if p.side = p.side.Opposite(); p.side == Silver {
 		p.moveNum--
 	}
-	move := p.currentMove()
-	if p.moveNum == 1 {
+	p.threefold.Decrement(p.Hash())
+	p.hash ^= silverHashKey()
+	p.hash ^= stepsHashKey(p.stepsLeft)
+	if move := p.currentMove(); p.moveNum == 1 {
 		p.stepsLeft = 16 - move.Len()
 	} else {
 		p.stepsLeft = 4 - move.Len()
 	}
+	p.hash ^= stepsHashKey(p.stepsLeft)
 }
 
 // completeCapture returns a capture step resulting from an undefended piece on a trap.
@@ -617,7 +621,9 @@ func (p *Pos) Step(step Step) (capture Step) {
 		p.stack[l].piece = piece
 		p.stack[l].src = src
 	}
+	p.hash ^= stepsHashKey(p.stepsLeft)
 	p.stepsLeft--
+	p.hash ^= stepsHashKey(p.stepsLeft)
 	if p.stepsLeft == 0 {
 		p.Pass()
 	}
