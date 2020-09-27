@@ -3,7 +3,9 @@ package zoo
 import (
 	"errors"
 	"fmt"
+	"math/rand"
 	"strings"
+	"time"
 )
 
 // ExecuteCommand parses AEI command and executes the handler or returns an error.
@@ -144,6 +146,23 @@ func init() {
 	RegisterAEIHandler("steps", extendedHandler(func(e *Engine, args string) error {
 		var stepList StepList
 		stepList.Generate(e.Pos)
+		for i := 0; i < stepList.Len(); i++ {
+			step := stepList.At(i)
+			illegalStr := ""
+			if !e.Legal(step.Step) {
+				illegalStr = " (illegal)"
+			}
+			if cap := step.Step.DebugCaptureContext(e.Pos); cap != 0 {
+				e.Logf("[%f] %s %s%s", step.Value, step.Step, cap, illegalStr)
+			} else {
+				e.Logf("[%f] %s%s", step.Value, step.Step, illegalStr)
+			}
+		}
+		return nil
+	}))
+	RegisterAEIHandler("psteps", extendedHandler(func(e *Engine, args string) error {
+		var stepList StepList
+		stepList.GeneratePlayout(rand.New(rand.NewSource(time.Now().UnixNano())), e.Pos)
 		for i := 0; i < stepList.Len(); i++ {
 			step := stepList.At(i)
 			illegalStr := ""

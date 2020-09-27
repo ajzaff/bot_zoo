@@ -5,13 +5,17 @@ package zoo
 type TTEntry struct {
 	// Key is the upper part of the ZHash (16 bits).
 	Key16 uint16
-	// Value of the entry (16 bits).
+
+	// Value is the estimated value of this node from the alpha network (16 bits).
 	Value Value
-	// Trials of simulation for the entry divided by 16 (8 bits).
-	Trials uint8
-	// Gen8 packs the aging parameter and PV flag (8 bits).
+
+	// Playouts is the number of playouts that passed through this node divided by 256 (8 bits).
+	Playouts uint8
+
+	// Gen8 contains the aging parameter (8 bits).
 	Gen8 uint8
-	// Step packed into a uint16 (16 bits).
+
+	// Best step packed into a uint16 (16 bits).
 	Step Step
 }
 
@@ -19,14 +23,9 @@ type TTEntry struct {
 func (e *TTEntry) Clear() {
 	e.Key16 = 0
 	e.Value = 0
-	e.Trials = 0
+	e.Playouts = 0
 	e.Gen8 = 0
 	e.Step = 0
-}
-
-// PV returns whether the entry is a PV entry.
-func (e *TTEntry) PV() bool {
-	return e.Gen8&4 != 0
 }
 
 // Save the information into the TableEntry if it is more valuable.
@@ -38,7 +37,7 @@ func (e *TTEntry) Save(key uint64, v Value, pv bool, gen, runs uint8, step Step)
 		e.Step = step
 	}
 	// Overwrite more valuable entries.
-	if key16 != e.Key16 || runs > e.Trials {
+	if key16 != e.Key16 || runs > e.Playouts {
 		e.Key16 = key16
 		e.Value = v
 		g := gen
@@ -111,7 +110,7 @@ func (t *TranspositionTable) Probe(key uint64) (e *TTEntry, found bool) {
 	for i := 0; i < clusterSize; i++ {
 		e := &cluster.entries[i]
 		if e.Key16 == key16 {
-			e.Gen8 = uint8(t.gen8 | (e.Gen8 & 0x7)) // Refresh
+			e.Gen8 = t.gen8 // Refresh
 			return e, true
 		}
 	}
@@ -122,8 +121,8 @@ func (t *TranspositionTable) Probe(key uint64) (e *TTEntry, found bool) {
 		e := &cluster.entries[i]
 		// Pick least valuable entry whilst handling cyclic generation overflow.
 		// See stockfish/tt.cpp for explaination.
-		if replace.Trials-((uint8(263+int(t.gen8))-e.Gen8)&0xf8) >
-			e.Trials-((uint8(263+int(t.gen8))-e.Gen8)&0xf8) {
+		if replace.Playouts-((uint8(263+int(t.gen8))-e.Gen8)&0xf8) >
+			e.Playouts-((uint8(263+int(t.gen8))-e.Gen8)&0xf8) {
 			replace = e
 		}
 	}

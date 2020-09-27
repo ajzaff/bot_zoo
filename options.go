@@ -36,6 +36,8 @@ func (o *Options) LookupOption(name string) (value interface{}, ok bool) {
 var setOptionPattern = regexp.MustCompile(`^name (\S+) value (\S+)$`)
 
 // ExecuteSetOption parses the setoption arguments and attempts to call the setoption handler or returns an error.
+// Example input:
+//	"name foo_option value 10"
 func (o *Options) ExecuteSetOption(s string) error {
 	matches := setOptionPattern.FindStringSubmatch(strings.TrimSpace(s))
 	if len(matches) != 3 {
@@ -85,4 +87,9 @@ func init() {
 	RegisterSetOption("sreserve", setIntOptionFunc())
 	RegisterSetOption("hash", setIntOptionFunc())
 	RegisterSetOption("goroutines", setIntOptionFunc())
+	RegisterSetOption("playouts", setIntOptionFunc())
+}
+
+func (o *Options) setDefaultOptions() {
+	o.ExecuteSetOption("name playouts value 1")
 }

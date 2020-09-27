@@ -39,6 +39,7 @@ func NewEngine() *Engine {
 		out:            log.New(os.Stdout, "", 0),
 		debug:          log.New(os.Stderr, "", 0),
 	}
+	e.setDefaultOptions()
 	e.searchState.Reset()
 	return e
 }

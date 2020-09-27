@@ -1,6 +1,7 @@
 package zoo
 
 import (
+	"math/rand"
 	"sort"
 )
 
@@ -10,17 +11,21 @@ type ExtStep struct {
 	Value
 }
 
-func makeExtStep(step Step) ExtStep {
-	return ExtStep{
-		Step:  step,
-		Value: -Inf,
-	}
+func (e *ExtStep) reset() {
+	e.Step = 0
+	e.Value = -Inf
 }
 
 // StepList implements an efficient data structure for storing scored steps from search lines.
 type StepList struct {
 	steps []ExtStep
 	begin int // begin index for Sort
+}
+
+func NewStepList(cap int) *StepList {
+	return &StepList{
+		steps: make([]ExtStep, 0, cap),
+	}
 }
 
 func (l *StepList) Len() int           { return len(l.steps) - l.begin }
@@ -31,12 +36,15 @@ func (a *StepList) Swap(i, j int) {
 
 // Generate the steps and scores for position p and append the sorted steps to the move list.
 func (l *StepList) Generate(p *Pos) {
-	begin := l.Len()
 	p.generateSteps(&l.steps)
-	l.Sort(begin)
 }
 
-// Sorts all steps by value at begin to l.Len().
+// GeneratePlayout generates the playout steps for position p to the move list.
+func (l *StepList) GeneratePlayout(r *rand.Rand, p *Pos) {
+	p.generatePlayoutSteps(r, &l.steps)
+}
+
+// Sort sorts all steps by value at begin to l.Len().
 func (l *StepList) Sort(begin int) {
 	l.begin = begin
 	sort.Stable(l)
@@ -48,10 +56,12 @@ func (l *StepList) Truncate(n int) {
 	l.steps = l.steps[:n]
 }
 
+// At returns the step at index i.
 func (l *StepList) At(i int) ExtStep {
 	return l.steps[i]
 }
 
+// SetValue sets the step at index i to value v.
 func (l *StepList) SetValue(i int, v Value) {
 	l.steps[i].Value = v
 }
@@ -88,11 +98,65 @@ func (p *Pos) generateSteps(a *[]ExtStep) {
 		emptyDB := db & empty
 		for b2 := emptyDB; b2 > 0; b2 &= b2 - 1 {
 			dest := b2.Square()
-			*a = append(*a, makeExtStep(MakeStep(t, src, dest)))
+			l := len(*a)
+			if l < cap(*a) {
+				(*a) = (*a)[:l+1]
+			} else {
+				e := ExtStep{}
+				e.reset()
+			}
+			(*a)[l].Step = MakeStep(t, src, dest)
 		}
 	}
 }
 
+// generatePlayoutSteps generates a subset of pseduo-legal steps
+// and appends them to a.
+func (p *Pos) generatePlayoutSteps(r *rand.Rand, a *[]ExtStep) {
+	if p.stepsLeft == 0 {
+		return
+	}
+	if p.moveNum == 1 {
+		p.generateSetupSteps(a)
+		return
+	}
+	ourSide := p.Side()
+	ourRabbit := GRabbit.WithColor(ourSide)
+	empty := p.Empty()
+	occupied := ^empty
+
+	if n := occupied.Count(); n > 16 {
+		occupied &= Bitboard(r.Uint64()) // 1/2 bits set.
+	}
+
+	for b := occupied; b > 0; b &= b - 1 {
+		src := b.Square()
+		t := p.At(src)
+
+		var db Bitboard
+		if t == ourRabbit {
+			db = src.ForwardNeighbors(ourSide)
+		} else {
+			db = src.Neighbors()
+		}
+
+		// Generate step from src to dest.
+		emptyDB := db & empty
+		for b2 := emptyDB; b2 > 0; b2 &= b2 - 1 {
+			dest := b2.Square()
+			l := len(*a)
+			if l < cap(*a) {
+				(*a) = (*a)[:l+1]
+			} else {
+				e := ExtStep{}
+				e.reset()
+			}
+			(*a)[l].Step = MakeStep(t, src, dest)
+		}
+	}
+}
+
+// generateSetupSteps generates all setup steps in a fixed order to reduce the branching factor.
 func (p *Pos) generateSetupSteps(a *[]ExtStep) {
 	c := p.Side()
 	i := A1
@@ -105,6 +169,13 @@ func (p *Pos) generateSetupSteps(a *[]ExtStep) {
 		i = i.Flip()
 	}
 	for t := GRabbit.WithColor(c); t <= GElephant.WithColor(c); t++ {
-		*a = append(*a, makeExtStep(MakeSetup(Piece(t).WithColor(c), i)))
+		l := len(*a)
+		if l < cap(*a) {
+			(*a) = (*a)[:l+1]
+		} else {
+			e := ExtStep{}
+			e.reset()
+		}
+		(*a)[l].Step = MakeSetup(Piece(t).WithColor(c), i)
 	}
 }

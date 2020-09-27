@@ -8,6 +8,10 @@ import (
 	"strings"
 )
 
+// maxPly used for computing some initial slice capacities.
+// This is not a hard limit.
+const maxPly = 1024
+
 // Pos represents an Arimaa position.
 type Pos struct {
 	board      []Piece    // board information; captures are negated such that they can be undone later
@@ -81,9 +85,10 @@ func NewEmptyPosition() *Pos {
 		threefold:  NewThreefold(),
 		side:       Gold,
 		moveNum:    1,
-		moves:      []Move{nil},
+		moves:      make([]Move, 1, maxPly),
 		stepsLeft:  16,
 		stack:      make([]pushInfo, 1, 4*maxPly),
+		turnHash:   make([]Hash, 0, maxPly),
 	}
 	p.stack[0].reset()
 	p.hash = computeHash(p.bitboards, p.side, p.stepsLeft)
@@ -229,7 +234,7 @@ func (p *Pos) Weaker(t Piece) Bitboard {
 }
 
 // Terminal tests whether this position is a terminal node from the perspecitve of player B to move.
-// Only checks for goal or elimination.
+// Only checks for goal, elimination, and immobilization.
 func (p *Pos) Terminal() Value {
 
 	// Still setting up?
@@ -271,6 +276,19 @@ func (p *Pos) Terminal() Value {
 	// Has player A lost all rabbits? If so player B wins.
 	if elimA {
 		return Win
+	}
+
+	// Has player B become immobilized? If so player A wins.
+	var mobile bool
+	for b := p.Presence(p.Side()); b > 0; b &= b - 1 {
+		src := b.Square()
+		if !p.Frozen(src) {
+			mobile = true
+			break
+		}
+	}
+	if !mobile {
+		return Loss
 	}
 
 	return 0
