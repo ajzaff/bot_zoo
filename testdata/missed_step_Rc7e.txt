@@ -1,1 +1,0 @@
-setposition g [rcc    rrrR H   rdEh  r  He  rM D     d        D     C  RRRRR RR]

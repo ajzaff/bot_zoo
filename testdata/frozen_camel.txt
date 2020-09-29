@@ -1,4 +1,0 @@
-setposition s [                              mE                                ]
-zzz_print
-makemove mg5s
-zzz_print

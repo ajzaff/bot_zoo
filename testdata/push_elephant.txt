@@ -1,4 +1,0 @@
-setposition s [                          eE                                    ]
-zzz_print
-makemove Ed5n ec5e
-zzz_print

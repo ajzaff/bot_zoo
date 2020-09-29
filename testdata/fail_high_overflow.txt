@@ -1,2 +1,0 @@
-setposition g [rc d crrrrrEr  r   d          hD         e  m    D hC      R    ]
-go

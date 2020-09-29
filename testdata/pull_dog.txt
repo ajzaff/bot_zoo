@@ -1,4 +1,0 @@
-setposition s [                          hD                                    ]
-zzz_print
-makemove hc5w Dd5w
-zzz_print

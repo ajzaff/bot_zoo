@@ -1,4 +1,0 @@
-setposition g [                 D                                              ]
-zzz_print
-makemove Db6e
-zzz_print
