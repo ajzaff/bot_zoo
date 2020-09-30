@@ -248,6 +248,12 @@ func init() {
 		e.Logf("%f", e.Terminal())
 		return nil
 	}))
+	RegisterAEIHandler("options", extendedHandler(func(e *Engine, args string) error {
+		e.Options.Range(func(name string, value interface{}) {
+			e.Debugf("%v=%v", name, value)
+		})
+		return nil
+	}))
 	RegisterAEIHandler("debug", extendedHandler(func(e *Engine, args string) error {
 		e.Debug()
 		return nil

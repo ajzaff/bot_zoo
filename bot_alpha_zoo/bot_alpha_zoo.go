@@ -17,14 +17,16 @@ var (
 )
 
 func main() {
-	flag.Parse()
-	engine := zoo.NewEngine()
-	engine.AEISettings = aeiSettings
-	engine.EngineSettings = engineSettings
-
 	log.SetOutput(os.Stderr)
 	log.SetFlags(0)
 	log.SetPrefix("")
+
+	flag.Parse()
+	engine, err := zoo.NewEngine(engineSettings, aeiSettings)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	log.Println("bot_alpha_zoo by Alan Zaffetti")
 	log.Println("For operation instructions: <https://github.com/ajzaff/bot_zoo>")
 	log.Println(`To quit: type "quit"`)

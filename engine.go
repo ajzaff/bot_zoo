@@ -28,10 +28,10 @@ type Engine struct {
 	searchState
 }
 
-func NewEngine() *Engine {
+func NewEngine(settings *EngineSettings, aeiSettings *AEISettings) (*Engine, error) {
 	e := &Engine{
-		AEISettings:    &AEISettings{},
-		EngineSettings: &EngineSettings{},
+		EngineSettings: settings,
+		AEISettings:    aeiSettings,
 		Options:        newOptions(),
 		timeControl:    makeTimeControl(),
 		Pos:            NewEmptyPosition(),
@@ -39,9 +39,11 @@ func NewEngine() *Engine {
 		out:            log.New(os.Stdout, "", 0),
 		debug:          log.New(os.Stderr, "", 0),
 	}
-	e.setDefaultOptions()
+	if err := e.EngineSettings.Options.Execute(e.Options); err != nil {
+		return nil, err
+	}
 	e.searchState.Reset()
-	return e
+	return e, nil
 }
 
 func (e *Engine) NewGame() {
@@ -123,9 +125,6 @@ func (e *Engine) Logf(format string, a ...interface{}) {
 // Outputf outputs the formatted message to the configured output log.
 // This should be used only for AEI protocol messages.
 func (e *Engine) Outputf(format string, a ...interface{}) {
-	if e.LogVerbosePosition {
-		e.Debug()
-	}
 	s := fmt.Sprintf(format, a...)
 	if e.LogProtocolTraffic {
 		e.Debugf("< %s", s)

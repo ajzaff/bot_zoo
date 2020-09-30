@@ -177,6 +177,16 @@ func (p *Pos) Clone() *Pos {
 	}
 }
 
+// MoveList returns a copy of the complete move list arriving at p.
+func (p *Pos) MoveList() MoveList {
+	l := make(MoveList, len(p.moves))
+	for i := range l {
+		l[i] = make(Move, len(p.moves[i]))
+		copy(l[i], p.moves[i])
+	}
+	return l
+}
+
 func (p *Pos) currentMove() *Move {
 	if len(p.moves) > 0 {
 		return &p.moves[len(p.moves)-1]

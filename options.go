@@ -3,6 +3,7 @@ package zoo
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,7 +16,9 @@ type Options struct {
 }
 
 func newOptions() *Options {
-	return &Options{data: make(map[string]interface{})}
+	o := &Options{data: make(map[string]interface{})}
+	o.ExecuteSetOption("name playouts value 1")
+	return o
 }
 
 // GetOption returns the value of the named option.
@@ -31,6 +34,20 @@ func (o *Options) LookupOption(name string) (value interface{}, ok bool) {
 	defer o.m.RUnlock()
 	v, ok := o.data[name]
 	return v, ok
+}
+
+func (o *Options) Range(f func(key string, value interface{})) {
+	o.m.Lock()
+	defer o.m.Unlock()
+
+	var names []string
+	for name := range o.data {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		f(name, o.data[name])
+	}
 }
 
 var setOptionPattern = regexp.MustCompile(`^name (\S+) value (\S+)$`)
@@ -88,8 +105,4 @@ func init() {
 	RegisterSetOption("hash", setIntOptionFunc())
 	RegisterSetOption("goroutines", setIntOptionFunc())
 	RegisterSetOption("playouts", setIntOptionFunc())
-}
-
-func (o *Options) setDefaultOptions() {
-	o.ExecuteSetOption("name playouts value 1")
 }

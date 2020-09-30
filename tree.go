@@ -110,7 +110,6 @@ type TreeNode struct {
 }
 
 // NewTreeNode creates a new game tree node for p with initial stats populated from the tt.
-// The node is added to the frontier if not a terminal node.
 func (t *Tree) NewTreeNode(parent *TreeNode, p *Pos, step Step, side Value, first bool) *TreeNode {
 	e := &TreeNode{
 		t:      t,
