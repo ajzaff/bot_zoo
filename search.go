@@ -7,7 +7,8 @@ import (
 )
 
 type searchState struct {
-	tt *TranspositionTable
+	tree *Tree
+	tt   *TranspositionTable
 
 	wg         sync.WaitGroup
 	resultChan chan Move
@@ -22,6 +23,9 @@ func (s *searchState) Reset() {
 		s.tt = &TranspositionTable{}
 	}
 	s.tt.Resize(50)
+	if s.tree == nil {
+		s.tree = NewEmptyTree(s.tt)
+	}
 	s.wg = sync.WaitGroup{}
 	s.resultChan = make(chan Move)
 	s.stopping = 0
@@ -37,25 +41,29 @@ func (e *Engine) searchRoot(ponder bool) {
 
 	p := e.Pos.Clone()
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	t := NewTree(e.tt, p)
+	e.tree.UpdateRoot(p)
 
 	playouts, _ := e.LookupOption("playouts")
 	if playouts == 0 {
 		playouts = 1
 	}
 
-	for i := 0; t.Len() > 0 && i < 1000; i++ {
-		n := t.Select()
+	for i := 0; e.tree.Len() > 0 && i < 1000; i++ {
+		n := e.tree.Select()
 		n.Expand()
 		v := n.Simulate(r, playouts.(int))
 		n.Backprop(v, playouts.(int))
 	}
 
-	m, value, ok := t.BestMove(r)
+	m, value, ok := e.tree.RetainBestMove(r)
 	if !ok {
 		e.Logf("no moves")
 		return
 	}
 	e.Logf("info score %f", value)
-	e.Outputf("bestmove %s", m)
+	if ponder {
+		e.Outputf("info pv %s", m)
+	} else {
+		e.Outputf("bestmove %s", m)
+	}
 }

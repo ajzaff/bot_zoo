@@ -15,15 +15,21 @@ type Tree struct {
 	p        *Pos                // root position
 }
 
-// NewTree creates a new game tree from the transposition table tt and root position p.
-func NewTree(tt *TranspositionTable, p *Pos) *Tree {
+// NewEmptyTree creates a new tree with no root position.
+func NewEmptyTree(tt *TranspositionTable) *Tree {
 	t := &Tree{
 		tt: tt,
-		p:  p.Clone(),
 	}
-	t.root = t.NewTreeNode(nil, t.p, 0, 1, true)
-	t.root.Expand()
 	return t
+}
+
+// UpdateRoot updates the root position to p if p differs from the stored root position.
+func (t *Tree) UpdateRoot(p *Pos) {
+	if t.p == nil || t.p.Hash() != p.Hash() {
+		t.p = p
+		t.root = t.NewTreeNode(nil, t.p, 0, 1, true)
+		t.root.Expand()
+	}
 }
 
 // Push the tree node x onto the frontier.
@@ -69,25 +75,40 @@ func (t *Tree) Less(i, j int) bool {
 	return t.frontier[i].ucb1 > t.frontier[j].ucb1
 }
 
-// BestMove returns the best move from the tree after all runs have been performed.
+// retainOptimalSubtree removes all suboptimal subtrees and resets
+// the frontier to only nodes under the optimal subtree n. After calling
+// this method, the tree is ready to evaluate the next turn.
+func (t *Tree) retainOptimalSubtree(n *TreeNode) {
+	// Clear the frontier heap.
+	t.frontier = t.frontier[:0]
+	// Reset the tree root;
+	// Clear the step and "rootify".
+	t.root = n
+	n.rootify()
+}
+
+// RetainBestMove returns the best move from the tree after all runs have been performed.
 // This is equivalent to the path from root with the greatest number of playouts.
 // If the best move would not be legal (this is possible given a terminal root node)
 // nil and false are returned instead.
-func (t *Tree) BestMove(r *rand.Rand) (m Move, v Value, ok bool) {
+// A call to RetainBestMove removes suboptimal child nodes as a side-effect.
+// See retainChildren for details.
+func (t *Tree) RetainBestMove(r *rand.Rand) (m Move, v Value, ok bool) {
 	n := t.root
 	for n.first && len(n.children) > 0 {
 		sort.Stable(byPlayouts(n.children))
 		b := 1
 		for ; b < len(n.children) && n.children[0].Playouts() == n.children[b].Playouts(); b++ {
 		}
-		n = n.children[r.Intn(b)]
+		i := r.Intn(b)
+		n = n.children[i]
 		cap := t.p.Step(n.step)
 		m = append(m, n.step)
 		if cap.Capture() {
 			m = append(m, cap)
 		}
-		defer t.p.Unstep()
 	}
+	t.retainOptimalSubtree(n)
 	if len(m) > 0 {
 		return m, n.Value(), true
 	}
@@ -156,6 +177,17 @@ func (n *TreeNode) Value() Value {
 // Eval returns the theoretical value of the node (-1, 0, +1).
 func (n *TreeNode) Eval() Value {
 	return n.eval
+}
+
+// rootify resets this node to create an expanded root node.
+func (n *TreeNode) rootify() {
+	n.step = 0
+	n.idx = -1
+	n.side = 1
+	n.first = true
+	n.parent = nil
+	n.children = n.children[:0]
+	n.Expand()
 }
 
 // fastForward plays out the root position to the position at n.
