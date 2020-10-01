@@ -63,7 +63,7 @@ class AlphaPolicyHead(object):
         self.conv = AlphaConvolutionLayer(2, (1, 1), activation='relu')
         self.flatten = layers.Flatten(data_format='channels_last')
         self.dense = layers.Dense(256, activation='relu')
-        self.output = layers.Dense(225, activation='linear')
+        self.output = layers.Dense(321, activation='linear')
 
     def __call__(self, inputs):
         return self.call(inputs)
@@ -77,10 +77,10 @@ class AlphaPolicyHead(object):
 
 model_depth = 16
 
-N = 5000
+N = 50
 N_validation = 100
 bs = 10
-epochs = 20
+epochs = 3
 steps_per_epoch = N/bs
 
 # Input
@@ -122,14 +122,14 @@ model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
 
 model.fit(x=tf.random.uniform((N, 8, 8, 26), dtype=tf.float16),
           y=(tf.random.uniform((N, 1,), dtype=tf.float16),
-              tf.random.uniform((N, 225,), dtype=tf.float16)),
+              tf.random.uniform((N, 321,), dtype=tf.float16)),
           batch_size=bs,
           epochs=epochs,
           steps_per_epoch=steps_per_epoch,
           validation_steps=1,
           validation_data=(tf.random.uniform((N_validation, 8, 8, 26), dtype=tf.float16),
                            (tf.random.uniform((N_validation, 1,), dtype=tf.float16),
-                            tf.random.uniform((N_validation, 225,), dtype=tf.float16))),
+                            tf.random.uniform((N_validation, 321,), dtype=tf.float16))),
           callbacks=[model_checkpoint_callback])
 
 # tf.saved_model.save(model,  saved_model_filepath)
