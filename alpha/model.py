@@ -139,7 +139,7 @@ _x = tf.random.categorical(tf.math.log([[0.9, 0.1]]), (N+N_validation)*8*8*21)
 _x = tf.reshape(_x, (N+N_validation, 8, 8, 21))
 
 _y1 = 2*tf.random.uniform((N+N_validation, 1,), dtype=tf.float16)-1
-_y2 = tf.nn.softmax(tf.random.uniform(
+_y2 = tf.nn.softmax(tf.random.normal(
     (N+N_validation, 230,),  dtype=tf.float16))
 
 model.fit(x=_x[:N], y=(_y1[:N], _y2[:N]),

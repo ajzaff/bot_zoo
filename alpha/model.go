@@ -1,12 +1,15 @@
 package alpha
 
 import (
+	zoo "github.com/ajzaff/bot_zoo"
 	tf "github.com/tensorflow/tensorflow/tensorflow/go"
 )
 
 // Model wraps a Keras SavedModel.
 type Model struct {
-	m *tf.SavedModel
+	m      *tf.SavedModel
+	value  float32
+	policy []float32
 }
 
 // NewModel loads the saved_model.pb from the saved_models directory or returns an error.
@@ -22,8 +25,12 @@ func NewModel() (*Model, error) {
 }
 
 // EvaluatePosition initiates a model run against the new positon.
-func (m *Model) EvaluatePosition() {
+func (m *Model) EvaluatePosition(p *zoo.Pos) {
 
+}
+
+// SetSeed is a noop in the real model.
+func (m *Model) SetSeed(seed int64) {
 }
 
 // Value returns the value estimate from the last model run.
