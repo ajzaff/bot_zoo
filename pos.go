@@ -243,6 +243,16 @@ func (p *Pos) Weaker(t Piece) Bitboard {
 	return p.weaker[t.RemoveColor()]
 }
 
+// MoveNum returns the current move number.
+func (p *Pos) MoveNum() int {
+	return p.moveNum
+}
+
+// LastStep returns true with one step left in the turn.
+func (p *Pos) LastStep() bool {
+	return p.stepsLeft == 1
+}
+
 // Terminal tests whether this position is a terminal node from the perspecitve of player B to move.
 // Only checks for goal, elimination, and immobilization.
 func (p *Pos) Terminal() Value {

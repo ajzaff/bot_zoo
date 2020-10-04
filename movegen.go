@@ -104,6 +104,7 @@ func (p *Pos) generateSteps(a *[]ExtStep) {
 			} else {
 				e := ExtStep{}
 				e.reset()
+				*a = append(*a, e)
 			}
 			(*a)[l].Step = MakeStep(t, src, dest)
 		}

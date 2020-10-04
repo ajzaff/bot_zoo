@@ -3,9 +3,8 @@ package zoo
 import "log"
 
 // Value is a score assigned to a position or move to represent its goodness.
-// Higher numbers are better. Depending on the context Values may range from
-// [0,1] (as in policies) or [-1,1] as in position eval. Inf is provided as
-// value outside the range useful for initialization.
+// Higher numbers are better. Values range from [-1, 1]. Win is 1 and loss is
+// -1. Inf is provided as value outside the range useful for initialization.
 type Value float64
 
 // Inf is an infinite value outside the range of normal use.

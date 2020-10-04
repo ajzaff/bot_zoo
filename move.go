@@ -187,6 +187,37 @@ func ParseStep(s string) (Step, error) {
 	return MakeStep(piece, src, src.Add(dest)), nil
 }
 
+var stepTable = [...]Step{
+	138, 26, 1178, 1066, 1034, 2218, 2106, 2074, 3258, 3146, 3114, 4298, 4186, 4154, 5338, 5226, 5194,
+	6378, 6266, 6234, 7418, 7274, 8458, 8346, 8202, 9498, 9386, 9354, 9242, 10538, 10426, 10394, 10282,
+	11578, 11466, 11434, 11322, 12618, 12506, 12474, 12362, 13658, 13546, 13514, 13402, 14698, 14586, 14554, 14442,
+	15738, 15594, 15482, 16778, 16666, 16522, 17818, 17706, 17674, 17562, 18858, 18746, 18714, 18602, 19898, 19786,
+	19754, 19642, 20938, 20826, 20794, 20682, 21978, 21866, 21834, 21722, 23018, 22906, 22874, 22762, 24058, 23914,
+	23802, 25098, 24986, 24842, 26138, 26026, 25994, 25882, 27178, 27066, 27034, 26922, 28218, 28106, 28074, 27962,
+	29258, 29146, 29114, 29002, 30298, 30186, 30154, 30042, 31338, 31226, 31194, 31082, 32378, 32234, 32122, 33418,
+	33306, 33162, 34458, 34346, 34314, 34202, 35498, 35386, 35354, 35242, 36538, 36426, 36394, 36282, 37578, 37466,
+	37434, 37322, 38618, 38506, 38474, 38362, 39658, 39546, 39514, 39402, 40698, 40554, 40442, 41738, 41626, 41482,
+	42778, 42666, 42634, 42522, 43818, 43706, 43674, 43562, 44858, 44746, 44714, 44602, 45898, 45786, 45754, 45642,
+	46938, 46826, 46794, 46682, 47978, 47866, 47834, 47722, 49018, 48874, 48762, 50058, 49946, 49802, 51098, 50986,
+	50954, 50842, 52138, 52026, 51994, 51882, 53178, 53066, 53034, 52922, 54218, 54106, 54074, 53962, 55258, 55146,
+	55114, 55002, 56298, 56186, 56154, 56042, 57338, 57194, 57082, 58266, 58122, 59306, 59274, 59162, 60346, 60314,
+	60202, 61386, 61354, 61242, 62426, 62394, 62282, 63466, 63434, 63322, 64506, 64474, 64362, 65514, 65402, 449,
+	450, 451, 452, 453, 454,
+}
+
+// MakeStepFromIndex returns the step from the compact index or ok = false.
+// If i is the pass value, pass will be true.
+// Captures are unmapped.
+func MakeStepFromIndex(i uint8) (s Step, pass, ok bool) {
+	if i < 231 {
+		return stepTable[i], false, true
+	}
+	if i == 231 {
+		return 0, true, true
+	}
+	return 0, false, false
+}
+
 // Piece returns the primary Piece for this Step.
 func (s Step) Piece() Piece {
 	return Piece(s & 0b1111)
@@ -223,6 +254,82 @@ func (s Step) Setup() bool {
 // Recurring returns true if playing s and step lead to a recurring position (i.e. step "undoes" s).
 func (s Step) Recurring(step Step) bool {
 	return s.Piece() == step.Piece() && s.Src() == step.Dest() && s.Dest() == step.Src()
+}
+
+// Flip flips this step across rank and file axes.
+func (s Step) Flip() Step {
+	switch {
+	case s.Setup():
+		return MakeSetup(s.Piece(), s.Dest().Flip())
+	case s.Capture():
+		return MakeCapture(s.Piece(), s.Src().Flip())
+	default:
+		return MakeStep(s.Piece(), s.Src().Flip(), s.Dest().Flip())
+	}
+}
+
+// MirrorLateral mirrors this step across file axis.
+// Used for dataset augmentation.
+func (s Step) MirrorLateral() Step {
+	switch {
+	case s.Setup():
+		return MakeSetup(s.Piece(), s.Dest().MirrorLateral())
+	case s.Capture():
+		return MakeCapture(s.Piece(), s.Src().MirrorLateral())
+	default:
+		return MakeStep(s.Piece(), s.Src().MirrorLateral(), s.Dest().MirrorLateral())
+	}
+}
+
+// RemoveColor returns this step with color data removed (same as gold pieces).
+func (s Step) RemoveColor() Step {
+	return s & 0b1111111111110111
+}
+
+const passIndex = 231
+
+// Index returns the computed compact index for the step.
+// Capture indices are undefined.
+func (s Step) Index() uint8 {
+	var i uint8
+	if s.Setup() {
+		return 224 + uint8(s.Piece().RemoveColor())
+	}
+	src, dest := s.Src(), s.Dest()
+	for j := North; j > DirNone; j-- {
+		v := dest.Add(j)
+		if v == src {
+			break
+		}
+		if v.Valid() {
+			i++
+		}
+	}
+	switch {
+	case dest <= H1:
+		switch {
+		case dest == A1:
+		default:
+			i += 2 + 3*(uint8(dest)-1)
+		}
+	case dest < A8:
+		i += 22 + 30*uint8(dest.Rank()-1)
+		switch f := dest.File(); {
+		case f == 0:
+		default:
+			i += 3 + 4*(f-1)
+		}
+	case dest < H8:
+		i += 202
+		switch f := dest.File(); {
+		case f == 0:
+		default:
+			i += 2 + 3*(f-1)
+		}
+	default:
+		i += 222
+	}
+	return i
 }
 
 // DebugCaptureContext returns the capture resulting from playing s.

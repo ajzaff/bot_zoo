@@ -13,6 +13,7 @@ type Tree struct {
 	frontier []*TreeNode         // frontier heap
 	tt       *TranspositionTable // tt for looking up transpositions
 	p        *Pos                // root position
+	sample   bool                // sample mode
 }
 
 // NewEmptyTree creates a new tree with no root position.
@@ -23,11 +24,21 @@ func NewEmptyTree(tt *TranspositionTable) *Tree {
 	return t
 }
 
+// Root returns the root node for this tree.
+func (t *Tree) Root() *TreeNode {
+	return t.root
+}
+
+// SetSample sets the sample mode to sample.
+func (t *Tree) SetSample(sample bool) {
+	t.sample = sample
+}
+
 // UpdateRoot updates the root position to p if p differs from the stored root position.
 func (t *Tree) UpdateRoot(p *Pos) {
 	if t.p == nil || t.p.Hash() != p.Hash() {
 		t.p = p
-		t.root = t.NewTreeNode(nil, t.p, 0, 1, true)
+		t.root = t.NewTreeNode(nil, t.p, 0, false, 1, true)
 		t.root.Expand()
 	}
 }
@@ -97,13 +108,40 @@ func (t *Tree) RetainBestMove(r *rand.Rand) (m Move, v Value, ok bool) {
 	n := t.root
 	for n.first && len(n.children) > 0 {
 		sort.Stable(byPlayouts(n.children))
-		b := 1
-		for ; b < len(n.children) && n.children[0].Playouts() == n.children[b].Playouts(); b++ {
+		var i int
+		if t.sample {
+			// Sample among the moves, use cumulative value as prior probability.
+			sum := 0
+			for _, child := range n.children {
+				sum += int(child.value)
+			}
+			if sum > 0 {
+				x := r.Intn(sum)
+				for j, child := range n.children {
+					if x -= int(child.value); x <= 0 {
+						i = j
+						break
+					}
+				}
+			}
+		} else {
+			// Choose the best move, use Value as a tie breaker.
+			bestValue := n.children[0].value
+			for j := 0; j < len(n.children) && n.children[i].Playouts() == n.children[j].Playouts(); j++ {
+				if v := n.children[j].Value(); v > bestValue {
+					i = j
+					bestValue = v
+				}
+			}
 		}
-		i := r.Intn(b)
 		n = n.children[i]
-		cap := t.p.Step(n.step)
-		m = append(m, n.step)
+		step, pass := n.Step()
+		if pass {
+			t.p.Pass()
+			break
+		}
+		cap := t.p.Step(step)
+		m = append(m, step)
 		if cap.Capture() {
 			m = append(m, cap)
 		}
@@ -113,6 +151,16 @@ func (t *Tree) RetainBestMove(r *rand.Rand) (m Move, v Value, ok bool) {
 		return m, n.Value(), true
 	}
 	return nil, 0, false
+}
+
+// RootChildren returns a shallow copy of the children at this root position.
+func (t *Tree) RootChildren() []*TreeNode {
+	if t.root == nil {
+		return nil
+	}
+	children := make([]*TreeNode, len(t.root.children))
+	copy(children, t.root.children)
+	return children
 }
 
 // TreeNode represents a game tree node for MCTS in memory.
@@ -125,24 +173,31 @@ type TreeNode struct {
 	playouts int         // number of playouts through this node.
 	ucb1     float64     // computed UCB1
 	step     Step        // step played to arrive at this position.
+	pass     bool        // pass was played to arrive at this position.
 	parent   *TreeNode   // parent node.
 	first    bool        // first turn; candidate for bestmove.
 	children []*TreeNode // expanded children of this node; used on first turn only to recover bestmove.
 }
 
 // NewTreeNode creates a new game tree node for p with initial stats populated from the tt.
-func (t *Tree) NewTreeNode(parent *TreeNode, p *Pos, step Step, side Value, first bool) *TreeNode {
+func (t *Tree) NewTreeNode(parent *TreeNode, p *Pos, step Step, pass bool, side Value, first bool) *TreeNode {
 	e := &TreeNode{
 		t:      t,
 		idx:    -1,
 		side:   side,
 		eval:   p.Terminal(),
 		step:   step,
+		pass:   pass,
 		parent: parent,
 		first:  first,
 	}
 	e.eval = p.Terminal()
 	return e
+}
+
+// Step returns the step for this node or pass.
+func (n *TreeNode) Step() (s Step, pass bool) {
+	return n.step, n.pass
 }
 
 // HasParent returns true if n has a non-nil parent.
@@ -234,7 +289,7 @@ func (n *TreeNode) Expand() {
 			childSide = -childSide
 		}
 
-		child := n.t.NewTreeNode(n, p, step.Step, childSide, n.first && initSide == p.Side())
+		child := n.t.NewTreeNode(n, p, step.Step, false, childSide, n.first && initSide == p.Side())
 		if n.first {
 			n.children = append(n.children, child)
 		}
@@ -243,6 +298,13 @@ func (n *TreeNode) Expand() {
 		}
 
 		p.Unstep()
+	}
+
+	if n.first && n.t.p.CanPass() {
+		p.Pass()
+		child := n.t.NewTreeNode(n, p, 0, true, -n.side, false)
+		n.children = append(n.children, child)
+		p.Unpass()
 	}
 
 	if !hasChildren {

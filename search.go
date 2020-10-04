@@ -10,12 +10,25 @@ type searchState struct {
 	tree *Tree
 	tt   *TranspositionTable
 
-	wg         sync.WaitGroup
-	resultChan chan Move
+	model       ModelInterface
+	batchWriter BatchWriterInterface
+
+	wg       sync.WaitGroup
+	bestMove Move
 
 	// semi-atomic
 	stopping int32
 	running  int32
+}
+
+// ModelInterface defines an interface for a model.
+type ModelInterface interface {
+}
+
+// BatchWriterInterface defines an interface for writing TFRecord batch data.
+type BatchWriterInterface interface {
+	WriteExample(p *Pos, t *Tree)
+	Finalize(Value) error
 }
 
 func (s *searchState) Reset() {
@@ -27,7 +40,6 @@ func (s *searchState) Reset() {
 		s.tree = NewEmptyTree(s.tt)
 	}
 	s.wg = sync.WaitGroup{}
-	s.resultChan = make(chan Move)
 	s.stopping = 0
 	s.running = 0
 }
@@ -39,23 +51,35 @@ func (e *Engine) searchRoot(ponder bool) {
 		e.tt.NewSearch()
 	}
 
+	e.wg.Add(1)
+	defer e.wg.Done()
+
 	p := e.Pos.Clone()
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	e.tree.UpdateRoot(p)
+	e.tree.SetSample(e.SampleBestMove)
 
 	playouts, _ := e.LookupOption("playouts")
 	if playouts == 0 {
 		playouts = 1
 	}
 
-	for i := 0; e.tree.Len() > 0 && i < 1000; i++ {
+	for i := 0; e.tree.Len() > 0 && i < 100; i++ {
 		n := e.tree.Select()
 		n.Expand()
 		v := n.Simulate(r, playouts.(int))
 		n.Backprop(v, playouts.(int))
 	}
 
+	if e.UseTFRecordWriter {
+		e.batchWriter.WriteExample(p, e.tree)
+		if v := p.Terminal(); v != 0 {
+			e.batchWriter.Finalize(v)
+		}
+	}
+
 	m, value, ok := e.tree.RetainBestMove(r)
+
 	if !ok {
 		e.Logf("no moves")
 		return
@@ -66,4 +90,6 @@ func (e *Engine) searchRoot(ponder bool) {
 	} else {
 		e.Outputf("bestmove %s", m)
 	}
+
+	e.bestMove = m
 }

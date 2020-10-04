@@ -4,3 +4,4 @@
 /running/
 /sandbox/
 *.test
+__pycache__

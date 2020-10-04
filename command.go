@@ -248,6 +248,28 @@ func init() {
 		e.Logf("%f", e.Terminal())
 		return nil
 	}))
+	RegisterAEIHandler("playbatch", extendedHandler(func(e *Engine, args string) error {
+		e.NewGame()
+		for n := 0; ; {
+			e.GoWait()
+			if v := e.Terminal(); v != 0 {
+				n++
+				e.Debugf("%s", e.Pos.String())
+				if c := e.Side(); v == 1 {
+					e.Debugf("%c won game %d of %d", c.Byte(), n, e.TFRecordBatchSize)
+				} else {
+					e.Debugf("%c lost game %d of %d", c.Byte(), n, e.TFRecordBatchSize)
+				}
+				e.NewGame()
+				if n == e.TFRecordBatchSize {
+					break
+				}
+				continue
+			}
+			e.Move(e.bestMove)
+		}
+		return nil
+	}))
 	RegisterAEIHandler("options", extendedHandler(func(e *Engine, args string) error {
 		e.Options.Range(func(name string, value interface{}) {
 			e.Debugf("%v=%v", name, value)
