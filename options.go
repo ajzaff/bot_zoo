@@ -104,5 +104,4 @@ func init() {
 	RegisterSetOption("sreserve", setIntOptionFunc())
 	RegisterSetOption("hash", setIntOptionFunc())
 	RegisterSetOption("goroutines", setIntOptionFunc())
-	RegisterSetOption("playouts", setIntOptionFunc())
 }

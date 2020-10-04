@@ -1,6 +1,7 @@
 package zoo
 
 import (
+	"compress/gzip"
 	"encoding/binary"
 	"fmt"
 	"hash/crc32"
@@ -11,14 +12,14 @@ import (
 	expb "github.com/tensorflow/tensorflow/tensorflow/go/core/example/example_protos_go_proto"
 )
 
+const examplesPerBatch = 50000
+
 // BatchWriter implements a writer capable of outputting TFRecord training data.
 type BatchWriter struct {
-	dir       string
-	epoch     int
-	batchSize int
+	dir   string
+	epoch int
 
 	batchNumber     int             // batch number
-	bufferedGames   int             // buffered games count
 	inProgress      []*expb.Example // in progress game positions
 	finished        []*expb.Example // finished game positions
 	feats           []float32       // position features
@@ -29,12 +30,11 @@ type BatchWriter struct {
 }
 
 // NewBatchWriter creates a new BatchWriter with the given batch size in number of games per tfrecord file.
-func NewBatchWriter(epoch int, batchSize int) *BatchWriter {
+func NewBatchWriter(epoch int) *BatchWriter {
 	return &BatchWriter{
 		dir:             filepath.Join("data", "training"),
-		batchSize:       batchSize,
 		inProgress:      make([]*expb.Example, 0, 1024),
-		finished:        make([]*expb.Example, 0, 1024*1024),
+		finished:        make([]*expb.Example, 0, examplesPerBatch),
 		feats:           make([]float32, 8*8*21),
 		latFeats:        make([]float32, 8*8*21),
 		policyLabels:    make([]float32, 231),
@@ -94,12 +94,20 @@ func (w *BatchWriter) checksum(data []byte) uint32 {
 //  byte      data[length]
 //  uint32    masked crc of data
 func (w *BatchWriter) write() (err error) {
-	f, err := os.OpenFile(filepath.Join(w.dir, fmt.Sprintf("games-%d.%d.tfrecord", w.epoch, w.batchNumber)), os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0755)
+	f, err := os.OpenFile(filepath.Join(w.dir, fmt.Sprintf("games-%d.%d.tfrecord.gz", w.epoch, w.batchNumber)), os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0755)
 	if err != nil {
 		return err
 	}
 	defer func() {
 		err1 := f.Close()
+		if err == nil {
+			err = err1
+		}
+	}()
+
+	gz := gzip.NewWriter(f)
+	defer func() {
+		err1 := gz.Flush()
 		if err == nil {
 			err = err1
 		}
@@ -118,21 +126,20 @@ func (w *BatchWriter) write() (err error) {
 		binary.LittleEndian.PutUint32(header[8:12], w.checksum(header[0:8]))
 		binary.LittleEndian.PutUint32(footer[0:4], w.checksum(payload))
 
-		_, err = f.Write(header)
+		_, err = gz.Write(header)
 		if err != nil {
 			return err
 		}
-		_, err = f.Write(payload)
+		_, err = gz.Write(payload)
 		if err != nil {
 			return err
 		}
-		_, err = f.Write(footer)
+		_, err = gz.Write(footer)
 		if err != nil {
 			return err
 		}
 	}
 	w.batchNumber++
-	w.bufferedGames = 0
 	w.finished = w.finished[:0]
 	return nil
 }
@@ -147,8 +154,7 @@ func (w *BatchWriter) Finalize(t Value) error {
 	}
 	w.finished = append(w.finished, w.inProgress...)
 	w.inProgress = w.inProgress[:0]
-	w.bufferedGames++
-	if w.bufferedGames == w.batchSize {
+	if len(w.finished) >= examplesPerBatch {
 		if err := w.write(); err != nil {
 			return err
 		}

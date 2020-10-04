@@ -256,12 +256,12 @@ func init() {
 				n++
 				e.Debugf("%s", e.Pos.String())
 				if c := e.Side(); v == 1 {
-					e.Debugf("%c won game %d of %d", c.Byte(), n, e.TFRecordBatchSize)
+					e.Debugf("%c won game %d of %d", c.Byte(), n, e.PlayBatchGames)
 				} else {
-					e.Debugf("%c lost game %d of %d", c.Byte(), n, e.TFRecordBatchSize)
+					e.Debugf("%c lost game %d of %d", c.Byte(), n, e.PlayBatchGames)
 				}
 				e.NewGame()
-				if n == e.TFRecordBatchSize {
+				if n == e.PlayBatchGames {
 					break
 				}
 				continue

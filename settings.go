@@ -40,7 +40,7 @@ type EngineSettings struct {
 	Concurrency           uint
 	UseTFRecordWriter     bool
 	TFRecordEpoch         int
-	TFRecordBatchSize     int
+	PlayBatchGames        int
 	SampleBestMove        bool
 	Options               SetoptionFlag
 }
@@ -128,7 +128,7 @@ The file may be newline terminated.`)
 	flag.Var(&s.Options, "O", `Repeated flag used to set AEI options (e.g. -O foo=1 -O bar="xxx"`)
 	flag.BoolVar(&s.UseTFRecordWriter, "use_tfrecord_writer", false, "Enables the TFRecord writer for outputting training data")
 	flag.IntVar(&s.TFRecordEpoch, "tfrecord_epoch", 0, "Epoch number to use when writing TFRecord files")
-	flag.IntVar(&s.TFRecordBatchSize, "tfrecord_batchsize", 5000, "Number of games per batch when outputting TFRecord files")
+	flag.IntVar(&s.PlayBatchGames, "playbatch_games", 5000, "Number of games to play for `playbatch'")
 	flag.BoolVar(&s.SampleBestMove, "suboptimal_move_selection", false, "Sample to best move instead of selecting the best")
 	return s
 }

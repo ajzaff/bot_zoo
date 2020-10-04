@@ -80,16 +80,15 @@ func (t *Tree) Len() int {
 	return len(t.frontier)
 }
 
-// Less orders the frontier by UCB1.
+// Less orders the frontier by priority.
 // For heap.Heap.
 func (t *Tree) Less(i, j int) bool {
-	return t.frontier[i].ucb1 > t.frontier[j].ucb1
+	return t.frontier[i].priority > t.frontier[j].priority
 }
 
-// retainOptimalSubtree removes all suboptimal subtrees and resets
-// the frontier to only nodes under the optimal subtree n. After calling
-// this method, the tree is ready to evaluate the next turn.
-func (t *Tree) retainOptimalSubtree(n *TreeNode) {
+// RetainOptimalSubtree removes all suboptimal subtrees and resets
+// the frontier. After calling this method, the tree is ready to evaluate the next turn.
+func (t *Tree) RetainOptimalSubtree(n *TreeNode) {
 	// Clear the frontier heap.
 	t.frontier = t.frontier[:0]
 	// Reset the tree root;
@@ -98,39 +97,28 @@ func (t *Tree) retainOptimalSubtree(n *TreeNode) {
 	n.rootify()
 }
 
-// RetainBestMove returns the best move from the tree after all runs have been performed.
+// BestMove returns the best move from the tree after all runs have been performed.
 // This is equivalent to the path from root with the greatest number of playouts.
 // If the best move would not be legal (this is possible given a terminal root node)
 // nil and false are returned instead.
-// A call to RetainBestMove removes suboptimal child nodes as a side-effect.
-// See retainChildren for details.
-func (t *Tree) RetainBestMove(r *rand.Rand) (m Move, v Value, ok bool) {
-	n := t.root
+func (t *Tree) BestMove(r *rand.Rand) (m Move, v Value, n *TreeNode, ok bool) {
+	n = t.root
 	for n.first && len(n.children) > 0 {
-		sort.Stable(byPlayouts(n.children))
+		sort.Stable(byRuns(n.children))
 		var i int
-		if t.sample {
-			// Sample among the moves, use cumulative value as prior probability.
+		if t.p.MoveNum() > 1 && t.sample { // TODO(ajzaff): Allow exploration in setup.
+			// Sample among the moves, use cumulative runs as prior probability.
 			sum := 0
 			for _, child := range n.children {
-				sum += int(child.value)
+				sum += int(child.Runs())
 			}
 			if sum > 0 {
 				x := r.Intn(sum)
 				for j, child := range n.children {
-					if x -= int(child.value); x <= 0 {
+					if x -= int(child.Runs()); x <= 0 {
 						i = j
 						break
 					}
-				}
-			}
-		} else {
-			// Choose the best move, use Value as a tie breaker.
-			bestValue := n.children[0].value
-			for j := 0; j < len(n.children) && n.children[i].Playouts() == n.children[j].Playouts(); j++ {
-				if v := n.children[j].Value(); v > bestValue {
-					i = j
-					bestValue = v
 				}
 			}
 		}
@@ -146,11 +134,10 @@ func (t *Tree) RetainBestMove(r *rand.Rand) (m Move, v Value, ok bool) {
 			m = append(m, cap)
 		}
 	}
-	t.retainOptimalSubtree(n)
 	if len(m) > 0 {
-		return m, n.Value(), true
+		return m, Value(float64(n.Weight()) / float64(n.Runs())), n, true
 	}
-	return nil, 0, false
+	return nil, 0, n, false
 }
 
 // RootChildren returns a shallow copy of the children at this root position.
@@ -168,10 +155,9 @@ type TreeNode struct {
 	t        *Tree       // parent tree containing the frontier heap
 	idx      int         // frontier heap index or -1
 	side     Value       // side-to-move multipier; can be 1 or -1.
-	eval     Value       // theoretical eval; if non-0 we do not do playouts.
-	value    Value       // cumulative playout value; divide by playouts to normalize.
-	playouts int         // number of playouts through this node.
-	ucb1     float64     // computed UCB1
+	weight   Value       // cumulative value of this state; divide by Runs to normalize.
+	runs     int         // number of runs through this node.
+	priority float64     // computed priority ordering for this node based on value, policy, and runs.
 	step     Step        // step played to arrive at this position.
 	pass     bool        // pass was played to arrive at this position.
 	parent   *TreeNode   // parent node.
@@ -185,13 +171,15 @@ func (t *Tree) NewTreeNode(parent *TreeNode, p *Pos, step Step, pass bool, side 
 		t:      t,
 		idx:    -1,
 		side:   side,
-		eval:   p.Terminal(),
 		step:   step,
 		pass:   pass,
 		parent: parent,
 		first:  first,
+		runs:   1,
 	}
-	e.eval = p.Terminal()
+	if v := p.Terminal(); v != 0 {
+		e.weight = side * v
+	}
 	return e
 }
 
@@ -205,33 +193,28 @@ func (n *TreeNode) HasParent() bool {
 	return n.parent != nil
 }
 
-// Playouts returns the number of simulations propagated through this node.
-func (n *TreeNode) Playouts() int {
-	return n.playouts
+// Runs returns the number of MCTS runs propagated through this node.
+func (n *TreeNode) Runs() int {
+	return n.runs
 }
 
-// ParentPlayouts returns the number of simulations propagated through this node's parent.
-func (n *TreeNode) ParentPlayouts() int {
+// ParentRuns returns the number of MCTS runs propagated through n's parent.
+func (n *TreeNode) ParentRuns() int {
 	if p := n.parent; p != nil {
-		return p.Playouts()
+		return p.Runs()
 	}
 	return 0
 }
 
-// Value computes the estimated win value of the node.
-func (n *TreeNode) Value() Value {
-	if n.eval != 0 {
-		return n.eval
-	}
-	if n.playouts > 0 {
-		return n.value / Value(n.playouts)
-	}
-	return 0
+// Weight returns the total value of node n.
+// Divide by Runs to normalize.
+func (n *TreeNode) Weight() Value {
+	return n.weight
 }
 
-// Eval returns the theoretical value of the node (-1, 0, +1).
-func (n *TreeNode) Eval() Value {
-	return n.eval
+// Terminal returns true if this node is a terminal node.
+func (n *TreeNode) Terminal() bool {
+	return n.Weight() != 0 && int(math.Abs(float64(n.Weight()))) == n.Runs()
 }
 
 // rootify resets this node to create an expanded root node.
@@ -293,7 +276,7 @@ func (n *TreeNode) Expand() {
 		if n.first {
 			n.children = append(n.children, child)
 		}
-		if !child.eval.Terminal() {
+		if !n.Terminal() {
 			heap.Push(n.t, child)
 		}
 
@@ -308,108 +291,50 @@ func (n *TreeNode) Expand() {
 	}
 
 	if !hasChildren {
-		n.eval = n.side * Loss
+		n.weight = n.side * Loss
 	}
 }
 
-// Simulate runs a number of playouts from the position to estimate the value.
-// It returns the cumulative value after n playouts.
-func (n *TreeNode) Simulate(r *rand.Rand, numPlayouts int) Value {
+// Evaluate uses the model to compute the value of the position.
+func (n *TreeNode) Evaluate(model ModelInterface) Value {
 	p := n.t.p.Clone()
 	n.fastForward(p)
-	stepList := NewStepList(40 * 64)
-
-	var v Value
-	for ; numPlayouts > 0; numPlayouts-- {
-		v += n.Playout(p, stepList, r)
-	}
-	return v
-}
-
-// Playout runs a single random playout from the position and returns the value.
-// In playout, only a subset of steps are generated and play continues for a fixed
-// number of steps only, unless a terminal node is reached. The depth limitation
-// is to mitigate the effect of random attacking being much stronger than random
-// defense (and thus vastly overestimating the value of rabbit pushes).
-// If at any time, no legal steps were generated, or we have reached the depth
-// limit before the end of the game we stop and return 0 + a small random bias.
-func (n *TreeNode) Playout(p *Pos, stepList *StepList, r *rand.Rand) Value {
-
-	for side := n.side; ; {
-		// Is this a terminal node? Return the value immediately.
-		if v := p.Terminal(); v != 0 {
-			return side * v
-		}
-
-		// Generate the steps for the next node.
-		stepList.Truncate(0)
-		stepList.Generate(p)
-
-		// Test and truncate illegal steps:
-		j := 0
-		for i := 0; i < stepList.Len(); i++ {
-			step := stepList.At(i)
-			if p.Legal(step.Step) {
-				stepList.Swap(i, j)
-				j++
-			}
-		}
-		stepList.Truncate(j)
-
-		// No steps generated? Stop the search.
-		if stepList.Len() == 0 {
-			break
-		}
-
-		// Continue the playout with the chosen step:
-		step := stepList.At(r.Intn(stepList.Len()))
-		initSide := p.Side()
-
-		p.Step(step.Step)
-		if p.Side() != initSide {
-			side = -side
-		}
-		defer p.Unstep()
-	}
-
-	return 0
+	model.EvaluatePosition(p)
+	return Value(model.Value())
 }
 
 const c = 1.41421
 
-func (n *TreeNode) computeUCB1(deltaN int) {
+func (n *TreeNode) computePriority(deltaN int) {
 	var x float64
 	if n.HasParent() {
-		N := n.ParentPlayouts() + deltaN
-		x = c * math.Sqrt(math.Log(float64(N))/float64(n.Playouts()))
+		N := n.ParentRuns() + deltaN
+		x = c * math.Sqrt(math.Log(float64(N))/float64(n.Runs()))
 	}
-	if n.Playouts() > 0 {
-		x += float64(n.value / Value(n.Playouts()))
-	}
-	n.ucb1 = x
+	n.priority = x + float64(n.Weight())
 }
 
-// Backprop propagates the value v representing n playouts to parents of this node.
+// Backprop propagates the value v representing n runs to parents of this node.
 // Fixes the frontier heap.
-func (n *TreeNode) Backprop(v Value, playouts int) {
-	n.value += v
-	n.playouts += playouts
-	n.computeUCB1(playouts)
+func (n *TreeNode) Backprop(v Value, runs int) {
+	n.weight += v
+	n.runs += runs
+	n.computePriority(runs)
 	if n.idx != -1 {
 		heap.Fix(n.t, n.idx)
 	}
 	for p := n.parent; p != nil; p = p.parent {
-		p.value += v
-		p.playouts += playouts
-		p.computeUCB1(playouts)
+		p.weight += v
+		p.runs += runs
+		p.computePriority(runs)
 		if n.idx != -1 {
 			heap.Fix(p.t, p.idx)
 		}
 	}
 }
 
-type byPlayouts []*TreeNode
+type byRuns []*TreeNode
 
-func (a byPlayouts) Len() int           { return len(a) }
-func (a byPlayouts) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a byPlayouts) Less(i, j int) bool { return a[i].Playouts() > a[j].Playouts() }
+func (a byRuns) Len() int           { return len(a) }
+func (a byRuns) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a byRuns) Less(i, j int) bool { return a[i].Runs() > a[j].Runs() }

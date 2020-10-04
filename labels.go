@@ -30,8 +30,8 @@ func PolicyLabels(t *Tree, labels, lateralLabels []float32) {
 
 	for _, n := range t.RootChildren() {
 		s, pass := n.Step()
-		labels[labelIndex(s, pass, false)] = float32(n.Playouts())
-		lateralLabels[labelIndex(s, pass, true)] = float32(n.Playouts())
+		labels[labelIndex(s, pass, false)] = float32(n.Runs())
+		lateralLabels[labelIndex(s, pass, true)] = float32(n.Runs())
 	}
 }
 
@@ -39,7 +39,7 @@ func PolicyLabels(t *Tree, labels, lateralLabels []float32) {
 func ValueLabel(t *Tree, value []float32) {
 	v := float32(-1)
 	if root := t.Root(); root != nil {
-		v = float32(root.Value())
+		v = float32(Value(float64(root.Weight()) / float64(root.Runs()))) // TODO(ajzaff): make numerically stable
 	}
 	value[0] = v
 }

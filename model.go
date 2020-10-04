@@ -1,11 +1,8 @@
-package alpha
+package zoo
 
-import (
-	zoo "github.com/ajzaff/bot_zoo"
-	tf "github.com/tensorflow/tensorflow/tensorflow/go"
-)
+import tf "github.com/tensorflow/tensorflow/tensorflow/go"
 
-// Model wraps a Keras SavedModel.
+// Model wraps a Tensorflow SavedModel.
 type Model struct {
 	m      *tf.SavedModel
 	value  float32
@@ -26,7 +23,7 @@ func NewModel() (*Model, error) {
 }
 
 // EvaluatePosition initiates a model run against the new positon.
-func (m *Model) EvaluatePosition(p *zoo.Pos) {
+func (m *Model) EvaluatePosition(p *Pos) {
 
 }
 

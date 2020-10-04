@@ -40,7 +40,7 @@ func NewEngine(settings *EngineSettings, aeiSettings *AEISettings) (*Engine, err
 		debug:          log.New(os.Stderr, "", 0),
 	}
 	if settings.UseTFRecordWriter {
-		e.batchWriter = NewBatchWriter(settings.TFRecordEpoch, settings.TFRecordBatchSize)
+		e.batchWriter = NewBatchWriter(settings.TFRecordEpoch)
 	}
 	if err := e.EngineSettings.Options.Execute(e.Options); err != nil {
 		return nil, err

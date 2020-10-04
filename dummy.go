@@ -1,31 +1,31 @@
-package alpha
+package zoo
 
 import (
 	"math"
 	"math/rand"
 )
 
-// Dummy implements a dummy model giving random evaluations.
-type Dummy struct {
+// DummyModel implements a dummy model giving random evaluations.
+type DummyModel struct {
 	r      *rand.Rand
 	value  float32
 	policy []float32
 }
 
-// NewDummy creates a new dummy evaluator.
-func NewDummy() *Dummy {
-	m := &Dummy{}
+// NewDummyModel creates a new dummy evaluator.
+func NewDummyModel() *DummyModel {
+	m := &DummyModel{}
 	m.SetSeed(1337)
 	return m
 }
 
 // SetSeed reseeds the random state for this dummy model.
-func (m *Dummy) SetSeed(seed int64) {
+func (m *DummyModel) SetSeed(seed int64) {
 	m.r = rand.New(rand.NewSource(seed))
 }
 
 // EvaluatePosition regenerates random outputs for the position.
-func (m *Dummy) EvaluatePosition() {
+func (m *DummyModel) EvaluatePosition(p *Pos) {
 	if m.policy == nil {
 		m.policy = make([]float32, 231)
 	}
@@ -36,11 +36,11 @@ func (m *Dummy) EvaluatePosition() {
 }
 
 // Value returns a randomly generated value estimate for the last position.
-func (m *Dummy) Value() float32 {
+func (m *DummyModel) Value() float32 {
 	return m.value
 }
 
 // Policy populates the policy with randomly generated logits for the last position.
-func (m *Dummy) Policy(policy []float32) {
+func (m *DummyModel) Policy(policy []float32) {
 	copy(policy, m.policy)
 }
