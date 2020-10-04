@@ -29,10 +29,11 @@ type ModelInterface interface {
 	Policy(policy []float32)
 }
 
-// BatchWriterInterface defines an interface for writing TFRecord batch data.
+// BatchWriterInterface defines an interface for writing Dataset batch data.
 type BatchWriterInterface interface {
 	WriteExample(p *Pos, t *Tree)
-	Finalize(Value) error
+	Finalize(*Pos, Value) error
+	Flush() error
 }
 
 func (s *searchState) Reset() {
@@ -62,7 +63,7 @@ func (e *Engine) searchRoot(ponder bool) {
 	p := e.Pos.Clone()
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	e.tree.UpdateRoot(p)
-	e.tree.SetSample(e.SampleBestMove)
+	e.tree.SetSample(e.UseSampledMove)
 
 	for i := 0; e.tree.Len() > 0 && i < 100; i++ {
 		n := e.tree.Select()
@@ -73,10 +74,17 @@ func (e *Engine) searchRoot(ponder bool) {
 
 	m, value, node, ok := e.tree.BestMove(r)
 
-	if e.UseTFRecordWriter {
+	if e.UseDatasetWriter {
 		e.batchWriter.WriteExample(p, e.tree)
+		for _, s := range m {
+			p.Step(s)
+			e.batchWriter.WriteExample(p, e.tree)
+		}
 		if value.Terminal() {
-			e.batchWriter.Finalize(value)
+			e.batchWriter.Finalize(p, value)
+		}
+		for range m {
+			p.Unstep()
 		}
 	}
 

@@ -38,10 +38,10 @@ type EngineSettings struct {
 	Seed                  int64
 	MoveList              string
 	Concurrency           uint
-	UseTFRecordWriter     bool
-	TFRecordEpoch         int
+	UseDatasetWriter      bool
+	DatasetEpoch          int
 	PlayBatchGames        int
-	SampleBestMove        bool
+	UseSampledMove        bool
 	Options               SetoptionFlag
 }
 
@@ -126,9 +126,9 @@ This should be the path to a move list file.  Each line should be prefixed by mo
 Setup moves must be included. The last line may include a move number and color to indice the side to move.
 The file may be newline terminated.`)
 	flag.Var(&s.Options, "O", `Repeated flag used to set AEI options (e.g. -O foo=1 -O bar="xxx"`)
-	flag.BoolVar(&s.UseTFRecordWriter, "use_tfrecord_writer", false, "Enables the TFRecord writer for outputting training data")
-	flag.IntVar(&s.TFRecordEpoch, "tfrecord_epoch", 0, "Epoch number to use when writing TFRecord files")
+	flag.BoolVar(&s.UseDatasetWriter, "use_dataset_writer", false, "Enables the Dataset writer for outputting training data")
+	flag.IntVar(&s.DatasetEpoch, "dataset_epoch", 0, "Epoch number to use when writing Dataset files")
 	flag.IntVar(&s.PlayBatchGames, "playbatch_games", 5000, "Number of games to play for `playbatch'")
-	flag.BoolVar(&s.SampleBestMove, "suboptimal_move_selection", false, "Sample to best move instead of selecting the best")
+	flag.BoolVar(&s.UseSampledMove, "use_suboptimal_move", false, "Sample to best move instead of selecting the best")
 	return s
 }

@@ -160,23 +160,6 @@ func init() {
 		}
 		return nil
 	}))
-	RegisterAEIHandler("psteps", extendedHandler(func(e *Engine, args string) error {
-		var stepList StepList
-		stepList.GeneratePlayout(rand.New(rand.NewSource(time.Now().UnixNano())), e.Pos)
-		for i := 0; i < stepList.Len(); i++ {
-			step := stepList.At(i)
-			illegalStr := ""
-			if !e.Legal(step.Step) {
-				illegalStr = " (illegal)"
-			}
-			if cap := step.Step.DebugCaptureContext(e.Pos); cap != 0 {
-				e.Logf("[%f] %s %s%s", step.Value, step.Step, cap, illegalStr)
-			} else {
-				e.Logf("[%f] %s%s", step.Value, step.Step, illegalStr)
-			}
-		}
-		return nil
-	}))
 	RegisterAEIHandler("legal", extendedHandler(func(e *Engine, args string) error {
 		if len(args) == 0 {
 			return fmt.Errorf("missing step")
@@ -248,8 +231,14 @@ func init() {
 		e.Logf("%f", e.Terminal())
 		return nil
 	}))
+	RegisterAEIHandler("random", extendedHandler(func(e *Engine, args string) error {
+		r := rand.New(rand.NewSource(time.Now().UnixNano()))
+		e.RandomSetup(r)
+		return nil
+	}))
 	RegisterAEIHandler("playbatch", extendedHandler(func(e *Engine, args string) error {
-		e.NewGame()
+		r := rand.New(rand.NewSource(time.Now().UnixNano()))
+		e.RandomSetup(r)
 		for n := 0; ; {
 			e.GoWait()
 			if v := e.Terminal(); v != 0 {
@@ -268,6 +257,7 @@ func init() {
 			}
 			e.Move(e.bestMove)
 		}
+		e.batchWriter.Flush()
 		return nil
 	}))
 	RegisterAEIHandler("options", extendedHandler(func(e *Engine, args string) error {

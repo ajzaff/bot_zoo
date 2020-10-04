@@ -1,37 +1,38 @@
 package zoo
 
-// precondition: p != Empty
-func featureIndex(c Color, i Square, p Piece, lateral bool) int {
-	idx := 64 * int(p.RemoveColor()-1)
+import expb "github.com/ajzaff/bot_zoo/proto"
+
+func featureBitset(ex *expb.Example, c Color, p Piece) *expb.Example_Bitset {
+	idx := uint32(p.RemoveColor())
 	if c != p.Color() {
-		idx += 384
+		idx += 6
 	}
+	b := ex.Bitsets[idx]
+	if b == nil {
+		b = &expb.Example_Bitset{}
+		ex.Bitsets[idx] = b
+	}
+	return b
+}
+
+func featureIndex(c Color, i Square) uint32 {
 	if c == Silver {
 		i = i.Flip()
 	}
-	if lateral {
-		i = i.MirrorLateral()
-	}
-	return idx + int(i)
+	return uint32(i)
 }
 
 // precondition: p != Empty
-func pushFeatureIndex(c Color, i Square, p Piece, lateral bool) int {
+func pushFeatureIndex(c Color, i Square, p Piece) int {
 	idx := 768 + 64*int(p.RemoveColor()-1)
 	if c == Silver {
 		i = i.Flip()
 	}
-	if lateral {
-		i = i.MirrorLateral()
-	}
 	return idx + int(i)
 }
 
-func clearFeatures(feats, lateralFeats []float32) {
-	for i := range feats {
-		feats[i] = 0
-		lateralFeats[i] = 0
-	}
+func clearFeatures(ex *expb.Example) {
+	ex.Bitsets = make(map[uint32]*expb.Example_Bitset)
 }
 
 // Features fills in the flat features slice which has the shape (8 * 8 * 21,)
@@ -49,40 +50,36 @@ func clearFeatures(feats, lateralFeats []float32) {
 // Gold's perspective of the board (with home rank of A, and goal rank of H).
 // lateralFeats is filled with board features mirrored laterally (for dataset
 // augmentation).
-func Features(p *Pos, feats, lateralFeats []float32) {
+func Features(p *Pos, ex *expb.Example) {
 	c := p.Side()
 
-	clearFeatures(feats, lateralFeats)
+	clearFeatures(ex)
 	for i := A1; i <= H8; i++ {
 		p := p.At(i)
 		if p != Empty {
-			feats[featureIndex(c, i, p, false)] = 1
-			lateralFeats[featureIndex(c, i, p, true)] = 1
+			b := featureBitset(ex, c, p)
+			b.Ones = append(b.Ones, featureIndex(c, i))
 		}
 	}
 
 	if src, piece, ok := p.Push(); src.Valid() {
-		feats[pushFeatureIndex(c, src, piece, false)] = 1
-		lateralFeats[pushFeatureIndex(c, src, piece, true)] = 1
+		idx := 12 + uint32(piece.RemoveColor())
+		b := ex.Bitsets[idx]
+		if b == nil {
+			b = &expb.Example_Bitset{}
+			ex.Bitsets[idx] = b
+		}
+		b.Ones = append(b.Ones, uint32(src))
 		if ok {
-			for i := 1152; i < 1216; i++ {
-				feats[i] = 1
-				lateralFeats[i] = 1
-			}
+			ex.Bitsets[18] = &expb.Example_Bitset{AllOne: true}
 		}
 	}
 
 	if p.LastStep() {
-		for i := 1216; i < 1280; i++ {
-			feats[i] = 1
-			lateralFeats[i] = 1
-		}
+		ex.Bitsets[19] = &expb.Example_Bitset{AllOne: true}
 	}
 
 	if p.MoveNum() == 1 {
-		for i := 1280; i < 1344; i++ {
-			feats[i] = 1
-			lateralFeats[i] = 1
-		}
+		ex.Bitsets[20] = &expb.Example_Bitset{AllOne: true}
 	}
 }

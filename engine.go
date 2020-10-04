@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -39,8 +40,8 @@ func NewEngine(settings *EngineSettings, aeiSettings *AEISettings) (*Engine, err
 		out:            log.New(os.Stdout, "", 0),
 		debug:          log.New(os.Stderr, "", 0),
 	}
-	if settings.UseTFRecordWriter {
-		e.batchWriter = NewBatchWriter(settings.TFRecordEpoch)
+	if settings.UseDatasetWriter {
+		e.batchWriter = NewBatchWriter(settings.DatasetEpoch)
 	}
 	if err := e.EngineSettings.Options.Execute(e.Options); err != nil {
 		return nil, err
@@ -53,6 +54,36 @@ func (e *Engine) NewGame() {
 	e.Pos = NewEmptyPosition()
 	e.tt.Clear()
 	e.timeInfo = e.timeControl.newTimeInfo()
+}
+
+// RandomSetup initializes the game with random setup moves.
+func (e *Engine) RandomSetup(r *rand.Rand) {
+	e.NewGame()
+	var stepList StepList
+	for i := 0; i < 32; i++ {
+		stepList.Generate(e.Pos)
+		j := 0
+		for i := 0; i < stepList.Len(); i++ {
+			if e.Legal(stepList.At(i).Step) {
+				stepList.Swap(i, j)
+				j++
+			}
+		}
+		stepList.Truncate(j)
+		s := stepList.At(r.Intn(stepList.Len())).Step
+		if e.UseDatasetWriter {
+			e.batchWriter.WriteExample(e.Pos, &Tree{
+				root: &TreeNode{
+					children: []*TreeNode{{
+						step: s,
+						runs: 1,
+					}},
+				},
+			})
+		}
+		e.Step(s)
+		stepList.Truncate(0)
+	}
 }
 
 func (e *Engine) startNow(ponder bool) {
