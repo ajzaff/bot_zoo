@@ -77,7 +77,7 @@ class AlphaPolicyHead(object):
         self.flatten = layers.Flatten(
             data_format='channels_last', name='policy_flatten')
         self.dense = layers.Dense(256, activation='relu', name='policy_dense')
-        self.output = layers.Dense(231, activation='linear', name='policy')
+        self.output = layers.Dense(232, activation='linear', name='policy')
 
     def __call__(self, inputs):
         return self.call(inputs)
@@ -140,7 +140,7 @@ _x = tf.reshape(_x, (N+N_validation, 8, 8, 21))
 
 _y1 = 2*tf.random.uniform((N+N_validation, 1,), dtype=tf.float16)-1
 _y2 = tf.nn.softmax(tf.random.normal(
-    (N+N_validation, 231,),  dtype=tf.float16))
+    (N+N_validation, 232,),  dtype=tf.float16))
 
 model.fit(x=_x[:N], y=(_y1[:N], _y2[:N]),
           batch_size=bs,

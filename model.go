@@ -17,7 +17,7 @@ func NewModel() (*Model, error) {
 	}
 	model := &Model{
 		m:      m,
-		policy: make([]float32, 231),
+		policy: make([]float32, 232),
 	}
 	return model, nil
 }

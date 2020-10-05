@@ -25,6 +25,7 @@ type BatchWriter struct {
 func NewBatchWriter(epoch int) *BatchWriter {
 	return &BatchWriter{
 		dir:        filepath.Join("data", "training"),
+		epoch:      epoch,
 		inProgress: &expb.Examples{},
 		finished:   &expb.Examples{},
 	}
@@ -77,6 +78,7 @@ func (w *BatchWriter) write() (err error) {
 // The method updates all examples in memory with the final score and commits them to
 // the finished examples.
 func (w *BatchWriter) Finalize(p *Pos, t Value) error {
+	p = p.Clone()
 	initSide := p.Side()
 	for i := len(w.inProgress.Examples) - 1; i >= 0; i-- {
 		w.inProgress.Examples[i].Value = float32(t)
@@ -96,6 +98,7 @@ func (w *BatchWriter) Finalize(p *Pos, t Value) error {
 	return nil
 }
 
+// Flush writes the remaining examples if any to a training file.
 func (w *BatchWriter) Flush() error {
 	if len(w.finished.Examples) > 0 {
 		if err := w.write(); err != nil {

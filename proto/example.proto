@@ -7,11 +7,11 @@ option go_package = "github.com/ajzaff/bot_zoo/proto";
 // Example encodes a single example features and labels.
 message Example {
 
-  // Bitset encodes positional features in an 8x8 bitsets.
+  // Bitset encodes positional features in 8x8 bitsets.
   message Bitset {
 
-    // AllOne indicates the value of 1 is applied to the entire bitset.
-    bool all_one = 2;
+    // AllOnes indicates the value of 1 is applied to the entire bitset.
+    bool all_ones = 2;
 
     // One indicates indices of one bits.
     repeated uint32 ones = 3;
@@ -20,14 +20,8 @@ message Example {
   // Bitsets containing input features.
   map<uint32, Bitset> bitsets = 1;
 
-  // Policy maps a policy logit to an index.
-  message Policy {
-    uint32 index = 1;
-    float logit = 2;
-  }
-
-  // Policy labels encode a sparse policy for the example.
-  repeated Policy policy = 2;
+  // Policy labels encode sparse policy logits for the example.
+  map<uint32, float> policy = 2;
 
   // Value label for the example.
   float value = 3;

@@ -53,6 +53,7 @@ func NewEngine(settings *EngineSettings, aeiSettings *AEISettings) (*Engine, err
 func (e *Engine) NewGame() {
 	e.Pos = NewEmptyPosition()
 	e.tt.Clear()
+	e.searchState.Reset()
 	e.timeInfo = e.timeControl.newTimeInfo()
 }
 

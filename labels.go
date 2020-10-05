@@ -3,19 +3,19 @@ package zoo
 import expb "github.com/ajzaff/bot_zoo/proto"
 
 func resetLabels(ex *expb.Example) {
-	ex.Policy = ex.Policy[:0]
+	ex.Policy = make(map[uint32]float32)
 	ex.Value = 0
 }
 
 func labelIndex(s Step, pass bool) uint32 {
 	if pass {
-		return 231
+		return passIndex
 	}
 	return uint32(s.Index())
 }
 
 // PolicyLabels fills in policy labels from the completed search tree.
-// The policy labels have shape (231,).
+// The policy labels have shape (232,).
 // Labels should be called before the tree is pruned (i.e. before
 // calling RetainBestMove).
 // lateralLabels is filled with step labels mirrored laterally
@@ -27,10 +27,7 @@ func PolicyLabels(t *Tree, ex *expb.Example) {
 
 	for _, n := range t.RootChildren() {
 		s, pass := n.Step()
-		ex.Policy = append(ex.Policy, &expb.Example_Policy{
-			Index: labelIndex(s, pass),
-			Logit: float32(n.Runs()),
-		})
+		ex.Policy[labelIndex(s, pass)] = float32(n.Runs())
 	}
 }
 

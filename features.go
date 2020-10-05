@@ -71,15 +71,15 @@ func Features(p *Pos, ex *expb.Example) {
 		}
 		b.Ones = append(b.Ones, uint32(src))
 		if ok {
-			ex.Bitsets[18] = &expb.Example_Bitset{AllOne: true}
+			ex.Bitsets[18] = &expb.Example_Bitset{AllOnes: true}
 		}
 	}
 
 	if p.LastStep() {
-		ex.Bitsets[19] = &expb.Example_Bitset{AllOne: true}
+		ex.Bitsets[19] = &expb.Example_Bitset{AllOnes: true}
 	}
 
 	if p.MoveNum() == 1 {
-		ex.Bitsets[20] = &expb.Example_Bitset{AllOne: true}
+		ex.Bitsets[20] = &expb.Example_Bitset{AllOnes: true}
 	}
 }

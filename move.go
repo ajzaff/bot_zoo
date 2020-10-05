@@ -209,10 +209,10 @@ var stepTable = [...]Step{
 // If i is the pass value, pass will be true.
 // Captures are unmapped.
 func MakeStepFromIndex(i uint8) (s Step, pass, ok bool) {
-	if i < 231 {
+	if i < passIndex {
 		return stepTable[i], false, true
 	}
-	if i == 231 {
+	if i == passIndex {
 		return 0, true, true
 	}
 	return 0, false, false

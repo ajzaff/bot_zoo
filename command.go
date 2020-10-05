@@ -238,24 +238,23 @@ func init() {
 	}))
 	RegisterAEIHandler("playbatch", extendedHandler(func(e *Engine, args string) error {
 		r := rand.New(rand.NewSource(time.Now().UnixNano()))
-		e.RandomSetup(r)
-		for n := 0; ; {
-			e.GoWait()
-			if v := e.Terminal(); v != 0 {
-				n++
-				e.Debugf("%s", e.Pos.String())
-				if c := e.Side(); v == 1 {
-					e.Debugf("%c won game %d of %d", c.Byte(), n, e.PlayBatchGames)
-				} else {
-					e.Debugf("%c lost game %d of %d", c.Byte(), n, e.PlayBatchGames)
-				}
-				e.NewGame()
-				if n == e.PlayBatchGames {
-					break
-				}
-				continue
+		for n := 0; n < e.PlayBatchGames; n++ {
+			e.RandomSetup(r)
+			var result Value
+			for ; !result.Terminal(); result = e.Terminal() {
+				e.GoWait()
+				e.Move(e.bestMove)
 			}
-			e.Move(e.bestMove)
+			if err := e.batchWriter.Finalize(e.Pos, result); err != nil {
+				return err
+			}
+			n++
+			e.Debugf("%s", e.Pos.String())
+			if c := e.Side(); result == 1 {
+				e.Debugf("%c won game %d of %d", c.Byte(), n, e.PlayBatchGames)
+			} else {
+				e.Debugf("%c lost game %d of %d", c.Byte(), n, e.PlayBatchGames)
+			}
 		}
 		e.batchWriter.Flush()
 		return nil

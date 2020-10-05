@@ -41,9 +41,7 @@ func (s *searchState) Reset() {
 		s.tt = &TranspositionTable{}
 	}
 	s.tt.Resize(50)
-	if s.tree == nil {
-		s.tree = NewEmptyTree(s.tt)
-	}
+	s.tree = NewEmptyTree(s.tt)
 	s.model = NewDummyModel()
 	s.wg = sync.WaitGroup{}
 	s.stopping = 0
@@ -62,14 +60,12 @@ func (e *Engine) searchRoot(ponder bool) {
 
 	p := e.Pos.Clone()
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	e.tree.UpdateRoot(p)
+	e.tree.UpdateRoot(p, e.model)
 	e.tree.SetSample(e.UseSampledMove)
 
-	for i := 0; e.tree.Len() > 0 && i < 100; i++ {
+	for i := 0; e.tree.Len() > 0 && i < 10000; i++ {
 		n := e.tree.Select()
-		n.Expand()
-		v := n.Evaluate(e.model)
-		n.Backprop(v, 1)
+		n.Expand(e.model)
 	}
 
 	m, value, node, ok := e.tree.BestMove(r)
@@ -80,15 +76,12 @@ func (e *Engine) searchRoot(ponder bool) {
 			p.Step(s)
 			e.batchWriter.WriteExample(p, e.tree)
 		}
-		if value.Terminal() {
-			e.batchWriter.Finalize(p, value)
-		}
 		for range m {
 			p.Unstep()
 		}
 	}
 
-	e.tree.RetainOptimalSubtree(node)
+	e.tree.RetainOptimalSubtree(node, e.model)
 
 	if !ok {
 		e.Logf("no moves")
