@@ -208,6 +208,11 @@ func (n *TreeNode) Terminal() bool {
 	return n.eval.Terminal()
 }
 
+// Policy returns the step policy for this node.
+func (n *TreeNode) Policy() []float32 {
+	return n.policy
+}
+
 // rootify resets this node to create an expanded root node.
 func (n *TreeNode) rootify(model ModelInterface) {
 	n.step = 0

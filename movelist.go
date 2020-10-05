@@ -61,6 +61,23 @@ func ParseMoveList(s string) (MoveList, error) {
 	return res, nil
 }
 
+// Last returns the last move in the list.
+// If the last move is empty, the previous is returned.
+func (l MoveList) Last() Move {
+	n := len(l)
+	if n == 0 {
+		return nil
+	}
+	m := l[n-1]
+	if len(m) > 0 {
+		return m
+	}
+	if n == 1 {
+		return nil
+	}
+	return l[n-2]
+}
+
 // appendString appends the MoveList string to sb.
 func (l MoveList) appendString(sb *strings.Builder) {
 	var (

@@ -24,8 +24,15 @@ Now generate the Go wrapper ops and protos.
 
 ```
 $ go generate github.com/tensorflow/tensorflow/tensorflow/go/op
+```
+
+If you still have issues you can running:
+
+```bash
 $ bash tensorflow/go/genop/generate.sh
 ```
+
+and manually move the vendored protos into the working tree.
 
 ## Recommended
 

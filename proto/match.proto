@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+option go_package = "github.com/ajzaff/bot_zoo/proto";
+
+message PGN {
+  message Annotation {
+    string step = 2;
+    string comment = 3;
+  }
+  message Step {
+    uint32 step = 1;
+    Annotation annotation = 2;
+  }
+  string gold_player = 1;
+  string silver_player = 2;
+  repeated uint32 steps = 3 [packed=true];
+  repeated float policy = 4 [packed=true];
+  repeated Annotation annotations = 5;
+  int32 result = 6;
+}
+
+message Match {
+  string id = 1;
+  repeated string players = 2;
+  message Result {
+    repeated uint32 wins = 1 [packed=true];
+  }
+  Result results = 4;
+  message Game {
+    uint32 gold_player = 1;
+    uint32 silver_player = 2;
+    PGN pgn = 3;
+  }
+  repeated Game games = 5;
+}
