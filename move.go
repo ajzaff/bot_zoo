@@ -344,6 +344,10 @@ func (s Step) DebugCaptureContext(p *Pos) (cap Step) {
 
 // appendString appends the Step string to the builder.
 func (s Step) appendString(sb *strings.Builder) {
+	if !s.Piece().Valid() {
+		s.appendGoString("Invalid", sb)
+		return
+	}
 	sb.WriteByte(s.Piece().Byte())
 	if s.Setup() {
 		sb.WriteString(s.Dest().String())
@@ -365,7 +369,13 @@ func (s Step) String() string {
 	return sb.String()
 }
 
+func (s Step) appendGoString(prefix string, sb *strings.Builder) {
+	fmt.Fprintf(sb, "%s(piece=%c src=%s, dest=%s)", prefix, s.Piece().Byte(), s.Src(), s.Dest())
+}
+
 // GoString returns the formatted GoString for this step.
 func (s Step) GoString() string {
-	return fmt.Sprintf("Step(piece=%c src=%s, dest=%s)", s.Piece().Byte(), s.Src(), s.Dest())
+	var sb strings.Builder
+	s.appendGoString("Step", &sb)
+	return sb.String()
 }

@@ -35,9 +35,10 @@ func (e *TTEntry) Save(key Hash, gen uint8, weight Value, runs uint32, policy []
 	// Overwrite entries with fewer runs.
 	if key16 != e.Key16 || runs > e.Runs {
 		e.Key16 = key16
+		e.Gen8 = gen
 		e.Weight = weight
 		e.Runs = runs
-		e.Gen8 = gen
+		e.Policy = policy
 	}
 }
 

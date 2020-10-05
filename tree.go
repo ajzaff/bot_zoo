@@ -37,7 +37,7 @@ func (t *Tree) SetSample(sample bool) {
 func (t *Tree) UpdateRoot(p *Pos, model ModelInterface) {
 	if t.p == nil || t.p.Hash() != p.Hash() {
 		t.p = p
-		t.root = t.NewTreeNode(nil, t.p, 0, false, 1, true)
+		t.root = t.NewTreeNode(nil, 0, false, 1, true)
 		t.root.rootify(p, model)
 	}
 }
@@ -120,7 +120,8 @@ func (t *Tree) Debug(l *log.Logger) {
 	l.Println("tree:")
 	n := t.root
 	for i := 0; len(n.children) > 0; i++ {
-		l.Printf("  depth=%d:", i)
+		l.Printf("  depth=%d [%s]:", i, n.step)
+		sort.Stable(byPriority(n.children))
 		sort.Stable(byRuns(n.children))
 		for _, c := range n.children {
 			l.Printf("    step=%s [%f] P=%f runs=%d weight=%f", c.step, float64(c.weight)/float64(c.runs), c.priority, c.runs, c.weight)
@@ -133,7 +134,6 @@ func (t *Tree) Debug(l *log.Logger) {
 type TreeNode struct {
 	t        *Tree       // parent tree containing the frontier heap
 	side     Value       // side-to-move multipier; can be 1 or -1.
-	eval     Value       // terminal eval; [-1 0 1]
 	weight   Value       // cumulative value of this state; divide by Runs to normalize.
 	runs     uint32      // number of runs through this node.
 	policy   []float32   // policy from the model, if run.
@@ -146,14 +146,14 @@ type TreeNode struct {
 }
 
 // NewTreeNode creates a new game tree node for p with initial stats populated from the tt.
-func (t *Tree) NewTreeNode(parent *TreeNode, p *Pos, step Step, pass bool, side Value, first bool) *TreeNode {
+func (t *Tree) NewTreeNode(parent *TreeNode, step Step, pass bool, side Value, first bool) *TreeNode {
 	e := &TreeNode{
 		t:      t,
 		side:   side,
-		eval:   side * p.Terminal(),
 		step:   step,
 		pass:   pass,
 		parent: parent,
+		policy: policyPool.Get().([]float32),
 		first:  first,
 	}
 	return e
@@ -174,7 +174,7 @@ func (n *TreeNode) StepIndex() uint8 {
 
 // HasParent returns true if n has a non-nil parent.
 func (n *TreeNode) HasParent() bool {
-	return n.parent != nil
+	return n.parent != nil && n.parent.Runs() > 0
 }
 
 // Runs returns the number of MCTS runs propagated through this node.
@@ -196,11 +196,6 @@ func (n *TreeNode) Weight() Value {
 	return n.weight
 }
 
-// Terminal returns true if this node is a terminal node.
-func (n *TreeNode) Terminal() bool {
-	return n.eval.Terminal()
-}
-
 // Policy returns the step policy for this node.
 func (n *TreeNode) Policy() []float32 {
 	return n.policy
@@ -210,58 +205,23 @@ func (n *TreeNode) Policy() []float32 {
 func (n *TreeNode) rootify(p *Pos, model ModelInterface) {
 	n.step = 0
 	n.side = 1
+	n.runs = 0
+	n.weight = 0
 	n.first = true
 	n.parent = nil
 	n.children = n.children[:0]
-	if e, found := n.t.tt.Probe(p.Hash()); found {
-		// TT Hit
-		n.weight = e.Weight
-		n.runs = e.Runs
-		n.policy = e.Policy
-	} else {
-		n.policy = policyPool.Get().([]float32)
-	}
 	n.Expand(p, model)
-}
-
-func (n *TreeNode) expandOne(p *Pos, model ModelInterface, step Step, pass bool, side, childSide Value) {
-
-	child := n.t.NewTreeNode(n, p, step, pass, childSide, n.first && side == childSide)
-	n.children = append(n.children, child)
-
-	var (
-		v    Value
-		runs = uint32(1)
-	)
-
-	if t := p.Terminal(); t != 0 {
-		// Terminal value
-		v = child.side * t
-	} else if e, found := n.t.tt.Probe(p.Hash()); found {
-		// TT Hit
-		child.policy = e.Policy
-		v = e.Weight
-		runs = e.Runs
-	} else {
-		// TT Miss: Evaluate new node.
-		model.EvaluatePosition(p)
-		v = child.side * Value(model.Value())
-
-		// Save to tt.
-		e.Save(p.Hash(), n.t.tt.GlobalAge(), v, 1, child.policy)
-	}
-
-	// Backprop
-	child.Backprop(v, runs)
-
-	if child.policy == nil {
-		child.policy = policyPool.Get().([]float32)
-	}
 }
 
 // Expand expands the node by generating all legal child nodes from this position.
 // All generated children are added to the frontier while n is removed from the frontier.
 func (n *TreeNode) Expand(p *Pos, model ModelInterface) {
+	v := p.Terminal()
+	if v.Terminal() {
+		n.Backprop(n.side*Loss, 1)
+		return
+	}
+
 	// Pos is not at n.
 	// Generate pseudo-legal steps.
 	var (
@@ -270,35 +230,52 @@ func (n *TreeNode) Expand(p *Pos, model ModelInterface) {
 	)
 	stepList.Generate(p)
 	for i := 0; i < stepList.Len(); i++ {
-
 		step := stepList.At(i)
 		if !p.Legal(step.Step) {
 			continue
 		}
 		hasChildren = true
-
-		initSide := p.Side()
-
-		p.Step(step.Step)
-
 		childSide := n.side
-		if initSide != p.Side() {
+		if p.LastStep() {
 			childSide = -childSide
 		}
-
-		n.expandOne(p, model, step.Step, false, n.side, childSide)
-
-		p.Unstep()
+		child := n.t.NewTreeNode(n, step.Step, false, childSide, n.first && n.side == childSide)
+		n.children = append(n.children, child)
 	}
 
+	// Handle passing step:
 	if n.t.p.CanPass() {
 		hasChildren = true
-		p.Pass()
-		n.expandOne(p, model, 0, true, n.side, -n.side)
-		p.Unpass()
+		child := n.t.NewTreeNode(n, 0, true, -n.side, false)
+		n.children = append(n.children, child)
 	}
 
-	if !hasChildren {
+	if hasChildren {
+		var (
+			v    Value
+			runs = uint32(1)
+		)
+
+		if e, found := n.t.tt.Probe(p.Hash()); found {
+			// TT Hit:
+			copy(n.policy, e.Policy)
+			n.policy = e.Policy
+			v = e.Weight
+			runs = e.Runs
+		} else {
+			// TT Miss. Evaluate new node:
+			model.EvaluatePosition(p)
+			v = n.side * Value(model.Value())
+			model.Policy(n.policy)
+
+			// Save to tt.
+			e.Save(p.Hash(), n.t.tt.GlobalAge(), v, 1, n.policy)
+		}
+
+		// Do backprop.
+		n.Backprop(v, runs)
+	} else {
+		// No moves, losing node:
 		n.Backprop(n.side*Loss, 1)
 	}
 }
@@ -309,9 +286,12 @@ func (n *TreeNode) computePriority(deltaN uint32) {
 	var x float64
 	if n.HasParent() {
 		N := n.ParentRuns() + deltaN
-		x = c * math.Sqrt(math.Log(float64(N))/float64(n.Runs()))
+		x = c * math.Sqrt(math.Log(float64(N))/float64(1+n.Runs()))
 	}
-	n.priority = x + float64(n.Weight()) + float64(n.policy[n.StepIndex()])
+	if n.policy != nil {
+		x += float64(n.policy[n.StepIndex()])
+	}
+	n.priority = x + float64(n.Weight())
 }
 
 const largeBackprop = 1000000000
@@ -319,11 +299,6 @@ const largeBackprop = 1000000000
 // Backprop propagates the value v representing n runs to parents of this node.
 // Fixes the frontier heap.
 func (n *TreeNode) Backprop(v Value, runs uint32) {
-	// Ensure we play winning moves.
-	if n.first && n.Terminal() {
-		v *= largeBackprop
-		runs *= largeBackprop
-	}
 	n.weight += v
 	n.runs += runs
 	for p := n.parent; p != nil; p = p.parent {
