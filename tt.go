@@ -3,48 +3,41 @@ package zoo
 // TTEntry is the transposition table entry.
 // The layout is made as compact as possible to save memory.
 type TTEntry struct {
-	// Key is the upper part of the ZHash (16 bits).
+	// Key is the upper part of the Hash (16 bits).
 	Key16 uint16
-
-	// Value is the estimated value of this node from the alpha network (16 bits).
-	Value Value
-
-	// Playouts is the number of playouts that passed through this node divided by 256 (8 bits).
-	Playouts uint8
 
 	// Gen8 contains the aging parameter (8 bits).
 	Gen8 uint8
 
-	// Best step packed into a uint16 (16 bits).
-	Step Step
+	// Weight is the cumulative value of this node (64 bits).
+	Weight Value
+
+	// Runs is the number of runs through this node (32 bits).
+	Runs uint32
+
+	// Policy slice for this node (64 bits).
+	Policy []float32
 }
 
 // Clear zeroes the TableEntry and resets to its initial state.
 func (e *TTEntry) Clear() {
 	e.Key16 = 0
-	e.Value = 0
-	e.Playouts = 0
 	e.Gen8 = 0
-	e.Step = 0
+	e.Weight = 0
+	e.Runs = 0
+	e.Policy = nil
 }
 
 // Save the information into the TableEntry if it is more valuable.
-func (e *TTEntry) Save(key uint64, v Value, pv bool, gen, runs uint8, step Step) {
+func (e *TTEntry) Save(key Hash, gen uint8, weight Value, runs uint32, policy []float32) {
 	key16 := uint16(key >> 48)
-	if step != 0 || key16 != e.Key16 {
-		// Preserve step information. Only reset step if valid
-		// and on key change (modulo Type 1 key errors).
-		e.Step = step
-	}
-	// Overwrite more valuable entries.
-	if key16 != e.Key16 || runs > e.Playouts {
+
+	// Overwrite entries with fewer runs.
+	if key16 != e.Key16 || runs > e.Runs {
 		e.Key16 = key16
-		e.Value = v
-		g := gen
-		if pv {
-			g |= 1 << 2
-		}
-		e.Gen8 = g
+		e.Weight = weight
+		e.Runs = runs
+		e.Gen8 = gen
 	}
 }
 
@@ -68,7 +61,7 @@ type tableCluster struct {
 }
 
 // cluster uses the 32 lowest order bits of the key to determine the cluster index.
-func (t *TranspositionTable) cluster(key uint64) *tableCluster {
+func (t *TranspositionTable) cluster(key Hash) *tableCluster {
 	return &t.table[(uint64(uint32(key))*uint64(t.clusterCount))>>32]
 }
 
@@ -87,7 +80,7 @@ func (t *TranspositionTable) Clear() {
 // A call to Resize during active search is problematic and should be prevented.
 func (t *TranspositionTable) Resize(mbSize int) {
 	t.Clear()
-	t.clusterCount = mbSize * 1024 * 1024 / 36 // sizeof(tableCluster)
+	t.clusterCount = mbSize * 1024 * 1024 / 184 // sizeof(tableCluster)
 	t.table = make([]tableCluster, t.clusterCount)
 }
 
@@ -103,7 +96,7 @@ func (t *TranspositionTable) NewSearch() {
 
 // Probe returns the entry matching the key and found = true, or returns
 // the least valuable entry (to be overwritten with a call to Save) and found = false.
-func (t *TranspositionTable) Probe(key uint64) (e *TTEntry, found bool) {
+func (t *TranspositionTable) Probe(key Hash) (e *TTEntry, found bool) {
 	key16 := uint16(key >> 48)
 	cluster := t.cluster(key)
 
@@ -121,8 +114,8 @@ func (t *TranspositionTable) Probe(key uint64) (e *TTEntry, found bool) {
 		e := &cluster.entries[i]
 		// Pick least valuable entry whilst handling cyclic generation overflow.
 		// See stockfish/tt.cpp for explaination.
-		if replace.Playouts-((uint8(263+int(t.gen8))-e.Gen8)&0xf8) >
-			e.Playouts-((uint8(263+int(t.gen8))-e.Gen8)&0xf8) {
+		if replace.Runs-uint32((uint8(263+int(t.gen8))-e.Gen8)&0xf8) >
+			e.Runs-uint32((uint8(263+int(t.gen8))-e.Gen8)&0xf8) {
 			replace = e
 		}
 	}

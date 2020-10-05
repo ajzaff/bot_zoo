@@ -1,6 +1,16 @@
 package zoo
 
-import expb "github.com/ajzaff/bot_zoo/proto"
+import (
+	"sync"
+
+	expb "github.com/ajzaff/bot_zoo/proto"
+)
+
+var policyPool = sync.Pool{
+	New: func() interface{} {
+		return make([]float32, 232)
+	},
+}
 
 func resetLabels(ex *expb.Example) {
 	ex.Policy = make(map[uint32]float32)

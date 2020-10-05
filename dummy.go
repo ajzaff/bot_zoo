@@ -27,7 +27,7 @@ func (m *DummyModel) SetSeed(seed int64) {
 // EvaluatePosition regenerates random outputs for the position.
 func (m *DummyModel) EvaluatePosition(p *Pos) {
 	if m.policy == nil {
-		m.policy = make([]float32, 232)
+		m.policy = policyPool.Get().([]float32)
 	}
 	m.value = float32(math.Tanh(0.5 * m.r.NormFloat64()))
 	for i := range m.policy {

@@ -66,8 +66,8 @@ func (e *Engine) searchRoot(ponder bool) {
 	e.tree.SetSample(e.UseSampledMove)
 
 	for i := 0; i < 100; i++ {
-		n := e.tree.Select()
-		n.Expand(e.model)
+		n, p := e.tree.Select(p)
+		n.Expand(p, e.model)
 	}
 
 	m, value, _, ok := e.tree.BestMove(r)

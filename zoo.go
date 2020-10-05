@@ -5,7 +5,7 @@ import "log"
 // Value is a score assigned to a position or move to represent its goodness.
 // Higher numbers are better. Values range from [-1, 1]. Win is 1 and loss is
 // -1. Inf is provided as value outside the range useful for initialization.
-type Value float64
+type Value float32
 
 // Inf is an infinite value outside the range of normal use.
 const Inf Value = 999

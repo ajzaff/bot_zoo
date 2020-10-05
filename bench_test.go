@@ -2,7 +2,6 @@ package zoo
 
 import (
 	"testing"
-	"time"
 )
 
 func BenchmarkOpening(b *testing.B) {
@@ -19,8 +18,6 @@ func BenchmarkOpening(b *testing.B) {
 	}
 
 	for n := 0; n < b.N; n++ {
-		engine.searchRoot(false)
-		time.Sleep(1 * time.Second)
-		engine.wg.Wait()
+		engine.GoWait()
 	}
 }

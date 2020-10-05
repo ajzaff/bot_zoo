@@ -9,7 +9,7 @@ import (
 	"github.com/golang/protobuf/proto"
 )
 
-const gamesPerBatch = 2000
+const gamesPerBatch = 1000
 
 // BatchWriter implements a writer capable of outputting training data.
 type BatchWriter struct {
@@ -38,8 +38,8 @@ func NewBatchWriter(epoch int) *BatchWriter {
 // Call finalize after the game is over to commit the final result.
 func (w *BatchWriter) WriteExample(p *Pos, t *Tree) {
 	w.inProgress.Pgn.Policy = t.Root().Policy()
-	if m := p.MoveList().Last(); len(m) > 0 {
-		w.inProgress.Pgn.Steps = append(w.inProgress.Pgn.Steps, uint32(m[len(m)-1].Index()))
+	for _, s := range p.MoveList().Last() {
+		w.inProgress.Pgn.Steps = append(w.inProgress.Pgn.Steps, uint32(s.Index()))
 	}
 }
 
@@ -50,7 +50,7 @@ func (w *BatchWriter) WriteExample(p *Pos, t *Tree) {
 //  byte      data[length]
 //  uint32    masked crc of data
 func (w *BatchWriter) write() (err error) {
-	f, err := os.OpenFile(filepath.Join(w.dir, fmt.Sprintf("examples.%d.%d.pb", w.epoch, w.batchNumber)), os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0755)
+	f, err := os.OpenFile(filepath.Join(w.dir, fmt.Sprintf("games.%d.%d.pb", w.epoch, w.batchNumber)), os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0755)
 	if err != nil {
 		return err
 	}

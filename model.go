@@ -17,7 +17,7 @@ func NewModel() (*Model, error) {
 	}
 	model := &Model{
 		m:      m,
-		policy: make([]float32, 232),
+		policy: policyPool.Get().([]float32),
 	}
 	return model, nil
 }
