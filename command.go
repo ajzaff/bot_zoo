@@ -3,6 +3,7 @@ package zoo
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"strings"
 	"time"
@@ -238,17 +239,22 @@ func init() {
 	}))
 	RegisterAEIHandler("playbatch", extendedHandler(func(e *Engine, args string) error {
 		r := rand.New(rand.NewSource(time.Now().UnixNano()))
-		for n := 0; n < e.PlayBatchGames; n++ {
+		for n := 1; n <= e.PlayBatchGames; n++ {
 			e.RandomSetup(r)
 			var result Value
+			moves := 0
 			for ; !result.Terminal(); result = e.Terminal() {
 				e.GoWait()
 				e.Move(e.bestMove)
+				moves++
+			}
+			if moves > 160 {
+				e.Debugf("debugging long game to sandbox/long_game.pgn")
+				ioutil.WriteFile("sandbox/long_game.pgn", []byte(e.Pos.MoveList().String()), 0755)
 			}
 			if err := e.batchWriter.Finalize(e.Pos, result); err != nil {
 				return err
 			}
-			n++
 			e.Debugf("%s", e.Pos.String())
 			if c := e.Side(); result == 1 {
 				e.Debugf("%c won game %d of %d", c.Byte(), n, e.PlayBatchGames)

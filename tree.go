@@ -2,6 +2,7 @@ package zoo
 
 import (
 	"container/heap"
+	"log"
 	"math"
 	"math/rand"
 	"sort"
@@ -46,14 +47,21 @@ func (t *Tree) UpdateRoot(p *Pos, model ModelInterface) {
 // Push the tree node x onto the frontier.
 // For heap.Heap.
 func (t *Tree) Push(x interface{}) {
-	n := t.Len()
-	t.frontier = append(t.frontier, x.(*TreeNode))
-	x.(*TreeNode).idx = n
+	// n := t.Len()
+	// t.frontier = append(t.frontier, x.(*TreeNode))
+	// x.(*TreeNode).idx = n
 }
 
-// Select pops and returns the most promising node from the frontier.
+// Select the next node to expand.
 func (t *Tree) Select() *TreeNode {
-	return heap.Pop(t).(*TreeNode)
+	n := t.root
+	for {
+		if len(n.children) == 0 {
+			return n
+		}
+		sort.Stable(byPriority(n.children))
+		n = n.children[0]
+	}
 }
 
 // Pop returns the top node from the frontier.
@@ -84,6 +92,13 @@ func (t *Tree) Len() int {
 // For heap.Heap.
 func (t *Tree) Less(i, j int) bool {
 	return t.frontier[i].priority > t.frontier[j].priority
+}
+
+// Reset clears all nodes from the tree.
+func (t *Tree) Reset() {
+	t.frontier = t.frontier[:0]
+	t.root = nil
+	t.p = nil
 }
 
 // RetainOptimalSubtree removes all suboptimal subtrees and resets
@@ -131,6 +146,20 @@ func (t *Tree) RootChildren() []*TreeNode {
 	children := make([]*TreeNode, len(t.root.children))
 	copy(children, t.root.children)
 	return children
+}
+
+// Debug the state of the tree.
+func (t *Tree) Debug(l *log.Logger) {
+	l.Println("tree:")
+	n := t.root
+	for i := 0; len(n.children) > 0; i++ {
+		l.Printf("  depth=%d:", i)
+		sort.Stable(byRuns(n.children))
+		for _, c := range n.children {
+			l.Printf("    step=%s [%f] P=%f runs=%d weight=%f", c.step, float64(c.weight)/float64(c.runs), c.priority, c.runs, c.weight)
+		}
+		n = n.children[0]
+	}
 }
 
 // TreeNode represents a game tree node for MCTS in memory.
@@ -269,9 +298,7 @@ func (n *TreeNode) Expand(model ModelInterface) {
 		}
 
 		child := n.t.NewTreeNode(n, p, step.Step, false, childSide, n.first && initSide == p.Side())
-		if n.first {
-			n.children = append(n.children, child)
-		}
+		n.children = append(n.children, child)
 
 		var v Value
 		if t := p.Terminal(); t != 0 {
@@ -296,9 +323,7 @@ func (n *TreeNode) Expand(model ModelInterface) {
 	if n.t.p.CanPass() {
 		p.Pass()
 		child := n.t.NewTreeNode(n, p, 0, true, -n.side, false)
-		if n.first {
-			n.children = append(n.children, child)
-		}
+		n.children = append(n.children, child)
 
 		var v Value
 		if t := p.Terminal(); t != 0 {
@@ -333,12 +358,19 @@ func (n *TreeNode) computePriority(deltaN int) {
 		N := n.ParentRuns() + deltaN
 		x = c * math.Sqrt(math.Log(float64(N))/float64(n.Runs()))
 	}
-	n.priority = x + float64(n.Weight())/float64(n.Runs()) + float64(n.policy[n.StepIndex()])
+	n.priority = x + float64(n.Weight()) + float64(n.policy[n.StepIndex()])
 }
+
+const largeBackprop = 1000000000
 
 // Backprop propagates the value v representing n runs to parents of this node.
 // Fixes the frontier heap.
 func (n *TreeNode) Backprop(v Value, runs int) {
+	// Ensure we play winning moves.
+	if n.first && n.Terminal() {
+		v *= largeBackprop
+		runs *= largeBackprop
+	}
 	n.weight += v
 	n.runs += runs
 	n.computePriority(runs)
@@ -360,3 +392,9 @@ type byRuns []*TreeNode
 func (a byRuns) Len() int           { return len(a) }
 func (a byRuns) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a byRuns) Less(i, j int) bool { return a[i].Runs() > a[j].Runs() }
+
+type byPriority []*TreeNode
+
+func (a byPriority) Len() int           { return len(a) }
+func (a byPriority) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a byPriority) Less(i, j int) bool { return a[i].priority > a[j].priority }
