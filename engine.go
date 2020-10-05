@@ -149,6 +149,7 @@ func (e *Engine) Debug() {
 	e.Debugf("push=%v", ok)
 	e.debugStack(e.debug)
 	e.threefold.Debug(e.debug)
+	e.tree.Debug(e.debug)
 }
 
 // Logf logs the formatted message to the configured log writer.

@@ -60,15 +60,17 @@ func (e *Engine) searchRoot(ponder bool) {
 
 	p := e.Pos.Clone()
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	e.tree.Reset()
 	e.tree.UpdateRoot(p, e.model)
 	e.tree.SetSample(e.UseSampledMove)
 
-	for i := 0; e.tree.Len() > 0 && i < 10000; i++ {
+	for i := 0; i < 100; i++ {
 		n := e.tree.Select()
 		n.Expand(e.model)
 	}
 
-	m, value, node, ok := e.tree.BestMove(r)
+	m, value, _, ok := e.tree.BestMove(r)
 
 	if e.UseDatasetWriter {
 		e.batchWriter.WriteExample(p, e.tree)
@@ -80,8 +82,6 @@ func (e *Engine) searchRoot(ponder bool) {
 			p.Unstep()
 		}
 	}
-
-	e.tree.RetainOptimalSubtree(node, e.model)
 
 	if !ok {
 		e.Logf("no moves")
