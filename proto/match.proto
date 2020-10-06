@@ -6,7 +6,7 @@ message PGN {
   message Annotation {
     string step = 2;
     string comment = 3;
-    repeated float policy = 4 [ packed = true ];
+    map<uint32, float> policy = 4;
   }
   message Step {
     uint32 step = 1;

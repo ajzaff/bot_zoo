@@ -3,7 +3,10 @@ package zoo
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -242,12 +245,20 @@ func init() {
 			e.RandomSetup(r)
 			var result Value
 			moves := 0
-			for ; !result.Terminal(); result = e.Terminal() {
+			i := 0
+			const maxTurns = 600
+			for ; i < maxTurns && !result.Terminal(); i, result = i+1, e.Terminal() {
 				e.GoWait()
 				e.Move(e.bestMove)
 				moves++
 			}
-			if err := e.batchWriter.Finalize(e.Pos, result); err != nil {
+			if i >= maxTurns {
+				path := filepath.Join(os.TempDir(), "bot_alpha_zoo", fmt.Sprintf("long_game_%d.pgn", time.Now().Unix()))
+				e.Debugf("Game reached maximum length of %d turns. Logging to %s", maxTurns, path)
+				if err := ioutil.WriteFile(path, []byte(e.Pos.MoveList().String()), 0755); err != nil {
+					e.Debugf("Error writing game: %v", err)
+				}
+			} else if err := e.batchWriter.Finalize(e.Pos, result); err != nil {
 				return err
 			}
 			e.Debugf("%s", e.Pos.String())

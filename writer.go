@@ -38,8 +38,14 @@ func NewBatchWriter(epoch int) *BatchWriter {
 // To be called for each step in the game.
 // Call finalize after the game is over to commit the final result.
 func (w *BatchWriter) WriteExample(p *Pos, t *Tree) {
+	policy := make(map[uint32]float32)
+	for i, logits := range t.Root().RunsLogits() {
+		if logits != 0 {
+			policy[uint32(i)] = logits
+		}
+	}
 	w.inProgress.Pgn.Annotations = append(w.inProgress.Pgn.Annotations, &zoopb.PGN_Annotation{
-		Policy: t.Root().RunsLogits(),
+		Policy: policy,
 	})
 }
 
