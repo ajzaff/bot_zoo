@@ -7,9 +7,10 @@ import (
 
 	zoopb "github.com/ajzaff/bot_zoo/proto"
 	"github.com/golang/protobuf/proto"
+	"github.com/golang/snappy"
 )
 
-const gamesPerBatch = 1000
+const gamesPerBatch = 100
 
 // BatchWriter implements a writer capable of outputting training data.
 type BatchWriter struct {
@@ -37,10 +38,9 @@ func NewBatchWriter(epoch int) *BatchWriter {
 // To be called for each step in the game.
 // Call finalize after the game is over to commit the final result.
 func (w *BatchWriter) WriteExample(p *Pos, t *Tree) {
-	w.inProgress.Pgn.Policy = t.Root().Policy()
-	for _, s := range p.MoveList().Last() {
-		w.inProgress.Pgn.Steps = append(w.inProgress.Pgn.Steps, uint32(s.Index()))
-	}
+	w.inProgress.Pgn.Annotations = append(w.inProgress.Pgn.Annotations, &zoopb.PGN_Annotation{
+		Policy: t.Root().RunsLogits(),
+	})
 }
 
 // write writes the buffered examples to a Dataset file.
@@ -50,7 +50,7 @@ func (w *BatchWriter) WriteExample(p *Pos, t *Tree) {
 //  byte      data[length]
 //  uint32    masked crc of data
 func (w *BatchWriter) write() (err error) {
-	f, err := os.OpenFile(filepath.Join(w.dir, fmt.Sprintf("games.%d.%d.pb", w.epoch, w.batchNumber)), os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0755)
+	f, err := os.OpenFile(filepath.Join(w.dir, fmt.Sprintf("games%d.pb.snappy", w.batchNumber)), os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0755)
 	if err != nil {
 		return err
 	}
@@ -60,13 +60,14 @@ func (w *BatchWriter) write() (err error) {
 			err = err1
 		}
 	}()
+	sw := snappy.NewWriter(f)
 
 	payload, err := proto.Marshal(w.finished)
 	if err != nil {
 		return err
 	}
 
-	_, err = f.Write(payload)
+	_, err = sw.Write(payload)
 	if err != nil {
 		return err
 	}
@@ -84,6 +85,7 @@ func (w *BatchWriter) Finalize(p *Pos, t Value) error {
 		t = -t
 	}
 	w.inProgress.Pgn.Result = int32(t)
+	w.inProgress.Pgn.Pgn = p.MoveList().String()
 	w.finished.Games = append(w.finished.Games, w.inProgress)
 	w.inProgress = &zoopb.Match_Game{Pgn: &zoopb.PGN{}}
 	if len(w.finished.Games) >= gamesPerBatch {

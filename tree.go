@@ -201,12 +201,25 @@ func (n *TreeNode) Policy() []float32 {
 	return n.policy
 }
 
+// RunsLogits returns the runs logits from this node.
+// These can be interpreted as prior probability of selecting the move.
+func (n *TreeNode) RunsLogits() []float32 {
+	logits := policyPool.Get().([]float32)
+	for _, n := range n.children {
+		s, pass := n.Step()
+		if pass {
+			logits[passIndex] = float32(n.Runs())
+		} else {
+			logits[s.Index()] = float32(n.Runs())
+		}
+	}
+	return logits
+}
+
 // rootify resets this node to create an expanded root node.
 func (n *TreeNode) rootify(p *Pos, model ModelInterface) {
 	n.step = 0
 	n.side = 1
-	n.runs = 0
-	n.weight = 0
 	n.first = true
 	n.parent = nil
 	n.children = n.children[:0]
@@ -239,8 +252,7 @@ func (n *TreeNode) Expand(p *Pos, model ModelInterface) {
 		if p.LastStep() {
 			childSide = -childSide
 		}
-		child := n.t.NewTreeNode(n, step.Step, false, childSide, n.first && n.side == childSide)
-		n.children = append(n.children, child)
+		n.children = append(n.children, n.t.NewTreeNode(n, step.Step, false, childSide, n.first && n.side == childSide))
 	}
 
 	// Handle passing step:
@@ -250,34 +262,29 @@ func (n *TreeNode) Expand(p *Pos, model ModelInterface) {
 		n.children = append(n.children, child)
 	}
 
-	if hasChildren {
-		var (
-			v    Value
-			runs = uint32(1)
-		)
-
-		if e, found := n.t.tt.Probe(p.Hash()); found {
-			// TT Hit:
-			copy(n.policy, e.Policy)
-			n.policy = e.Policy
-			v = e.Weight
-			runs = e.Runs
-		} else {
-			// TT Miss. Evaluate new node:
-			model.EvaluatePosition(p)
-			v = n.side * Value(model.Value())
-			model.Policy(n.policy)
-
-			// Save to tt.
-			e.Save(p.Hash(), n.t.tt.GlobalAge(), v, 1, n.policy)
-		}
-
-		// Do backprop.
-		n.Backprop(v, runs)
-	} else {
+	if !hasChildren {
 		// No moves, losing node:
 		n.Backprop(n.side*Loss, 1)
+		return
 	}
+
+	// Do backprop.
+	var runs = uint32(1)
+	if e, found := n.t.tt.Probe(p.Hash()); found {
+		// TT Hit:
+		copy(n.policy, e.Policy)
+		v = e.Weight
+		runs = e.Runs
+	} else {
+		// TT Miss. Evaluate new node:
+		model.EvaluatePosition(p)
+		v = n.side * Value(model.Value())
+		model.Policy(n.policy)
+
+		// Save to tt.
+		e.Save(p.Hash(), n.t.tt.GlobalAge(), v, 1, n.policy)
+	}
+	n.Backprop(v, runs)
 }
 
 const c = 1.41421
@@ -288,10 +295,7 @@ func (n *TreeNode) computePriority(deltaN uint32) {
 		N := n.ParentRuns() + deltaN
 		x = c * math.Sqrt(math.Log(float64(N))/float64(1+n.Runs()))
 	}
-	if n.policy != nil {
-		x += float64(n.policy[n.StepIndex()])
-	}
-	n.priority = x + float64(n.Weight())
+	n.priority = x + float64(n.Weight()) + float64(n.policy[n.StepIndex()])
 }
 
 const largeBackprop = 1000000000

@@ -6,6 +6,7 @@ message PGN {
   message Annotation {
     string step = 2;
     string comment = 3;
+    repeated float policy = 4 [ packed = true ];
   }
   message Step {
     uint32 step = 1;
@@ -13,8 +14,8 @@ message PGN {
   }
   string gold_player = 1;
   string silver_player = 2;
-  repeated uint32 steps = 3 [packed=true];
-  repeated float policy = 4 [packed=true];
+  string pgn = 7;
+  repeated uint32 steps = 3 [ packed = true ];
   repeated Annotation annotations = 5;
   int32 result = 6;
 }
@@ -22,13 +23,14 @@ message PGN {
 message Match {
   string id = 1;
   repeated string players = 2;
-  message Result {
-    repeated uint32 wins = 1 [packed=true];
-  }
+  message Result { repeated uint32 wins = 1 [ packed = true ]; }
   Result results = 4;
   message Game {
     uint32 gold_player = 1;
     uint32 silver_player = 2;
+    uint32 gold_player_rating = 4;
+    uint32 silver_player_rating = 5;
+    bool rated = 6;
     PGN pgn = 3;
   }
   repeated Game games = 5;

@@ -65,7 +65,7 @@ func (e *Engine) searchRoot(ponder bool) {
 	e.tree.UpdateRoot(p, e.model)
 	e.tree.SetSample(e.UseSampledMove)
 
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 1600; i++ {
 		n, p := e.tree.Select(p)
 		n.Expand(p, e.model)
 	}
@@ -73,7 +73,9 @@ func (e *Engine) searchRoot(ponder bool) {
 	m, value, _, ok := e.tree.BestMove(r)
 
 	if e.UseDatasetWriter {
-		e.batchWriter.WriteExample(p, e.tree)
+		if p.MoveNum() == 1 && p.Side() == Gold {
+			e.batchWriter.WriteExample(p, e.tree)
+		}
 		for _, s := range m {
 			p.Step(s)
 			e.batchWriter.WriteExample(p, e.tree)

@@ -3,7 +3,6 @@ package zoo
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"strings"
 	"time"
@@ -247,10 +246,6 @@ func init() {
 				e.GoWait()
 				e.Move(e.bestMove)
 				moves++
-			}
-			if moves > 160 {
-				e.Debugf("debugging long game to sandbox/long_game.pgn")
-				ioutil.WriteFile("sandbox/long_game.pgn", []byte(e.Pos.MoveList().String()), 0755)
 			}
 			if err := e.batchWriter.Finalize(e.Pos, result); err != nil {
 				return err
