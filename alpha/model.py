@@ -1,12 +1,13 @@
 import tensorflow as tf
 
 from tensorflow.keras import layers
+from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2
 
 
 class AlphaConvolutionLayer(layers.Layer):
 
-    def __init__(self, filters, kernel_size, padding='valid', activation=None, name=None):
-        super(AlphaConvolutionLayer, self).__init__(name=name)
+    def __init__(self, filters, kernel_size, padding='valid', activation=None, name=None, **kwargs):
+        super(AlphaConvolutionLayer, self).__init__(name=name, **kwargs)
         self.conv = layers.Conv2D(
             filters, kernel_size, padding=padding, data_format='channels_last')
         self.norm = layers.BatchNormalization(axis=3)
@@ -24,8 +25,8 @@ class AlphaConvolutionLayer(layers.Layer):
 
 class AlphaResidualLayer(layers.Layer):
 
-    def __init__(self):
-        super(AlphaResidualLayer, self).__init__()
+    def __init__(self, **kwargs):
+        super(AlphaResidualLayer, self).__init__(**kwargs)
         self.conv1 = AlphaConvolutionLayer(
             256, (3, 3), padding='same', activation='relu')
         self.conv2 = AlphaConvolutionLayer(256, (3, 3), padding='same')
@@ -41,26 +42,24 @@ class AlphaResidualLayer(layers.Layer):
 
 class AlphaValueHead(layers.Layer):
 
-    def __init__(self, name=None):
-        super(AlphaValueHead, self).__init__(name=name)
+    def __init__(self, name=None, **kwargs):
+        super(AlphaValueHead, self).__init__(name=name, **kwargs)
         self.conv = AlphaConvolutionLayer(1, (1, 1), activation='relu')
         self.flatten = layers.Flatten(data_format='channels_last')
         self.hidden = layers.Dense(256, activation='relu')
-        self.value_dense = layers.Dense(1)
-        self.value_output = layers.Activation('tanh')
+        self.value_dense = layers.Dense(1, activation='tanh')
 
     def call(self, inputs):
         x = self.conv(inputs)
         x = self.flatten(x)
         x = self.hidden(x)
-        x = self.value_dense(x)
-        return self.value_output(x)
+        return self.value_dense(x)
 
 
 class AlphaPolicyHead(layers.Layer):
 
-    def __init__(self, name=None):
-        super(AlphaPolicyHead, self).__init__(name=name)
+    def __init__(self, name=None, **kwargs):
+        super(AlphaPolicyHead, self).__init__(name=name, **kwargs)
         self.conv = AlphaConvolutionLayer(2, (1, 1), activation='relu')
         self.flatten = layers.Flatten(data_format='channels_last')
         self.dense = layers.Dense(256, activation='relu')
@@ -107,7 +106,8 @@ model.summary()
 
 
 checkpoint_filepath = './data/checkpoint/{name}'.format(name=model.name)
-saved_model_filepath = './data/saved_models/{name}'.format(name=model.name)
+saved_model_filepath = './data/saved_models'
+frozen_graph_filename = 'bot_alpha_zoo-{}'.format(model_depth)
 
 model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
     filepath=checkpoint_filepath,
@@ -133,4 +133,36 @@ _y2 = tf.nn.softmax(tf.random.normal(
 #           validation_data=(_x[N:], (_y1[N:], _y2[N:])),
 #           callbacks=[model_checkpoint_callback])
 
-tf.saved_model.save(model, saved_model_filepath)
+# Output frozen model GraphDef to load in Golang:
+
+# Convert Keras model to ConcreteFunction
+full_model = tf.function(lambda x: model(x))
+full_model = full_model.get_concrete_function(
+    tf.TensorSpec(model.inputs[0].shape, model.inputs[0].dtype))
+
+# Get frozen ConcreteFunction
+frozen_func = convert_variables_to_constants_v2(full_model)
+frozen_func.graph.as_graph_def()
+layers = [op.name for op in frozen_func.graph.get_operations()]
+
+print("-" * 60)
+print("Frozen model layers: ")
+for layer in layers:
+    print(layer)
+print("-" * 60)
+print("Frozen model inputs: ")
+print(frozen_func.inputs)
+print("Frozen model outputs: ")
+print(frozen_func.outputs)
+
+# Save frozen graph to disk
+tf.io.write_graph(graph_or_graph_def=frozen_func.graph,
+                  logdir=saved_model_filepath,
+                  name=f"{frozen_graph_filename}.pb",
+                  as_text=False)
+
+# Save its text representation
+tf.io.write_graph(graph_or_graph_def=frozen_func.graph,
+                  logdir=saved_model_filepath,
+                  name=f"{frozen_graph_filename}.pbtxt",
+                  as_text=True)
