@@ -46,7 +46,9 @@ func NewEngine(settings *EngineSettings, aeiSettings *AEISettings) (*Engine, err
 	if err := e.EngineSettings.Options.Execute(e.Options); err != nil {
 		return nil, err
 	}
-	e.searchState.Reset()
+	if err := e.searchState.Reset(); err != nil {
+		return nil, err
+	}
 	return e, nil
 }
 
@@ -134,6 +136,14 @@ func (e *Engine) Stop() {
 		e.running = 0
 		e.stopping = 0
 	}
+}
+
+// Close closes the engine and all dependencies.
+func (e *Engine) Close() (err error) {
+	if err1 := e.searchState.model.Close(); err1 != nil && err == nil {
+		err = err1
+	}
+	return err
 }
 
 // Debug engine info.

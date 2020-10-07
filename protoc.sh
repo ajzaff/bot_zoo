@@ -1,1 +1,1 @@
-protoc --proto_path proto/ --go_out $GOPATH/src proto/*.proto
+protoc --proto_path proto/ --go_out $GOPATH/src --python_out tensorflow proto/*.proto

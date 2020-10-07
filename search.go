@@ -27,6 +27,7 @@ type ModelInterface interface {
 	SetSeed(seed int64)
 	Value() float32
 	Policy(policy []float32)
+	Close() error
 }
 
 // BatchWriterInterface defines an interface for writing Dataset batch data.
@@ -36,16 +37,23 @@ type BatchWriterInterface interface {
 	Flush() error
 }
 
-func (s *searchState) Reset() {
+func (s *searchState) Reset() error {
 	if s.tt == nil {
 		s.tt = &TranspositionTable{}
 	}
 	s.tt.Resize(50)
 	s.tree = NewEmptyTree(s.tt)
-	s.model = NewDummyModel()
+	if s.model == nil {
+		model, err := NewModel()
+		if err != nil {
+			return err
+		}
+		s.model = model
+	}
 	s.wg = sync.WaitGroup{}
 	s.stopping = 0
 	s.running = 0
+	return nil
 }
 
 func (e *Engine) searchRoot(ponder bool) {

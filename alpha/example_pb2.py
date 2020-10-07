@@ -19,7 +19,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='zoo',
   syntax='proto3',
   serialized_options=_b('Z\037github.com/ajzaff/bot_zoo/proto'),
-  serialized_pb=_b('\n\rexample.proto\x12\x03zoo\"\xff\x01\n\x07\x45xample\x12*\n\x07\x62itsets\x18\x01 \x03(\x0b\x32\x19.zoo.Example.BitsetsEntry\x12#\n\x06policy\x18\x02 \x03(\x0b\x32\x13.zoo.Example.Policy\x12\r\n\x05value\x18\x03 \x01(\x02\x1a\'\n\x06\x42itset\x12\x0f\n\x07\x61ll_one\x18\x02 \x01(\x08\x12\x0c\n\x04ones\x18\x03 \x03(\r\x1a\x43\n\x0c\x42itsetsEntry\x12\x0b\n\x03key\x18\x01 \x01(\r\x12\"\n\x05value\x18\x02 \x01(\x0b\x32\x13.zoo.Example.Bitset:\x02\x38\x01\x1a&\n\x06Policy\x12\r\n\x05index\x18\x01 \x01(\r\x12\r\n\x05logit\x18\x02 \x01(\x02\"*\n\x08\x45xamples\x12\x1e\n\x08\x65xamples\x18\x01 \x03(\x0b\x32\x0c.zoo.ExampleB!Z\x1fgithub.com/ajzaff/bot_zoo/protob\x06proto3')
+  serialized_pb=_b('\n\rexample.proto\x12\x03zoo\"\x8c\x02\n\x07\x45xample\x12*\n\x07\x62itsets\x18\x01 \x03(\x0b\x32\x19.zoo.Example.BitsetsEntry\x12(\n\x06policy\x18\x02 \x03(\x0b\x32\x18.zoo.Example.PolicyEntry\x12\r\n\x05value\x18\x03 \x01(\x02\x1a(\n\x06\x42itset\x12\x10\n\x08\x61ll_ones\x18\x02 \x01(\x08\x12\x0c\n\x04ones\x18\x03 \x03(\r\x1a\x43\n\x0c\x42itsetsEntry\x12\x0b\n\x03key\x18\x01 \x01(\r\x12\"\n\x05value\x18\x02 \x01(\x0b\x32\x13.zoo.Example.Bitset:\x02\x38\x01\x1a-\n\x0bPolicyEntry\x12\x0b\n\x03key\x18\x01 \x01(\r\x12\r\n\x05value\x18\x02 \x01(\x02:\x02\x38\x01\"*\n\x08\x45xamples\x12\x1e\n\x08\x65xamples\x18\x01 \x03(\x0b\x32\x0c.zoo.ExampleB!Z\x1fgithub.com/ajzaff/bot_zoo/protob\x06proto3')
 )
 
 
@@ -33,7 +33,7 @@ _EXAMPLE_BITSET = _descriptor.Descriptor(
   containing_type=None,
   fields=[
     _descriptor.FieldDescriptor(
-      name='all_one', full_name='zoo.Example.Bitset.all_one', index=0,
+      name='all_ones', full_name='zoo.Example.Bitset.all_ones', index=0,
       number=2, type=8, cpp_type=7, label=1,
       has_default_value=False, default_value=False,
       message_type=None, enum_type=None, containing_type=None,
@@ -58,8 +58,8 @@ _EXAMPLE_BITSET = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=130,
-  serialized_end=169,
+  serialized_start=135,
+  serialized_end=175,
 )
 
 _EXAMPLE_BITSETSENTRY = _descriptor.Descriptor(
@@ -95,26 +95,26 @@ _EXAMPLE_BITSETSENTRY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=171,
-  serialized_end=238,
+  serialized_start=177,
+  serialized_end=244,
 )
 
-_EXAMPLE_POLICY = _descriptor.Descriptor(
-  name='Policy',
-  full_name='zoo.Example.Policy',
+_EXAMPLE_POLICYENTRY = _descriptor.Descriptor(
+  name='PolicyEntry',
+  full_name='zoo.Example.PolicyEntry',
   filename=None,
   file=DESCRIPTOR,
   containing_type=None,
   fields=[
     _descriptor.FieldDescriptor(
-      name='index', full_name='zoo.Example.Policy.index', index=0,
+      name='key', full_name='zoo.Example.PolicyEntry.key', index=0,
       number=1, type=13, cpp_type=3, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='logit', full_name='zoo.Example.Policy.logit', index=1,
+      name='value', full_name='zoo.Example.PolicyEntry.value', index=1,
       number=2, type=2, cpp_type=6, label=1,
       has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
@@ -126,14 +126,14 @@ _EXAMPLE_POLICY = _descriptor.Descriptor(
   nested_types=[],
   enum_types=[
   ],
-  serialized_options=None,
+  serialized_options=_b('8\001'),
   is_extendable=False,
   syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=240,
-  serialized_end=278,
+  serialized_start=246,
+  serialized_end=291,
 )
 
 _EXAMPLE = _descriptor.Descriptor(
@@ -167,7 +167,7 @@ _EXAMPLE = _descriptor.Descriptor(
   ],
   extensions=[
   ],
-  nested_types=[_EXAMPLE_BITSET, _EXAMPLE_BITSETSENTRY, _EXAMPLE_POLICY, ],
+  nested_types=[_EXAMPLE_BITSET, _EXAMPLE_BITSETSENTRY, _EXAMPLE_POLICYENTRY, ],
   enum_types=[
   ],
   serialized_options=None,
@@ -177,7 +177,7 @@ _EXAMPLE = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=23,
-  serialized_end=278,
+  serialized_end=291,
 )
 
 
@@ -207,16 +207,16 @@ _EXAMPLES = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=280,
-  serialized_end=322,
+  serialized_start=293,
+  serialized_end=335,
 )
 
 _EXAMPLE_BITSET.containing_type = _EXAMPLE
 _EXAMPLE_BITSETSENTRY.fields_by_name['value'].message_type = _EXAMPLE_BITSET
 _EXAMPLE_BITSETSENTRY.containing_type = _EXAMPLE
-_EXAMPLE_POLICY.containing_type = _EXAMPLE
+_EXAMPLE_POLICYENTRY.containing_type = _EXAMPLE
 _EXAMPLE.fields_by_name['bitsets'].message_type = _EXAMPLE_BITSETSENTRY
-_EXAMPLE.fields_by_name['policy'].message_type = _EXAMPLE_POLICY
+_EXAMPLE.fields_by_name['policy'].message_type = _EXAMPLE_POLICYENTRY
 _EXAMPLES.fields_by_name['examples'].message_type = _EXAMPLE
 DESCRIPTOR.message_types_by_name['Example'] = _EXAMPLE
 DESCRIPTOR.message_types_by_name['Examples'] = _EXAMPLES
@@ -238,10 +238,10 @@ Example = _reflection.GeneratedProtocolMessageType('Example', (_message.Message,
     ))
   ,
 
-  Policy = _reflection.GeneratedProtocolMessageType('Policy', (_message.Message,), dict(
-    DESCRIPTOR = _EXAMPLE_POLICY,
+  PolicyEntry = _reflection.GeneratedProtocolMessageType('PolicyEntry', (_message.Message,), dict(
+    DESCRIPTOR = _EXAMPLE_POLICYENTRY,
     __module__ = 'example_pb2'
-    # @@protoc_insertion_point(class_scope:zoo.Example.Policy)
+    # @@protoc_insertion_point(class_scope:zoo.Example.PolicyEntry)
     ))
   ,
   DESCRIPTOR = _EXAMPLE,
@@ -251,7 +251,7 @@ Example = _reflection.GeneratedProtocolMessageType('Example', (_message.Message,
 _sym_db.RegisterMessage(Example)
 _sym_db.RegisterMessage(Example.Bitset)
 _sym_db.RegisterMessage(Example.BitsetsEntry)
-_sym_db.RegisterMessage(Example.Policy)
+_sym_db.RegisterMessage(Example.PolicyEntry)
 
 Examples = _reflection.GeneratedProtocolMessageType('Examples', (_message.Message,), dict(
   DESCRIPTOR = _EXAMPLES,
@@ -263,4 +263,5 @@ _sym_db.RegisterMessage(Examples)
 
 DESCRIPTOR._options = None
 _EXAMPLE_BITSETSENTRY._options = None
+_EXAMPLE_POLICYENTRY._options = None
 # @@protoc_insertion_point(module_scope)

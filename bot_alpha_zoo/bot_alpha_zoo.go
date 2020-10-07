@@ -26,6 +26,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer engine.Close()
 
 	log.Println("bot_alpha_zoo by Alan Zaffetti")
 	log.Println("For operation instructions: <https://github.com/ajzaff/bot_zoo>")

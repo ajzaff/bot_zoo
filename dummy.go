@@ -44,3 +44,6 @@ func (m *DummyModel) Value() float32 {
 func (m *DummyModel) Policy(policy []float32) {
 	copy(policy, m.policy)
 }
+
+// Close is a noop for the dummy model.
+func (m *DummyModel) Close() error { return nil }

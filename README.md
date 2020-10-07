@@ -10,7 +10,7 @@ Prebuilt binaries are available on the bot website and in the github releases ar
 
 * Golang
 
-* Tensorflow
+* Tensorflow (2.0.0b1)
 
 * Protobuf
 
