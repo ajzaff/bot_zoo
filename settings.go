@@ -42,6 +42,8 @@ type EngineSettings struct {
 	DatasetEpoch          int
 	PlayBatchGames        int
 	UseSampledMove        bool
+	UseSavedModel         bool
+	SavedModelPath        string
 	Options               SetoptionFlag
 }
 
@@ -130,5 +132,7 @@ The file may be newline terminated.`)
 	flag.IntVar(&s.DatasetEpoch, "dataset_epoch", 0, "Epoch number to use when writing Dataset files")
 	flag.IntVar(&s.PlayBatchGames, "playbatch_games", 5000, "Number of games to play for `playbatch'")
 	flag.BoolVar(&s.UseSampledMove, "use_suboptimal_move", false, "Sample to best move instead of selecting the best")
+	flag.BoolVar(&s.UseSavedModel, "use_saved_model", false, "Use a saved model configured by model_graph_path*")
+	flag.StringVar(&s.SavedModelPath, "saved_model_path", "", "Path to GraphDef binary protocol buffer")
 	return s
 }

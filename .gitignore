@@ -3,6 +3,7 @@
 /logs/
 /running/
 /sandbox/
+/target/
 *.test
 __pycache__
 .vscode

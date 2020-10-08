@@ -46,7 +46,7 @@ func NewEngine(settings *EngineSettings, aeiSettings *AEISettings) (*Engine, err
 	if err := e.EngineSettings.Options.Execute(e.Options); err != nil {
 		return nil, err
 	}
-	if err := e.searchState.Reset(); err != nil {
+	if err := e.searchState.Reset(settings); err != nil {
 		return nil, err
 	}
 	return e, nil
@@ -55,7 +55,7 @@ func NewEngine(settings *EngineSettings, aeiSettings *AEISettings) (*Engine, err
 func (e *Engine) NewGame() {
 	e.Pos = NewEmptyPosition()
 	e.tt.Clear()
-	e.searchState.Reset()
+	e.searchState.Reset(e.EngineSettings)
 	e.timeInfo = e.timeControl.newTimeInfo()
 }
 

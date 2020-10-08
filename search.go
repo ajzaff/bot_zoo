@@ -37,18 +37,22 @@ type BatchWriterInterface interface {
 	Flush() error
 }
 
-func (s *searchState) Reset() error {
+func (s *searchState) Reset(settings *EngineSettings) error {
 	if s.tt == nil {
 		s.tt = &TranspositionTable{}
 	}
 	s.tt.Resize(50)
 	s.tree = NewEmptyTree(s.tt)
 	if s.model == nil {
-		model, err := NewModel()
-		if err != nil {
-			return err
+		if settings.UseSavedModel {
+			model, err := NewModel(settings.ModelGraphPath)
+			if err != nil {
+				return err
+			}
+			s.model = model
+		} else {
+			s.model = NewDummyModel()
 		}
-		s.model = model
 	}
 	s.wg = sync.WaitGroup{}
 	s.stopping = 0

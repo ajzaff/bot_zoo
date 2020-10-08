@@ -10,14 +10,14 @@ import (
 type Model struct {
 	g      *tf.Graph
 	sess   *tf.Session
-	input  []float32
+	input  [][][][]float32
 	policy [][]float32
 	value  [][]float32
 }
 
 // NewModel loads the saved_model.pb from the saved_models directory or returns an error.
-func NewModel() (*Model, error) {
-	bs, err := ioutil.ReadFile("data/saved_models/bot_alpha_zoo-16.pb")
+func NewModel(graphPath string) (*Model, error) {
+	bs, err := ioutil.ReadFile(graphPath)
 	if err != nil {
 		return nil, err
 	}
@@ -32,10 +32,18 @@ func NewModel() (*Model, error) {
 	model := &Model{
 		g:      g,
 		sess:   sess,
-		input:  make([]float32, modelInputSize),
 		policy: [][]float32{policyPool.Get().([]float32)},
 		value:  make([][]float32, 1, 232),
 	}
+	input := make([][][][]float32, 1)
+	input[0] = make([][][]float32, 8)
+	for i := range input[0] {
+		input[0][i] = make([][]float32, 8)
+		for j := range input[0][i] {
+			input[0][i][j] = make([]float32, 21)
+		}
+	}
+	model.input = input
 	return model, nil
 }
 
@@ -63,20 +71,6 @@ func (m *Model) EvaluatePosition(p *Pos) {
 	if err != nil {
 		panic(err)
 	}
-	tIn.Reshape(modelInputShape)
-
-	tPolicy, err := tf.NewTensor(m.policy)
-	if err != nil {
-		panic(err)
-	}
-	tPolicy.Reshape(policyOutputShape)
-
-	tValue, err := tf.NewTensor(m.value)
-	if err != nil {
-		panic(err)
-	}
-	tValue.Reshape(valueOutputShape)
-
 	opInput := m.g.Operation(modelInputName)
 	if opInput == nil {
 		panic("opInput == nil")
@@ -89,7 +83,6 @@ func (m *Model) EvaluatePosition(p *Pos) {
 	if opInput == nil {
 		panic("opValue == nil")
 	}
-
 	ts, err := m.sess.Run(map[tf.Output]*tf.Tensor{
 		opInput.Output(0): tIn,
 	}, []tf.Output{opPolicy.Output(0), opValue.Output(0)}, nil)

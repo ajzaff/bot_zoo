@@ -48,9 +48,16 @@ wget https://arimaa.ajz.dev/best-network
 
 ## GPU Support
 
-The dockerized runner is the easiest way to get GPU inference and training. Otherwise there may be several more steps to install CUDA, cuDNN, and possibly Tensorflow shared object files from source. If you wish to do this instructions are available.
+Docker GPU runner may be an easy way to get GPU support.
 
 Follow the instructions to install CUDA for Docker support.
+
+Otherwise there may be several more steps to install CUDA, cuDNN, and possibly Tensorflow shared object files from source.
+
+It's important to note each version of Tensorflow expects a rather narrow configuration of CUDA / cuDNN versions.
+See the table of [tested configurations](https://www.tensorflow.org/install/source#gpu) first.
+
+You may be able to avoid building Tensorflow with the right combination of library `.so`s. `LIBRARY_PATH` and `LD_LIBRARY_PATH` are your friend for installing multiple versions of CUDA.
 
 # See the games
 
