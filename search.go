@@ -45,7 +45,7 @@ func (s *searchState) Reset(settings *EngineSettings) error {
 	s.tree = NewEmptyTree(s.tt)
 	if s.model == nil {
 		if settings.UseSavedModel {
-			model, err := NewModel(settings.ModelGraphPath)
+			model, err := NewModel(settings.SavedModelPath)
 			if err != nil {
 				return err
 			}
